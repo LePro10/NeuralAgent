@@ -53,7 +53,10 @@ pub fn ensure() -> Result<DaemonInfo> {
     if let Some(info) = read_info(&dir) {
         if healthy(info.port) {
             if info.protocol != PROTOCOL {
-                bail!("the running NeuralAgent service speaks protocol {} (this app: {PROTOCOL}); quit it from the menu bar and restart", info.protocol);
+                bail!(
+                    "the running NeuralAgent service speaks protocol {} (this app: {PROTOCOL}); quit it from the menu bar and restart",
+                    info.protocol
+                );
             }
             return Ok(info);
         }
