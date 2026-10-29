@@ -60,10 +60,24 @@ export function App() {
       .map((s) => s.status);
   }, [state?.sessions, state?.profiles]);
   const trayCounts = [agentStatuses.length, agentStatuses.filter((s) => s === "working").length, agentStatuses.filter((s) => s === "waiting").length].join(",");
+  const remoteStatus = state?.remote.status;
+  const remoteOn = !remoteStatus || ["signed_out", "pending", "denied", "blocked"].includes(remoteStatus) ? null : !state?.remote.paused;
   useEffect(() => {
     const [running, working, waiting] = trayCounts.split(",").map(Number);
-    platform.trayStatus?.({ running, working, waiting });
-  }, [trayCounts, platform]);
+    platform.trayStatus?.({ running, working, waiting, remote: remoteOn });
+  }, [trayCounts, remoteOn, platform]);
+  // The tray's emergency switch for remote access.
+  useEffect(
+    () =>
+      platform.onTrayRemote?.(() => {
+        const paused = client.state?.remote.paused ?? false;
+        client.req({ m: "remote_enable", p: { enabled: paused } }).then(
+          () => toast(paused ? "Remote access reconnected" : "Remote access disconnected"),
+          (e) => toast((e as Error).message, { tone: "danger" }),
+        );
+      }),
+    [client, platform],
+  );
 
   const addWorkspace = async () => {
     const path = await platform.pickFolder?.();

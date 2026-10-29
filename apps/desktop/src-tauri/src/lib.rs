@@ -35,8 +35,8 @@ async fn daemon_stop() -> Result<(), String> {
 
 /// The UI reports agent counts so the menu bar icon can show them.
 #[tauri::command]
-fn tray_update(app: tauri::AppHandle, running: u32, working: u32, waiting: u32) -> Result<(), String> {
-    tray::update(&app, running, working, waiting).map_err(|e| e.to_string())
+fn tray_update(app: tauri::AppHandle, running: u32, working: u32, waiting: u32, remote: Option<bool>) -> Result<(), String> {
+    tray::update(&app, running, working, waiting, remote).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

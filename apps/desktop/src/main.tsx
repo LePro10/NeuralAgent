@@ -46,6 +46,7 @@ const platform: Platform = {
   notify: (title, body) => void notifyAllowed().then((ok) => ok && sendNotification({ title, body })),
   focused: () => focused,
   trayStatus: (counts) => void invoke("tray_update", counts).catch(() => {}),
+  onTrayRemote: (cb) => subscribe<null>("tray-remote", cb),
   trafficLights: mac,
   startDrag: () => void getCurrentWindow().startDragging(),
   voice: {

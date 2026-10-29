@@ -1,18 +1,19 @@
 //! Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just
-//! the app (agents keep running) or everything. Closing the window keeps the app here, so the
+//! the app (agents keep running) or everything; with remote access set up it also holds the
+//! emergency "Disconnect remote". Closing the window keeps the app here, so the
 //! dictation shortcut and the wake word keep working.
 
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::daemon;
 
 const ID: &str = "main";
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    let menu = build_menu(app, "No agents running")?;
+    let menu = build_menu(app, "No agents running", None)?;
     TrayIconBuilder::with_id(ID)
         .icon(mark(if cfg!(target_os = "macos") { 36 } else { 32 }))
         .icon_as_template(true)
@@ -21,6 +22,10 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => show_main(app),
+            // The window's script (alive while hidden) knows the current state and asks the daemon.
+            "remote" => {
+                let _ = app.emit("tray-remote", ());
+            }
             "quit" => app.exit(0),
             "quit-all" => {
                 if let Err(e) = daemon::stop() {
@@ -42,22 +47,26 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-fn build_menu(app: &AppHandle, status: &str) -> tauri::Result<Menu<tauri::Wry>> {
-    Menu::with_items(
+fn build_menu(app: &AppHandle, status: &str, remote: Option<bool>) -> tauri::Result<Menu<tauri::Wry>> {
+    let menu = Menu::with_items(
         app,
         &[
             &MenuItem::with_id(app, "status", status, false, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "open", "Open NeuralAgent", true, None::<&str>)?,
-            &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(app, "quit", "Quit (agents keep running)", true, None::<&str>)?,
-            &MenuItem::with_id(app, "quit-all", "Quit and stop all agents", true, None::<&str>)?,
         ],
-    )
+    )?;
+    if let Some(on) = remote {
+        menu.append(&MenuItem::with_id(app, "remote", if on { "Disconnect remote" } else { "Reconnect remote" }, true, None::<&str>)?)?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, "quit", "Quit (agents keep running)", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "quit-all", "Quit and stop all agents", true, None::<&str>)?)?;
+    Ok(menu)
 }
 
 /// Called by the UI whenever agent states change.
-pub fn update(app: &AppHandle, running: u32, working: u32, waiting: u32) -> tauri::Result<()> {
+pub fn update(app: &AppHandle, running: u32, working: u32, waiting: u32, remote: Option<bool>) -> tauri::Result<()> {
     let Some(tray) = app.tray_by_id(ID) else { return Ok(()) };
     let status = match (running, working, waiting) {
         (0, ..) => "No agents running".to_string(),
@@ -65,7 +74,7 @@ pub fn update(app: &AppHandle, running: u32, working: u32, waiting: u32) -> taur
         (n, w, 0) => format!("{} · {w} working", agents(n)),
         (n, _, q) => format!("{} · {q} need{} you", agents(n), if q == 1 { "s" } else { "" }),
     };
-    tray.set_menu(Some(build_menu(app, &status)?))?;
+    tray.set_menu(Some(build_menu(app, &status, remote)?))?;
     tray.set_tooltip(Some(format!("NeuralAgent — {status}")))?;
     set_badge(&tray, waiting)?;
     Ok(())

@@ -17,7 +17,10 @@ export interface Platform {
   trafficLights?: boolean;
   startDrag?: () => void;
   /** Agent counts for the menu bar / tray icon (desktop only). */
-  trayStatus?: (counts: { running: number; working: number; waiting: number }) => void;
+  /** `remote`: null when there is no approved account, else whether it is connected. */
+  trayStatus?: (counts: { running: number; working: number; waiting: number; remote: boolean | null }) => void;
+  /** "Disconnect remote" / "Reconnect remote" was picked in the tray menu. */
+  onTrayRemote?: (cb: () => void) => () => void;
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
 }
