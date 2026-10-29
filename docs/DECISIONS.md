@@ -156,3 +156,16 @@ Supertonic 3 speaks 31 languages (German included), loads in 0.2 s, MIT code + O
 weights. Replies are spoken sentence by sentence, so the first audio comes after the first
 sentence, not the whole answer. Pocket TTS is the English alternative with voice cloning. Piper
 was dropped: sherpa-onnx 2.x no longer bundles espeak, so it would need our own phonemizer.
+
+## D22 — Voice runs in the desktop app, models are downloaded on demand
+Dictation and the wake word live in the Tauri process (`apps/desktop/src-tauri/src/voice.rs`),
+not in the daemon: macOS grants microphone and Accessibility per app bundle, and the UI needs
+the live state. Hold-to-talk uses `tauri-plugin-global-shortcut` (pressed/released), audio comes
+from `cpal` (default input, mixed to mono, resampled to 16 kHz), text is typed with `enigo` on
+the main thread. Settings are per machine in `<data>/voice.json`; default shortcut ⌥/Alt+Space
+(also ⌘⇧Space or F5). The wake loop feeds the spotter and the VAD together; after a wake the
+utterance is transcribed and the wake word dropped from the text (or, if the recognizer misheard
+it, the audio before it is cut). Models (Parakeet, spotter, Silero, Supertonic; ~630 MB) are not
+bundled: Settings downloads them from the sherpa-onnx GitHub releases and checks fixed SHA-256
+sums. Dev builds accept `NEURALAGENT_TEST_MIC=a.wav:b.wav` as a fake microphone for end-to-end
+tests; release builds ignore it.

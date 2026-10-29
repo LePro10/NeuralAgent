@@ -18,11 +18,21 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow.workspace = true
+bzip2 = "0.6.1"
+cpal = "0.18.2"
+enigo = "0.6.1"
+na-voice.workspace = true
+parking_lot = "0.13.0"
+tar = "0.4.46"
+ureq = "3.5.0"
 dirs = "7.0.0"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10.9"
+sherpa-onnx.workspace = true
 tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-dialog = "2.8.4"
+tauri-plugin-global-shortcut = "2.4.1"
 tauri-plugin-notification = "2.8.0"
 tauri-plugin-opener = "2.7.2"
 tracing.workspace = true

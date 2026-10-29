@@ -34,6 +34,14 @@ Open items first. Everything else keeps going locally until these are done.
   - Tauri updater signing key (private key + password) — without it no desktop update.
   - Relay secrets on .96 (`/etc/neuralagent/relay.env`: JWT key, VAPID keys) and the relay
     database `/var/lib/neuralagent/relay.db` (accounts, devices).
+- [ ] **Voice with your own voice** (5 min, when you are back at the Mac): Settings (gear at
+      the bottom of the sidebar) → Voice models → download Parakeet, Wake word spotter, Silero.
+      Hold ⌥ Space in any app, speak, let go → text appears. macOS asks once for
+      *Microphone* and *Accessibility* for NeuralAgent: please allow. Then turn on
+      "Listen for Hey Neural", say "Hey Neural, what are my agents doing?"; if it does not react,
+      press *Learn my voice → Record* 3× and say "Hey Neural". Tell me what did not work.
+      (A macOS dialog "Terminal wants to control TextEdit" may be open from a test: click
+      *Don't Allow*, it is not needed.)
 - [ ] **Legal pages**: fill in name, address, contact on `/imprint`, `/privacy`, `/terms` and
       have them reviewed before inviting people (drafts will be in `apps/web/legal/`).
 - [ ] **Logo uploads** (after the logo is chosen; files in `docs/brand/export/`): Discord
@@ -61,8 +69,9 @@ Open items first. Everything else keeps going locally until these are done.
 | Phase 0 (reverse engineering, feature matrix) | done (2026-10-29) |
 | Server .96 base (Ubuntu 26.04.1 LTS, SSH key-only, unattended-upgrades, Docker 29.9, ufw) | done (2026-10-29) |
 | M0 repo, docs, CI, design library, brand | done (2026-10-29) — CI on 3 OS, secret scan, token check, logo C |
-| M1 desktop shell, daemon, pane grid | done (2026-10-29) — CI green on Linux/macOS, Windows fix pending CI |
-| M2 agent CLIs: catalog, install, hooks, dashboard | in progress — see below |
+| M1 desktop shell, daemon, pane grid | done (2026-10-29) — CI green on Linux/macOS, Windows fix (ConPTY cursor answer) pending CI |
+| M2 agent CLIs: catalog, install, hooks, dashboard | done except a real Codex turn (needs `codex login`) |
+| M3 voice: local STT/TTS, push-to-talk, wake word | in progress — see below |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -83,6 +92,19 @@ Open items first. Everything else keeps going locally until these are done.
 - Notifications: permission granted, sent when the window is in the background. In `tauri dev`
   macOS shows no banner (unbundled binary); to check again with a bundled build.
 - Open: resume from dashboard/session search, real Codex turn (needs login).
+
+### M3 verified so far (2026-10-29)
+- Benchmarks in D19 (STT: Parakeet chosen), D20 (wake word), D21 (TTS: Supertonic 3).
+- Desktop dictation end to end (real app, real hotkey events, test audio as microphone):
+  hold ⌥ Space → "Start codex in the website folder and fix the failing tests." typed into
+  another app's text field. Shortcut switch to F5 in Settings works immediately.
+- Wake word end to end: 4 of 4 "Hey Neural, …" clips woke it, 0 false wakes; commands came out
+  as "read me the last message from Claude." / "start Claude." (shown as a toast until the
+  orchestrator exists).
+- Settings → Voice models: download with progress, SHA-256 check (wrong checksum is rejected,
+  test), unpack, installed state.
+- Open: your real voice and microphone (checklist), learn-my-voice with a real recording,
+  status indicator while dictating outside the app (tray), Windows/Linux voice test.
 
 ## Known gaps
 

@@ -1,7 +1,8 @@
-import { App, DaemonProvider, type Platform } from "@neuralagent/app";
+import { App, DaemonProvider, type Platform, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -46,7 +47,21 @@ const platform: Platform = {
   focused: () => focused,
   trafficLights: mac,
   startDrag: () => void getCurrentWindow().startDragging(),
+  voice: {
+    status: () => invoke<VoiceStatus>("voice_status"),
+    set: (config) => invoke("voice_set", { config }),
+    download: (id) => invoke("voice_download", { id }),
+    learn: () => invoke<string>("voice_learn"),
+    onStatus: (cb) => subscribe<VoiceStatus>("voice", cb),
+    onCommand: (cb) => subscribe<string>("voice-command", cb),
+  },
 };
+
+/** `listen` resolves its unsubscribe later; hand back a plain function. */
+function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
+  const off = listen<T>(event, (e) => cb(e.payload));
+  return () => void off.then((f) => f());
+}
 
 const client = new DaemonClient(platform.connect, { kind: "desktop", name: platform.clientName });
 

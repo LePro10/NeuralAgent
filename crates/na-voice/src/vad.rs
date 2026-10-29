@@ -7,6 +7,12 @@ use sherpa_onnx::{VadModelConfig, VoiceActivityDetector};
 
 use crate::SAMPLE_RATE;
 
+/// One utterance; `start` counts samples since the stream began.
+pub struct Segment {
+    pub start: usize,
+    pub samples: Vec<f32>,
+}
+
 pub struct Vad {
     vad: VoiceActivityDetector,
     window: usize,
@@ -30,7 +36,7 @@ impl Vad {
     }
 
     /// Feeds audio; returns every utterance that ended in it.
-    pub fn push(&mut self, samples: &[f32]) -> Vec<Vec<f32>> {
+    pub fn push(&mut self, samples: &[f32]) -> Vec<Segment> {
         self.pending.extend_from_slice(samples);
         let full = self.pending.len() / self.window * self.window;
         for w in self.pending[..full].chunks(self.window) {
@@ -46,15 +52,15 @@ impl Vad {
     }
 
     /// Ends the stream and returns what is left.
-    pub fn flush(&mut self) -> Vec<Vec<f32>> {
+    pub fn flush(&mut self) -> Vec<Segment> {
         self.vad.flush();
         self.take()
     }
 
-    fn take(&mut self) -> Vec<Vec<f32>> {
+    fn take(&mut self) -> Vec<Segment> {
         let mut out = Vec::new();
         while let Some(seg) = self.vad.front() {
-            out.push(seg.samples().to_vec());
+            out.push(Segment { start: seg.start().max(0) as usize, samples: seg.samples().to_vec() });
             self.vad.pop();
         }
         out

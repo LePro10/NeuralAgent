@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use na_voice::stt::{Stt, SttKind, SttModel};
 use na_voice::text::wer;
 use na_voice::tts::{Tts, TtsKind, TtsModel};
-use sherpa_onnx::{LinearResampler, Wave};
+use sherpa_onnx::LinearResampler;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

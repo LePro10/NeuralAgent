@@ -1,6 +1,13 @@
 mod daemon;
+mod mic;
+mod models;
+mod voice;
+
+use std::sync::Arc;
 
 use serde::Serialize;
+use tauri::{Manager, State};
+use voice::{Voice, VoiceConfig, VoiceStatus};
 
 #[derive(Serialize)]
 struct Connection {
@@ -24,6 +31,28 @@ async fn daemon_stop() -> Result<(), String> {
     daemon::stop().map_err(|e| format!("{e:#}"))
 }
 
+#[tauri::command]
+fn voice_status(voice: State<'_, Arc<Voice>>) -> VoiceStatus {
+    voice.status()
+}
+
+#[tauri::command]
+fn voice_set(voice: State<'_, Arc<Voice>>, config: VoiceConfig) -> Result<(), String> {
+    voice.set_config(config).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn voice_download(voice: State<'_, Arc<Voice>>, id: String) -> Result<(), String> {
+    voice.download(&id).map_err(|e| format!("{e:#}"))
+}
+
+/// Records "Hey Neural" once (up to 4 s) and teaches the wake word this pronunciation.
+#[tauri::command]
+async fn voice_learn(voice: State<'_, Arc<Voice>>) -> Result<String, String> {
+    let voice = voice.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || voice.learn().map_err(|e| format!("{e:#}"))).await.map_err(|e| e.to_string())?
+}
+
 /// Dev builds: the webview's console errors end up in the terminal running `tauri dev`.
 #[tauri::command]
 fn dev_log(level: String, message: String) {
@@ -38,7 +67,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![daemon_connect, daemon_stop, dev_log])
+        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _, event| voice::on_shortcut(app, event.state)).build())
+        .setup(|app| {
+            let data = daemon::data_dir()?;
+            let voice = Voice::new(app.handle().clone(), data);
+            app.manage(voice.clone());
+            voice.apply();
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            daemon_connect,
+            daemon_stop,
+            dev_log,
+            voice_status,
+            voice_set,
+            voice_download,
+            voice_learn
+        ])
         .run(tauri::generate_context!())
         .expect("error while running NeuralAgent");
 }

@@ -5,12 +5,14 @@ import { useEffect, useMemo } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
+import { SettingsPage } from "./components/SettingsPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 
 const ADD = "__add";
 const AGENTS = "__agents";
+const SETTINGS = "__settings";
 
 export function App() {
   const client = useClient();
@@ -21,7 +23,11 @@ export function App() {
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
   const dashboard = workspace === AGENTS;
-  const current = dashboard ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const settingsOpen = workspace === SETTINGS;
+  const current = dashboard || settingsOpen ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+
+  // "Hey Neural, …": until the orchestrator exists, show what was heard.
+  useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
 
   // Notify when an agent finishes or needs input while the window is in the background.
   useEffect(() => {
@@ -66,6 +72,8 @@ export function App() {
     <div className="grid h-full place-items-center">
       {status === "offline" ? <Callout tone="danger" title="Daemon not reachable">Trying to reconnect…</Callout> : <Spinner label="Connecting" />}
     </div>
+  ) : settingsOpen ? (
+    <SettingsPage />
   ) : dashboard ? (
     <AgentsDashboard />
   ) : current ? (
@@ -95,6 +103,8 @@ export function App() {
           value={dashboard ? AGENTS : (current?.id ?? "")}
           onChange={(id) => (id === ADD ? void addWorkspace() : setWorkspace(id))}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
+          onSettings={() => setWorkspace(SETTINGS)}
+          settingsActive={settingsOpen}
           pinned={sidebarPinned}
           onPinnedChange={setSidebarPinned}
           // macOS draws the window buttons over the top-left corner.

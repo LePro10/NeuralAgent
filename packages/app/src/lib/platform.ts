@@ -1,4 +1,5 @@
 import type { Connect } from "@neuralagent/protocol";
+import type { VoiceApi } from "./voice";
 
 /** What the shell around the shared app provides (Tauri window, browser/PWA, Android). */
 export interface Platform {
@@ -15,4 +16,6 @@ export interface Platform {
   /** macOS draws traffic lights over the content at the top left. */
   trafficLights?: boolean;
   startDrag?: () => void;
+  /** Local dictation and wake word (desktop only). */
+  voice?: VoiceApi;
 }
