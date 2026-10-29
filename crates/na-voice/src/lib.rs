@@ -4,6 +4,8 @@
 
 pub mod stt;
 pub mod text;
+pub mod vad;
+pub mod wake;
 
 /// All engines work on 16 kHz mono f32 samples.
 pub const SAMPLE_RATE: i32 = 16_000;

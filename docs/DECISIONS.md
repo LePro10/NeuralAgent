@@ -118,3 +118,24 @@ Parakeet is the default for push-to-talk dictation: best German, fast, 25 langua
 stays available as the streaming engine (live partial text, call mode) — it needs leading
 silence or it drops the first word. Whisper is too slow on CPU for <1 s. Models are downloaded on
 demand into `$NEURALAGENT_HOME/models`, never bundled.
+
+## D20 — Wake word "Hey Neural": keyword spotter + learn-my-voice, Silero VAD
+`na_voice::wake` uses sherpa-onnx's streaming keyword spotter (zipformer gigaspeech, 3.3 M params,
+~0.9 % of one CPU core in real time). "Hey Neural" is written as BPE pieces plus near-miss
+variants (NURAL, NORAL, NOYRAL, MURAL, "Hi Neural"), boost score 2.0.
+Test (`examples/wake_vad.rs`, synthetic `say` clips, 4 English + 4 German voices):
+
+| Set | Hits | False wakes |
+|---|---|---|
+| English voices, "Hey Neural" (8 clips) | 8 / 8 | — |
+| German voices, German pronunciation (8 clips) | 0 / 8 | — |
+| German voices after learning from one clip each | 4 / 8 | — |
+| Other sentences (42 clips) | — | 0 |
+
+The model is English-only, so a German "noy-ral" is not heard. Fix: **learn my voice** —
+`wake::learn` decodes a recording of the wake word with the spotter's own model and adds the
+pieces it hears as another keyword line (rejected when shorter than 3 pieces, which would wake on
+everyday speech). Settings will ask for three recordings. Real-voice check is on the user list.
+A dedicated multilingual wake model can replace this later without changing the API.
+`na_voice::vad` (Silero, 0.5 s pause) cut 52/52 test utterances correctly; it ends dictation and
+call turns.

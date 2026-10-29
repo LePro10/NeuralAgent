@@ -28,7 +28,7 @@ pub struct SttModel {
 }
 
 /// Finds `<stem>.int8.onnx`, then `<stem>.onnx`, then any `*<stem>*.onnx` in `dir`.
-fn file(dir: &Path, stem: &str) -> Result<String> {
+pub(crate) fn file(dir: &Path, stem: &str) -> Result<String> {
     for name in [format!("{stem}.int8.onnx"), format!("{stem}.onnx")] {
         let p = dir.join(&name);
         if p.exists() {
@@ -45,7 +45,7 @@ fn file(dir: &Path, stem: &str) -> Result<String> {
     found.first().map(|p| p.to_string_lossy().into_owned()).with_context(|| format!("no {stem} model in {}", dir.display()))
 }
 
-fn tokens(dir: &Path) -> Result<String> {
+pub(crate) fn tokens(dir: &Path) -> Result<String> {
     std::fs::read_dir(dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with("tokens.txt")))
