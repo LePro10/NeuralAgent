@@ -16,6 +16,8 @@ export interface Platform {
   /** macOS draws traffic lights over the content at the top left. */
   trafficLights?: boolean;
   startDrag?: () => void;
+  /** Agent counts for the menu bar / tray icon (desktop only). */
+  trayStatus?: (counts: { running: number; working: number; waiting: number }) => void;
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
 }

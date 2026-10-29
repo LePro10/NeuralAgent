@@ -67,7 +67,8 @@ pub struct Pty {
     writer: Mutex<Box<dyn Write + Send>>,
     /// `None` once closed after the child exited (Windows, see `spawn`).
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
-    child: Mutex<Box<dyn Child + Send + Sync>>,
+    /// Shared with the reader thread, which reaps the child even after the session was closed.
+    child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     pub last_input: Mutex<Option<Instant>>,
 }
 
@@ -128,12 +129,12 @@ impl Pty {
             tx: tx.clone(),
             writer: Mutex::new(writer),
             master: Mutex::new(Some(pair.master)),
-            child: Mutex::new(child),
+            child: Arc::new(Mutex::new(child)),
             last_input: Mutex::new(None),
         });
 
         let weak = Arc::downgrade(&pty);
-        let (note, done) = (notify.clone(), exited.clone());
+        let (note, done, reap) = (notify.clone(), exited.clone(), pty.child.clone());
         std::thread::Builder::new()
             .name("pty-read".into())
             .spawn(move || {
@@ -167,7 +168,7 @@ impl Pty {
                         notify(PtyNote::Bell);
                     }
                 }
-                let code = weak.upgrade().and_then(|p| p.child.lock().wait().ok()).map(|s| s.exit_code() as i32);
+                let code = reap.lock().wait().ok().map(|s| s.exit_code() as i32);
                 if !done.swap(true, std::sync::atomic::Ordering::SeqCst) {
                     notify(PtyNote::Exited(code));
                 }

@@ -42,6 +42,19 @@ export function App() {
     return () => void off();
   }, [client, platform]);
 
+  // Menu bar / tray: how many agents run, work, and wait for you.
+  const agentStatuses = useMemo(() => {
+    const engine = (id: string) => state?.profiles.find((p) => p.id === id)?.engine ?? "shell";
+    return Object.values(state?.sessions ?? {})
+      .filter((s) => s.alive && engine(s.profile_id) !== "shell" && !s.profile_id.startsWith("install:"))
+      .map((s) => s.status);
+  }, [state?.sessions, state?.profiles]);
+  const trayCounts = [agentStatuses.length, agentStatuses.filter((s) => s === "working").length, agentStatuses.filter((s) => s === "waiting").length].join(",");
+  useEffect(() => {
+    const [running, working, waiting] = trayCounts.split(",").map(Number);
+    platform.trayStatus?.({ running, working, waiting });
+  }, [trayCounts, platform]);
+
   const addWorkspace = async () => {
     const path = await platform.pickFolder?.();
     if (!path) return;

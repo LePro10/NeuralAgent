@@ -132,7 +132,15 @@ Open items first. Everything else keeps going locally until these are done.
   Resume opens the CLI with its resume argument in the conversation's original folder
   (checked: `codex resume <id>` in /private/tmp/na-codex-test, workspace created for it).
   Phones/orchestrator will only see conversations from approved workspaces.
-- Fixed on the way: a session busy from its first second stayed "Starting" forever.
+- Menu bar icon (tray on Windows/Linux): the NeuralAgent mark with a menu that shows
+  "N agents · M working / K need you" (checked: "No agents running" → "1 agent running" when a
+  Claude session started), "Open NeuralAgent", "Quit (agents keep running)" (checked: app gone,
+  daemon and the Claude process still running) and "Quit and stop all agents". On macOS the
+  count of agents waiting for you is shown next to the icon. Closing the window now keeps the
+  app in the menu bar (checked: Cmd+W → window hidden, reopened from the menu), so dictation and
+  the wake word keep working.
+- Fixed on the way: a session busy from its first second stayed "Starting" forever; a closed
+  session's process was left as a zombie (the daemon now always reaps it, checked).
 
 ## Known gaps
 

@@ -45,6 +45,7 @@ const platform: Platform = {
   openExternal: (url) => void openUrl(url),
   notify: (title, body) => void notifyAllowed().then((ok) => ok && sendNotification({ title, body })),
   focused: () => focused,
+  trayStatus: (counts) => void invoke("tray_update", counts).catch(() => {}),
   trafficLights: mac,
   startDrag: () => void getCurrentWindow().startDragging(),
   voice: {

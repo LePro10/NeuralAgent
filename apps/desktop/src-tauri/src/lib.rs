@@ -2,6 +2,7 @@ mod daemon;
 mod hud;
 mod mic;
 mod models;
+mod tray;
 mod voice;
 
 use std::sync::Arc;
@@ -30,6 +31,12 @@ async fn daemon_connect() -> Result<Connection, String> {
 #[tauri::command]
 async fn daemon_stop() -> Result<(), String> {
     daemon::stop().map_err(|e| format!("{e:#}"))
+}
+
+/// The UI reports agent counts so the menu bar icon can show them.
+#[tauri::command]
+fn tray_update(app: tauri::AppHandle, running: u32, working: u32, waiting: u32) -> Result<(), String> {
+    tray::update(&app, running, working, waiting).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -77,17 +84,39 @@ pub fn run() {
                 tracing::warn!("listening pill: {e}");
             }
             voice.apply();
+            if let Err(e) = tray::create(app.handle()) {
+                tracing::warn!("menu bar icon: {e}");
+            }
             Ok(())
+        })
+        // Closing the window keeps NeuralAgent in the menu bar (dictation and wake word stay on).
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == "main"
+            {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             daemon_connect,
             daemon_stop,
             dev_log,
+            tray_update,
             voice_status,
             voice_set,
             voice_download,
             voice_learn
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running NeuralAgent");
+        .build(tauri::generate_context!())
+        .expect("error while starting NeuralAgent")
+        .run(|app, event| {
+            // macOS: clicking the Dock icon brings the hidden window back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tray::show_main(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }
