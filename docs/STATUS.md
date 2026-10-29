@@ -103,8 +103,11 @@ Open items first. Everything else keeps going locally until these are done.
   orchestrator exists).
 - Settings → Voice models: download with progress, SHA-256 check (wrong checksum is rejected,
   test), unpack, installed state.
+- Listening pill: while dictating or after "Hey Neural" a small "Listening…" pill shows at the
+  bottom of the screen, on top of other apps, without taking focus (checked: text still lands
+  in the other app).
 - Open: your real voice and microphone (checklist), learn-my-voice with a real recording,
-  status indicator while dictating outside the app (tray), Windows/Linux voice test.
+  Windows/Linux voice test.
 
 ## Known gaps
 

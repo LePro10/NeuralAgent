@@ -51,3 +51,11 @@ body,
 .xterm {
   height: 100%;
 }
+
+/* The listening pill window (desktop): only the pill is painted. */
+html.hud,
+html.hud body,
+html.hud #root {
+  background: transparent;
+  overflow: hidden;
+}

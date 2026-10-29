@@ -50,16 +50,16 @@ fn healthy(port: u16) -> bool {
 /// Returns connection info for a running daemon, starting one if needed.
 pub fn ensure() -> Result<DaemonInfo> {
     let dir = data_dir()?;
-    if let Some(info) = read_info(&dir) {
-        if healthy(info.port) {
-            if info.protocol != PROTOCOL {
-                bail!(
-                    "the running NeuralAgent service speaks protocol {} (this app: {PROTOCOL}); quit it from the menu bar and restart",
-                    info.protocol
-                );
-            }
-            return Ok(info);
+    if let Some(info) = read_info(&dir)
+        && healthy(info.port)
+    {
+        if info.protocol != PROTOCOL {
+            bail!(
+                "the running NeuralAgent service speaks protocol {} (this app: {PROTOCOL}); quit it from the menu bar and restart",
+                info.protocol
+            );
         }
+        return Ok(info);
     }
     let bin = install_binary(&dir)?;
     let before = read_info(&dir).map(|i| i.pid);
@@ -67,10 +67,11 @@ pub fn ensure() -> Result<DaemonInfo> {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(15) {
         std::thread::sleep(Duration::from_millis(100));
-        if let Some(info) = read_info(&dir) {
-            if Some(info.pid) != before && healthy(info.port) {
-                return Ok(info);
-            }
+        if let Some(info) = read_info(&dir)
+            && Some(info.pid) != before
+            && healthy(info.port)
+        {
+            return Ok(info);
         }
     }
     bail!("the NeuralAgent service did not start; see {}", dir.join("logs/daemon.log").display())
@@ -113,7 +114,7 @@ fn prune_old(bin_dir: &Path, keep: usize) {
         .filter(|e| e.file_name().to_string_lossy().starts_with("neuralagentd-"))
         .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
     for (_, p) in files.into_iter().skip(keep) {
         let _ = std::fs::remove_file(p); // fails harmlessly while that version still runs
     }

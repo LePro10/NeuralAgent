@@ -133,6 +133,7 @@ impl Voice {
     fn set_activity(&self, a: Activity) {
         dev_log(format_args!("activity {a:?}"));
         *self.activity.lock() = a;
+        crate::hud::update(&self.app, a);
         self.emit();
     }
 
@@ -140,6 +141,7 @@ impl Voice {
         dev_log(format_args!("error {e}"));
         *self.error.lock() = Some(e.to_string());
         *self.activity.lock() = Activity::Idle;
+        crate::hud::update(&self.app, Activity::Idle);
         self.emit();
     }
 
@@ -291,7 +293,7 @@ impl Voice {
             let speech = heard
                 .or_else(|| vad.flush().into_iter().next())
                 .map(|s| s.samples)
-                .context("Nothing heard. Say \u{201c}Hey Neural\u{201d} after the tone.")?;
+                .context("Nothing heard. Press Record, then say \u{201c}Hey Neural\u{201d}.")?;
             na_voice::wake::learn(&dir, &speech, 2)
         })();
         *self.activity.lock() = Activity::Idle;

@@ -168,4 +168,6 @@ utterance is transcribed and the wake word dropped from the text (or, if the rec
 it, the audio before it is cut). Models (Parakeet, spotter, Silero, Supertonic; ~630 MB) are not
 bundled: Settings downloads them from the sherpa-onnx GitHub releases and checks fixed SHA-256
 sums. Dev builds accept `NEURALAGENT_TEST_MIC=a.wav:b.wav` as a fake microphone for end-to-end
-tests; release builds ignore it.
+tests; release builds ignore it. While listening, a separate small window (`hud.html`:
+transparent, always on top, not focusable, ignores the mouse) shows a pill at the bottom of
+the screen; it needs Tauri's `macos-private-api` for transparency (fine outside the App Store).

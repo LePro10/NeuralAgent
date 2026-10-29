@@ -1,4 +1,5 @@
 mod daemon;
+mod hud;
 mod mic;
 mod models;
 mod voice;
@@ -72,6 +73,9 @@ pub fn run() {
             let data = daemon::data_dir()?;
             let voice = Voice::new(app.handle().clone(), data);
             app.manage(voice.clone());
+            if let Err(e) = hud::create(app.handle()) {
+                tracing::warn!("listening pill: {e}");
+            }
             voice.apply();
             Ok(())
         })
