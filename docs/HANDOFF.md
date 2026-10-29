@@ -4,15 +4,16 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-29)
-- M0, M1 done. M2 in progress (see STATUS "M2 verified so far").
-- Daemon: `catalog.rs` (13 CLIs, detect/install), `profiles.rs` (launch args, hook injection),
-  `core.rs::on_hook` (hook → status mapping), Windows exit detection in `pty.rs` (wait thread).
-- UI: `AgentCatalog.tsx` (sheet, opened via `useCatalogSheet`), `AgentsDashboard.tsx` (sidebar
-  "Agents"), `lib/profiles.ts::launchable` (installed-only launchers).
-- Next in M2: custom profile editor (name, CLI, extra args), check notifications in the Tauri
-  app, CI green on Windows. Then M3 per PLAN.md. Settings page, session search/resume and
-  keep-awake are still open from the M1 extras.
-- Codex: installed at `~/.local/bin/codex`, not logged in (D17).
+- M0, M1 done; M2 done except a real Codex turn (needs `codex login`, D17). M3 in progress.
+- M3 so far: `crates/na-voice` (stt/wake/vad/tts + benches in `examples/`, numbers in D19–D21);
+  desktop voice in `apps/desktop/src-tauri/src/{voice,mic,models}.rs` (D22); UI
+  `packages/app/src/components/SettingsPage.tsx` (gear in the sidebar rail).
+- CI: commit 1e09fe3 drops stale sherpa build output after the cache restore (mac/linux failed
+  with "could not find native static library sherpa-onnx-c-api"). Windows
+  `pty::tests::spawn_echo_and_attach` still hangs (no exit note in 10 s even with the DSR
+  answer); the test now panics with child state, bytes read and screen. Read that, then fix.
+- Next in M3: tray/overlay indicator while dictating outside the app; TTS playback (cpal out)
+  is needed by M4 (orchestrator). Then M4 per PLAN.md.
 
 ## How to run
 - `pnpm dev` (Tauri dev; set `NEURALAGENT_HOME=/tmp/na-dev` to keep test state separate).
@@ -25,3 +26,7 @@ decisions: `DECISIONS.md`.
 - Hook tests: scripts in `/tmp/na-drive` (`perm2.mjs` permission flow, `notify-sim.mjs` Codex
   notify, `install.mjs <agent>` install pane). Claude test profiles use `--model haiku`.
 - Window screenshot: `research-local/tools/winid neuralagent` → `screencapture -x -o -l <id>`.
+- Voice E2E without speakers: dev build with `NEURALAGENT_TEST_MIC=a.wav:b.wav` (16 kHz, played
+  in real time, 2 s apart); Swift helpers in `/tmp/na-drive` (`hold <s>` holds ⌥Space,
+  `holdf5`, `sink <out> <s>` text field that saves what was typed, `click x y`). Test wavs:
+  `/tmp/na-voice/{corpus,wake}`. Models: `$NEURALAGENT_HOME/models`.
