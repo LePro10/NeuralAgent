@@ -33,3 +33,4 @@ local.properties
 .vscode/*
 !.vscode/extensions.json
 *.log
+.claude/
