@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
-import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Smartphone } from "lucide-react";
+import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
@@ -116,6 +116,17 @@ export function App() {
     ...(platform.pickFolder ? [{ id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 }] : []),
   ];
 
+  const selected = dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : (current?.id ?? "");
+  // Phones: a tab bar with the agents and the workspaces first; the rest (and settings) under "More".
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const phoneItems: NavItem[] = [
+    byId.get(AGENTS)!,
+    ...items.filter((i) => i.group === "Workspaces").map((i) => ({ ...i, group: undefined })),
+    ...[HISTORY, USAGE, MCP, REMOTE].flatMap((id) => (byId.has(id) ? [{ ...byId.get(id)!, group: undefined }] : [])),
+    { id: SETTINGS, label: "Settings", Icon: Settings },
+  ];
+  const go = (id: string) => (id === ADD ? void addWorkspace() : setWorkspace(id));
+
   const body = !state ? (
     <div className="grid h-full place-items-center">
       {status === "offline" ? <Callout tone="danger" title="Daemon not reachable">Trying to reconnect…</Callout> : <Spinner label="Connecting" />}
@@ -153,11 +164,12 @@ export function App() {
 
   return (
     <AppShell
+      nav={{ items: phoneItems, value: selected, onChange: go }}
       sidebar={
         <Sidebar
           items={items}
-          value={dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : (current?.id ?? "")}
-          onChange={(id) => (id === ADD ? void addWorkspace() : setWorkspace(id))}
+          value={settingsOpen ? "" : selected}
+          onChange={go}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
           onSettings={() => setWorkspace(SETTINGS)}
           settingsActive={settingsOpen}

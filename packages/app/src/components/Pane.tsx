@@ -1,5 +1,5 @@
 import type { PaneContent, Session } from "@neuralagent/protocol";
-import { StatusDot } from "@neuralagent/ui";
+import { StatusDot, useLayoutMode } from "@neuralagent/ui";
 import { Columns2, GitBranch, Globe, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@neuralagent/ui";
@@ -53,6 +53,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
   const session: Session | undefined = useDaemon((c) => (sid ? c.state?.sessions[sid] : undefined));
   const profile = useDaemon((c) => (session ? c.state?.profiles.find((p) => p.id === session.profile_id) : undefined));
   const client = useClient();
+  const phone = useLayoutMode() === "phone";
   const showChanges = useChanges((c) => c.show);
   const [dropTarget, setDropTarget] = useState(false);
   // Closing a pane stops its process; a running one needs a second click within 3 s.
@@ -171,6 +172,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
           </div>
         )}
       </div>
+      {phone && sid && session?.alive && <KeyBar sid={sid} />}
     </div>
   );
 }
@@ -181,4 +183,37 @@ function hostOf(url: string): string {
   } catch {
     return "Browser";
   }
+}
+
+// Keys a phone keyboard lacks, for answering agent prompts (menus, approvals, interrupts).
+const KEYS: [string, string][] = [
+  ["Esc", "\x1b"],
+  ["Tab", "\t"],
+  ["⇧Tab", "\x1b[Z"],
+  ["↑", "\x1b[A"],
+  ["↓", "\x1b[B"],
+  ["←", "\x1b[D"],
+  ["→", "\x1b[C"],
+  ["^C", "\x03"],
+  ["Enter", "\r"],
+];
+
+function KeyBar({ sid }: { sid: string }) {
+  const client = useClient();
+  return (
+    <div className="flex shrink-0 gap-1 overflow-x-auto border-t border-line px-2 py-1.5">
+      {KEYS.map(([label, seq]) => (
+        <button
+          key={label}
+          type="button"
+          // Keep the terminal (and the on-screen keyboard) focused.
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={() => client.write(sid, seq)}
+          className="h-8 min-w-10 shrink-0 rounded-xs bg-fill-2 px-2.5 font-mono text-meta text-ink active:bg-fill-4"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
