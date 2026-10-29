@@ -78,7 +78,11 @@ Open items first. Everything else keeps going locally until these are done.
 - Codex status via notify (simulated call, see D17): done + thread id + last message.
 - Launcher and "New agent" offer only installed CLIs plus "Install agents…"; catalog sheet with
   versions, install command, docs; Agents dashboard across workspaces.
-- Open: resume from dashboard/session search, custom profile editor, real Codex turn (needs login).
+- Profile editor (catalog sheet → Profiles): create with name, CLI, extra args (quotes kept),
+  edit, delete; shows up in launchers.
+- Notifications: permission granted, sent when the window is in the background. In `tauri dev`
+  macOS shows no banner (unbundled binary); to check again with a bundled build.
+- Open: resume from dashboard/session search, real Codex turn (needs login).
 
 ## Known gaps
 

@@ -1,9 +1,11 @@
-import type { CatalogEntry, Session } from "@neuralagent/protocol";
+import type { CatalogEntry, Profile, Session } from "@neuralagent/protocol";
 import { Button, Callout, List, Pill, Row, Sheet, toast } from "@neuralagent/ui";
-import { ExternalLink, RotateCw } from "lucide-react";
+import { ExternalLink, Plus, RotateCw } from "lucide-react";
 import { useState } from "react";
+import { joinArgs } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon, usePlatform, useUi } from "../lib/store";
 import { GlyphTile } from "./AgentGlyph";
+import { ProfileEditor } from "./ProfileEditor";
 
 /** Every known agent CLI: what is installed, and a one-click install that runs visibly in a pane. */
 export function AgentCatalog() {
@@ -12,6 +14,10 @@ export function AgentCatalog() {
   const { open, setOpen } = useCatalogSheet();
   const catalog = useDaemon((c) => c.state?.catalog);
   const workspaces = useDaemon((c) => c.state?.workspaces);
+  const profiles = useDaemon((c) => c.state?.profiles);
+  /** `null` while listing; "new" or a profile while the editor is shown. */
+  const [editing, setEditing] = useState<Profile | "new" | null>(null);
+  const custom = (profiles ?? []).filter((p) => !p.builtin);
   const { workspace, setWorkspace } = useUi();
   const [refreshing, setRefreshing] = useState(false);
   const target = workspaces?.find((w) => w.id === workspace) ?? workspaces?.[0];
@@ -43,61 +49,82 @@ export function AgentCatalog() {
   return (
     <Sheet
       open={open}
-      onClose={() => setOpen(false)}
-      title="Agents"
+      onClose={() => {
+        setOpen(false);
+        setEditing(null);
+      }}
+      title={editing === "new" ? "New profile" : editing ? editing.name : "Agents"}
       size="lg"
       action={
-        <Button size="sm" variant="quiet" Icon={RotateCw} busy={refreshing} onClick={refresh}>
-          Refresh
-        </Button>
+        !editing && (
+          <Button size="sm" variant="quiet" Icon={RotateCw} busy={refreshing} onClick={refresh}>
+            Refresh
+          </Button>
+        )
       }
     >
-      <div className="flex flex-col gap-4 pb-4">
-        {!target && <Callout tone="warning">Add a workspace first: installs run in one of its panes.</Callout>}
-        <List footer={target ? `Installs run in a pane of ${target.name}, so you can see and answer every step.` : undefined}>
-          {sorted.map((a) => (
-            <Row
-              key={a.id}
-              leading={<GlyphTile engine={a.id} />}
-              title={
-                <span className="flex items-center gap-2">
-                  {a.name}
-                  {a.installed && (
-                    <Pill size="sm" tone="success">
-                      {a.version ?? "Installed"}
-                    </Pill>
-                  )}
-                </span>
-              }
-              detail={
-                a.installed ? (
-                  <span className="font-mono">{a.path}</span>
-                ) : (
-                  <span className="flex flex-col gap-0.5">
-                    <span className="font-mono break-all text-faint">{a.install}</span>
-                    {a.install_note && <span>{a.install_note}</span>}
+      {editing ? (
+        <ProfileEditor key={editing === "new" ? "new" : editing.id} profile={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
+      ) : (
+        <div className="flex flex-col gap-6 pb-4">
+          {!target && <Callout tone="warning">Add a workspace first: installs run in one of its panes.</Callout>}
+          <List footer={target ? `Installs run in a pane of ${target.name}, so you can see and answer every step.` : undefined}>
+            {sorted.map((a) => (
+              <Row
+                key={a.id}
+                leading={<GlyphTile engine={a.id} />}
+                title={
+                  <span className="flex items-center gap-2">
+                    {a.name}
+                    {a.installed && (
+                      <Pill size="sm" tone="success">
+                        {a.version ?? "Installed"}
+                      </Pill>
+                    )}
                   </span>
-                )
-              }
-              wrap
-              trailing={
-                <span className="flex items-center gap-1">
-                  {platform.openExternal && (
-                    <Button size="xs" variant="quiet" Icon={ExternalLink} onClick={() => platform.openExternal?.(a.docs_url)} aria-label={`${a.name} docs`}>
-                      Docs
-                    </Button>
-                  )}
-                  {!a.installed && a.install && (
-                    <Button size="xs" variant="ghost" disabled={!target} onClick={() => install(a)}>
-                      Install
-                    </Button>
-                  )}
-                </span>
-              }
-            />
-          ))}
-        </List>
-      </div>
+                }
+                detail={
+                  a.installed ? (
+                    <span className="font-mono">{a.path}</span>
+                  ) : (
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-mono break-all text-faint">{a.install}</span>
+                      {a.install_note && <span>{a.install_note}</span>}
+                    </span>
+                  )
+                }
+                wrap
+                trailing={
+                  <span className="flex items-center gap-1">
+                    {platform.openExternal && (
+                      <Button size="xs" variant="quiet" Icon={ExternalLink} onClick={() => platform.openExternal?.(a.docs_url)} aria-label={`${a.name} docs`}>
+                        Docs
+                      </Button>
+                    )}
+                    {!a.installed && a.install && (
+                      <Button size="xs" variant="ghost" disabled={!target} onClick={() => install(a)}>
+                        Install
+                      </Button>
+                    )}
+                  </span>
+                }
+              />
+            ))}
+          </List>
+          <List label="Profiles" footer="A profile starts a CLI with your own arguments, for example another model.">
+            {custom.map((p) => (
+              <Row
+                key={p.id}
+                leading={<GlyphTile engine={p.engine} />}
+                title={p.name}
+                detail={<span className="font-mono">{[p.command, joinArgs(p.args)].filter(Boolean).join(" ")}</span>}
+                onClick={() => setEditing(p)}
+              />
+            ))}
+            <Row Icon={Plus} title="New profile" onClick={() => setEditing("new")} />
+          </List>
+        </div>
+      )}
     </Sheet>
   );
 }

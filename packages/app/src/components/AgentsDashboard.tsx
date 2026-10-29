@@ -26,7 +26,10 @@ export function AgentsDashboard() {
     const engine = (s: Session) => state?.profiles.find((p) => p.id === s.profile_id)?.engine ?? "shell";
     const all = Object.values(state?.sessions ?? {}).filter((s) => engine(s) !== "shell" && !s.profile_id.startsWith("install:"));
     return (state?.workspaces ?? [])
-      .map((w) => ({ w, sessions: all.filter((s) => s.workspace_id === w.id).sort((a, b) => FIRST[a.status] - FIRST[b.status] || b.status_since - a.status_since) }))
+      .map((w) => ({
+        w,
+        sessions: all.filter((s) => s.workspace_id === w.id).sort((a, b) => FIRST[a.status] - FIRST[b.status] || b.status_since - a.status_since),
+      }))
       .filter((g) => g.sessions.length > 0);
   }, [state?.sessions, state?.workspaces, state?.profiles]);
 
