@@ -8,4 +8,9 @@ pane_id?: string, cols?: number, rows?: number,
 /**
  * Continue a previous CLI conversation.
  */
-resume?: string, worktree?: boolean, };
+resume?: string, 
+/**
+ * Folder inside the workspace to run in (default: the workspace folder). CLIs keep their
+ * conversations per folder, so resuming needs the original one.
+ */
+cwd?: string, worktree?: boolean, };

@@ -10,6 +10,7 @@ mod core;
 mod discord;
 mod env;
 mod fsbrowse;
+mod history;
 mod hooks;
 mod layout;
 mod paths;

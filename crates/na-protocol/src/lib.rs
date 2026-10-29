@@ -546,6 +546,13 @@ pub enum Request {
     FsList {
         path: String,
     },
+    // past agent conversations (Claude Code, Codex) on this computer, newest first
+    HistorySearch {
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        limit: Option<u32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -570,6 +577,11 @@ pub struct StartSession {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub resume: Option<String>,
+    /// Folder inside the workspace to run in (default: the workspace folder). CLIs keep their
+    /// conversations per folder, so resuming needs the original one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub worktree: Option<bool>,
@@ -586,6 +598,23 @@ pub struct AttachResult {
     pub seq: u64,
     pub cols: u16,
     pub rows: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct HistoryEntry {
+    /// Catalog id of the CLI ("claude", "codex"); resume with `StartSession.resume = id`.
+    pub engine: Id,
+    pub id: String,
+    pub cwd: String,
+    pub title: String,
+    /// The prompt that matched the query, shortened around the match.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub snippet: Option<String>,
+    pub prompts: u32,
+    #[ts(type = "number")]
+    pub updated_at: Millis,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

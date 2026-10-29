@@ -12,6 +12,7 @@ export type * from "./ErrorCode";
 export type * from "./Event";
 export type * from "./FsEntry";
 export type * from "./GitSummary";
+export type * from "./HistoryEntry";
 export type * from "./HostInfo";
 export type * from "./KeepAwake";
 export type * from "./LayoutNode";

@@ -73,6 +73,7 @@ pub struct Core {
     /// Set while shutting down: exits caused by the shutdown are not saved, so the next start
     /// still knows what was running.
     closing: std::sync::atomic::AtomicBool,
+    history: crate::history::History,
 }
 
 pub struct Subscription {
@@ -123,6 +124,7 @@ impl Core {
             port: Mutex::new(0),
             was_running: Mutex::new(was_running),
             closing: std::sync::atomic::AtomicBool::new(false),
+            history: Default::default(),
         })
     }
 
@@ -350,6 +352,19 @@ impl Core {
                 Ok(Value::Null)
             }
             Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path),
+            Request::HistorySearch { query, limit } => {
+                // Phones and the orchestrator only see conversations from approved workspaces.
+                let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop)
+                    .then(|| self.read(|s| s.workspaces.iter().filter(|w| w.approved).map(|w| w.path.clone()).collect()));
+                let allow = move |cwd: &str| approved.as_ref().is_none_or(|ws| ws.iter().any(|w| Path::new(cwd).starts_with(w)));
+                // The first search reads every transcript once; keep that off the async threads.
+                let me = self.clone();
+                let limit = limit.unwrap_or(50).min(200) as usize;
+                tokio::task::spawn_blocking(move || me.history.search(&me.env.home, &query, limit, allow))
+                    .await
+                    .map(|hits| json!(hits))
+                    .map_err(|e| err(ErrorCode::Internal, e.to_string()))
+            }
         }
     }
 
@@ -384,13 +399,18 @@ impl Core {
             .read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned())
             .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
         let profile = self.profile(&start.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
+        let cwd = match &start.cwd {
+            Some(c) if Path::new(c).starts_with(&ws.path) && Path::new(c).is_dir() => c.clone(),
+            Some(_) => return Err(err(ErrorCode::BadRequest, "that folder is not inside the workspace")),
+            None => ws.path.clone(),
+        };
         let now = now_ms();
         let session = Session {
             id: layout::new_id(),
             workspace_id: ws.id.clone(),
             profile_id: profile.id.clone(),
             title: profile.name.clone(),
-            cwd: ws.path.clone(),
+            cwd,
             status: AgentStatus::Starting,
             status_since: now,
             started_at: now,

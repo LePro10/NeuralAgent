@@ -126,6 +126,12 @@ Open items first. Everything else keeps going locally until these are done.
   restarts (checked: alive again, accepts input); with the setting off it stays stopped. Agents
   with a known conversation id get their CLI's resume argument (Claude `--resume <id>`).
   Exits caused by the shutdown itself are no longer saved, so the next start knows what ran.
+- Session search + resume: sidebar → History lists past Claude Code and Codex conversations
+  on this computer (titles and your own prompts only; tool output and answers are not read).
+  Measured on 1.9 GB of real transcripts: first search 5.9 s (debug build), then 2–3 ms.
+  Resume opens the CLI with its resume argument in the conversation's original folder
+  (checked: `codex resume <id>` in /private/tmp/na-codex-test, workspace created for it).
+  Phones/orchestrator will only see conversations from approved workspaces.
 - Fixed on the way: a session busy from its first second stayed "Starting" forever.
 
 ## Known gaps
