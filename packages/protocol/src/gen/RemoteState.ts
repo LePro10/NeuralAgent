@@ -7,7 +7,11 @@ export type RemoteState = { status: RemoteStatus,
 /**
  * Relay base URL, e.g. `https://agent.neuralhub.dev`.
  */
-relay: string, account?: RemoteAccount, 
+relay: string, 
+/**
+ * Switched off on this computer ("Disconnect remote"); the account stays signed in.
+ */
+paused: boolean, account?: RemoteAccount, 
 /**
  * The account's devices (this computer included).
  */

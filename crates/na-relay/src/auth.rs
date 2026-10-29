@@ -333,6 +333,8 @@ fn new_device(r: &Relay, user: User, d: &NewDevice) -> ApiResult<Tokens> {
         r.db.add_device(&user.id, d.name.trim(), &d.platform, &d.kind, d.pubkey.as_deref(), &hash(&refresh))
             .map_err(|e| ApiError::bad(e.to_string()))?;
     let _ = r.db.bump("signins", 1);
+    // The account's other devices list the new one right away (e.g. the computer that showed the QR).
+    r.hub.presence(r, &user.id);
     Ok(Tokens { access: access_for(r, &user, &device), refresh, expires_in: ACCESS_TTL, device_id: device.id, user })
 }
 

@@ -4,7 +4,7 @@ import { apply } from "./apply.ts";
 import type { State, Workspace } from "./gen/index.ts";
 
 const empty: State = { workspaces: [], layouts: {}, sessions: {}, profiles: [], catalog: [], mcp: [],
-    limits: [], remote: { status: "signed_out", relay: "", devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude" } };
+    limits: [], remote: { status: "signed_out", relay: "", paused: false, devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude" } };
 const ws: Workspace = { id: "w1", name: "a", path: "/a", approved: true, pinned: false, order: 1, created_at: 0 };
 
 test("upsert, then remove cascades", () => {

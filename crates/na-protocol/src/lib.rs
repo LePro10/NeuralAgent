@@ -201,6 +201,9 @@ pub struct RemoteState {
     pub status: RemoteStatus,
     /// Relay base URL, e.g. `https://agent.neuralhub.dev`.
     pub relay: String,
+    /// Switched off on this computer ("Disconnect remote"); the account stays signed in.
+    #[serde(default)]
+    pub paused: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub account: Option<RemoteAccount>,
@@ -249,6 +252,8 @@ pub struct RemotePairCode {
     /// Opens the web remote (or the app) and pairs; the code is in the URL fragment.
     pub url: String,
     pub expires_in: u32,
+    /// The URL as a QR code (SVG, black on white so every camera reads it in any theme).
+    pub svg: String,
 }
 
 /// Tokens of model calls. `input` excludes cached input; `cache_read` / `cache_write` are the

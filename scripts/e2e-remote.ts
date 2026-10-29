@@ -153,6 +153,8 @@ const redeem = await fetch(`${RELAY}/api/pair/redeem`, {
 }).then((r) => r.json());
 ok(redeem.tokens?.access && redeem.host.id === frag.get("h"), "phone redeems the code");
 const hostPub = unb64(redeem.host.pubkey);
+await until(() => remoteNow().devices.some((d: any) => d.name === "E2E Phone" && !d.online), "new phone listed on the desktop");
+ok(true, "paired phone appears on the desktop at once");
 ok((await fingerprint(hostPub)) === frag.get("f"), "host key matches the fingerprint from the QR");
 const again = await fetch(`${RELAY}/api/pair/redeem`, {
   method: "POST",

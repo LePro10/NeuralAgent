@@ -7,4 +7,8 @@ export type RemotePairCode = {
 /**
  * Opens the web remote (or the app) and pairs; the code is in the URL fragment.
  */
-url: string, expires_in: number, };
+url: string, expires_in: number, 
+/**
+ * The URL as a QR code (SVG, black on white so every camera reads it in any theme).
+ */
+svg: string, };

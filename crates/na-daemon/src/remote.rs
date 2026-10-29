@@ -140,6 +140,7 @@ pub fn start(core: &Arc<Core>) {
     update(core, |r| {
         r.relay = creds.as_ref().map(|c| c.relay.clone()).unwrap_or_else(relay_default);
         r.fingerprint = fp;
+        r.paused = off_flag(core).exists();
         r.status = if creds.is_some() { RemoteStatus::Connecting } else { RemoteStatus::SignedOut };
     });
     tokio::spawn(run(core.clone()));
@@ -309,6 +310,7 @@ pub async fn handle(core: &Arc<Core>, req: Request) -> Result<Value, ApiError> {
                 std::fs::write(&flag, b"").map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
             }
             tracing::info!(enabled, "remote access switched");
+            update(core, |r| r.paused = !enabled);
             // A phone that pulled the switch still gets its answer before the line drops.
             let core = core.clone();
             tokio::spawn(async move {
@@ -323,7 +325,8 @@ pub async fn handle(core: &Arc<Core>, req: Request) -> Result<Value, ApiError> {
             let fp = device_key(&creds).map(|k| fingerprint(&k.public())).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
             let code = v["code"].as_str().unwrap_or_default();
             let url = format!("{}/app/pair#c={code}&h={}&f={fp}", creds.relay, creds.device_id);
-            Ok(json!(RemotePairCode { url, expires_in: v["expires_in"].as_u64().unwrap_or(120) as u32 }))
+            let svg = qr_svg(&url).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+            Ok(json!(RemotePairCode { url, expires_in: v["expires_in"].as_u64().unwrap_or(120) as u32, svg }))
         }
         Request::RemoteRevoke { device_id } => {
             api(core, reqwest::Method::DELETE, &format!("/api/devices/{device_id}"), None).await?;
@@ -331,6 +334,18 @@ pub async fn handle(core: &Arc<Core>, req: Request) -> Result<Value, ApiError> {
         }
         _ => Err(err(ErrorCode::BadRequest, "not a remote request")),
     }
+}
+
+fn qr_svg(url: &str) -> anyhow::Result<String> {
+    use qrcode::render::svg;
+    let code = qrcode::QrCode::with_error_correction_level(url, qrcode::EcLevel::M)?;
+    Ok(code
+        .render::<svg::Color>()
+        .min_dimensions(240, 240)
+        .quiet_zone(true)
+        .dark_color(svg::Color("black"))
+        .light_color(svg::Color("white"))
+        .build())
 }
 
 fn signed_out(core: &Core) {
@@ -694,6 +709,12 @@ async fn serve_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pairing_qr_is_svg() {
+        let svg = qr_svg("https://agent.neuralhub.dev/app/pair#c=abc&h=def&f=0123").unwrap();
+        assert!(svg.contains("<svg") && svg.contains("black"));
+    }
 
     #[test]
     fn status_from_account() {
