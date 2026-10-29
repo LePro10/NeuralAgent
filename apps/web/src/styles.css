@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "@neuralagent/ui/styles.css";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+
+@source "./";
+@source "../../../packages/ui/ui";
+
+/* Unlike the app, these are ordinary documents: the page scrolls inside #root. */
+#root {
+  height: 100%;
+  overflow-y: auto;
+}

@@ -9,6 +9,9 @@ on:
       - crates/na-relay/**
       - crates/na-crypto/**
       - deploy/relay/**
+      - apps/web/**
+      - packages/**
+      - pnpm-lock.yaml
       - Cargo.lock
       - .github/workflows/relay-image.yml
   workflow_dispatch:
