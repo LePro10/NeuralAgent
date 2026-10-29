@@ -10,14 +10,12 @@ decisions: `DECISIONS.md`.
     GHCR token exists: `git ls-files -z | rsync -a --from0 --files-from=- ./ root@192.168.30.96:/opt/neuralagent/src/`
     then `docker build -f deploy/relay/Dockerfile -t ghcr.io/lepro10/neuralagent-relay:latest .`
     in `/opt/neuralagent/src` and `docker compose up -d` in `/opt/neuralagent`.
-    The relay on .96 does not yet have the "presence on new device" fix (commit after 85b8bb5).
   - Daemon remote client `crates/na-daemon/src/remote.rs` (D27–D29), desktop page
     `RemotePage.tsx`, tray Disconnect/Reconnect.
 - Next for M5: admin web UI (`/admin`: requests, users, devices, stats, passkey) and landing in
   `apps/web` (served by the relay from `NA_RELAY_WEB`); then M6 web remote `/app` (pairing at
   `/app/pair#c=&h=&f=`, client side of the E2E envelopes `hs1/hs2/d/bye` — see remote.rs).
-- Open small things: `dev:web` script points at the web package that doesn't exist yet; the
-  relay closes a revoked socket without a close frame (client sees 1006); audit log of remote
+- Open small things: `dev:web` script points at the web package that doesn't exist yet; audit log of remote
   actions (M7); "Last seen" for a device that never connected shows its creation date.
 
 ## How to run

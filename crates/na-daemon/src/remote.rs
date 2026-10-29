@@ -225,21 +225,30 @@ async fn refresh(core: &Arc<Core>) -> Result<String, Fail> {
 
 async fn api(core: &Arc<Core>, method: reqwest::Method, path: &str, body: Option<Value>) -> Result<Value, ApiError> {
     let relay = core.remote.creds.lock().as_ref().map(|c| c.relay.clone()).ok_or_else(|| err(ErrorCode::BadRequest, "not signed in"))?;
-    let access = match refresh(core).await {
-        Ok(a) => a,
-        Err(f) => return Err(fail(core, f)),
-    };
-    let mut req = core.remote.http.request(method, format!("{relay}{path}")).bearer_auth(access).timeout(Duration::from_secs(15));
-    if let Some(b) = body {
-        req = req.json(&b);
+    // Twice at most: after a relay restart the cached access token is unknown there.
+    for attempt in 0..2 {
+        let access = match refresh(core).await {
+            Ok(a) => a,
+            Err(f) => return Err(fail(core, f)),
+        };
+        let mut req =
+            core.remote.http.request(method.clone(), format!("{relay}{path}")).bearer_auth(access).timeout(Duration::from_secs(15));
+        if let Some(b) = &body {
+            req = req.json(b);
+        }
+        let res = req.send().await.map_err(|e| err(ErrorCode::Unavailable, format!("relay unreachable ({})", e.without_url())))?;
+        let status = res.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED && attempt == 0 {
+            *core.remote.access.lock() = None;
+            continue;
+        }
+        let v: Value = res.json().await.unwrap_or(Value::Null);
+        if !status.is_success() {
+            return Err(err(ErrorCode::BadRequest, v["error"].as_str().unwrap_or("the relay refused this").to_string()));
+        }
+        return Ok(v);
     }
-    let res = req.send().await.map_err(|e| err(ErrorCode::Unavailable, format!("relay unreachable ({})", e.without_url())))?;
-    let status = res.status();
-    let v: Value = res.json().await.unwrap_or(Value::Null);
-    if !status.is_success() {
-        return Err(err(ErrorCode::BadRequest, v["error"].as_str().unwrap_or("the relay refused this").to_string()));
-    }
-    Ok(v)
+    Err(err(ErrorCode::Unavailable, "the relay did not accept this computer's sign-in"))
 }
 
 fn fail(core: &Core, f: Fail) -> ApiError {
@@ -556,7 +565,12 @@ async fn connect(core: &Arc<Core>, c: &Creds, mut wake: std::pin::Pin<&mut tokio
                             update(core, |r| r.status = RemoteStatus::Blocked);
                             break End::Park;
                         }
-                        if reason.contains("signed out") || reason.contains("deleted") || reason == "sign in again" {
+                        // The relay restarted and forgot access tokens: get a new one, stay signed in.
+                        if reason == "sign in again" {
+                            *core.remote.access.lock() = None;
+                            break End::Wake;
+                        }
+                        if reason.contains("signed out") || reason.contains("deleted") {
                             fail(core, Fail::SignedOut);
                             break End::Park;
                         }

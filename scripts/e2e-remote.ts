@@ -63,13 +63,19 @@ function run(bin: string, args: string[], env: Record<string, string>) {
 // ───────────── relay and daemon ─────────────
 
 let daemonLog = () => "";
-const relayLog = run("neuralagent-relay", [], {
-  NA_RELAY_BIND: `127.0.0.1:${RELAY_PORT}`,
-  PUBLIC_URL: RELAY,
-  NA_RELAY_DB: join(tmp, "relay.db"),
-  NA_RELAY_TEST_LOGIN: "1",
-  ADMIN_EMAILS: "owner@e2e.test",
-});
+let relayLog = () => "";
+const startRelay = () => {
+  relayLog = run("neuralagent-relay", [], {
+    NA_RELAY_BIND: `127.0.0.1:${RELAY_PORT}`,
+    PUBLIC_URL: RELAY,
+    NA_RELAY_DB: join(tmp, "relay.db"),
+    NA_RELAY_TEST_LOGIN: "1",
+    ADMIN_EMAILS: "owner@e2e.test",
+  });
+  // The relay is always procs[0], so a test can stop it.
+  procs.unshift(procs.pop()!);
+};
+startRelay();
 await until(() => fetch(`${RELAY}/api/health`).then((r) => r.ok).catch(() => false), "relay up");
 ok(true, "relay running");
 
@@ -248,6 +254,15 @@ await desk.req("remote_revoke", { device_id: phoneId });
 await until(() => rws.readyState === WebSocket.CLOSED || relayIn.some((m) => m.t === "revoked"), "phone revoked");
 ok(true, "revoked phone is cut off");
 
+// A relay restart (deploy) forgets access tokens: the computer reconnects and stays signed in.
+procs.shift()!.kill("SIGKILL");
+await until(() => remoteNow().status === "offline", "daemon notices the relay is gone");
+startRelay();
+await until(() => fetch(`${RELAY}/api/health`).then((r) => r.ok).catch(() => false), "relay back");
+await until(() => remoteNow().status === "online", "daemon back online after relay restart", 40000);
+ok(remoteNow().account?.email === "owner@e2e.test", "relay restart: still signed in, online again");
+const pair2 = await desk.req("remote_pair");
+ok(pair2.url.includes("#c="), "relay API works again with a fresh access token");
 await desk.req("remote_sign_out");
 await until(() => remoteNow().status === "signed_out", "signed out");
 ok(true, "sign out");

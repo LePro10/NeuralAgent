@@ -159,6 +159,7 @@ async fn serve(r: Arc<Relay>, socket: WebSocket) {
         Ok(a) => a,
         Err(e) => {
             let _ = sink.send(Message::Text(json!({ "t": "revoked", "reason": e.1 }).to_string().into())).await;
+            let _ = sink.send(Message::Close(None)).await;
             return;
         }
     };
@@ -177,6 +178,7 @@ async fn serve(r: Arc<Relay>, socket: WebSocket) {
     };
     if full {
         let _ = sink.send(Message::Text(json!({ "t": "revoked", "reason": "too many connections" }).to_string().into())).await;
+        let _ = sink.send(Message::Close(None)).await;
         return;
     }
     let _ = r.db.bump("connections", 1);
