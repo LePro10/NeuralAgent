@@ -28,6 +28,10 @@ last_message?: string,
  */
 prompt?: string, worktree?: WorktreeInfo, 
 /**
+ * Last local web address it printed (a dev server), for the preview pane.
+ */
+preview_url?: string, 
+/**
  * Where the status comes from.
  */
 status_source: StatusSource, };

@@ -335,6 +335,10 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub worktree: Option<WorktreeInfo>,
+    /// Last local web address it printed (a dev server), for the preview pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub preview_url: Option<String>,
     /// Where the status comes from.
     pub status_source: StatusSource,
 }

@@ -16,6 +16,7 @@ mod hooks;
 mod layout;
 mod paths;
 mod policy;
+mod preview;
 mod profiles;
 mod pty;
 mod server;

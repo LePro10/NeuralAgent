@@ -3,12 +3,12 @@ import { Callout } from "@neuralagent/ui";
 import { useState } from "react";
 import { launchable } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
-import { Download } from "lucide-react";
+import { Download, Globe } from "lucide-react";
 import { useWorktreeStart } from "../lib/worktree";
 import { AgentGlyph } from "./AgentGlyph";
 
 /** An empty pane is a launcher: pick what runs here. */
-export function EmptyPane({ workspaceId, paneId, onFocus }: { workspaceId: string; paneId: string; onFocus: () => void }) {
+export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspaceId: string; paneId: string; onFocus: () => void; onBrowser: (url: string) => void }) {
   const client = useClient();
   const profiles = useDaemon((c) => c.state?.profiles);
   const catalog = useDaemon((c) => c.state?.catalog);
@@ -16,6 +16,8 @@ export function EmptyPane({ workspaceId, paneId, onFocus }: { workspaceId: strin
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const worktree = useWorktreeStart(workspaceId);
+  // A dev server one of this workspace's agents started, else the usual default.
+  const previewUrl = useDaemon((c) => Object.values(c.state?.sessions ?? {}).find((s) => s.workspace_id === workspaceId && s.alive && s.preview_url)?.preview_url);
 
   const start = async (p: Profile) => {
     setBusy(p.id);
@@ -46,6 +48,14 @@ export function EmptyPane({ workspaceId, paneId, onFocus }: { workspaceId: strin
               <span className="truncate">{busy === p.id ? "Starting…" : p.name}</span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => onBrowser(previewUrl ?? "http://localhost:3000/")}
+            className="hoverable flex h-8 items-center gap-2 rounded-field bg-fill-1 px-3 text-chip text-ink transition-colors"
+          >
+            <Globe size={13} strokeWidth={1.6} className="text-dim" aria-hidden />
+            Browser
+          </button>
           <button
             type="button"
             onClick={() => openCatalog(true)}

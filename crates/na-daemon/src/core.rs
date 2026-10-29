@@ -526,6 +526,7 @@ impl Core {
             last_message: None,
             prompt: start.prompt.as_ref().map(|p| p.chars().take(300).collect()),
             worktree,
+            preview_url: None,
             status_source: StatusSource::Output,
         };
         let s = self.spawn_into(session, start.prompt)?;
@@ -541,6 +542,8 @@ impl Core {
     /// Starts (or restarts) the process for `session` and publishes it.
     fn spawn_into(self: &Arc<Self>, mut session: Session, prompt: Option<String>) -> std::result::Result<Session, ApiError> {
         let profile = self.profile(&session.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "profile was deleted"))?;
+        // A dev server from the previous run is gone.
+        session.preview_url = None;
         let exe = std::env::current_exe().map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
         let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe)?;
         let hook_token = crate::server::random_token();
@@ -698,6 +701,11 @@ impl Core {
                 }
             }
             PtyNote::Bell => {}
+            PtyNote::Url(url) => {
+                if self.read(|s| s.sessions.get(sid).is_some_and(|x| x.preview_url.as_deref() != Some(url.as_str()))) {
+                    self.update_session(sid, |s| s.preview_url = Some(url));
+                }
+            }
             PtyNote::Exited(code) => {
                 let was_live = self.live.lock().remove(sid).is_some();
                 if !was_live {

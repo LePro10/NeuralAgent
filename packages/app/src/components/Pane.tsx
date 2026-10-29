@@ -1,11 +1,12 @@
 import type { PaneContent, Session } from "@neuralagent/protocol";
 import { StatusDot } from "@neuralagent/ui";
-import { Columns2, GitBranch, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
+import { Columns2, GitBranch, Globe, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@neuralagent/ui";
 import { STATUS } from "../lib/status";
 import { useChanges, useClient, useDaemon } from "../lib/store";
 import { AgentGlyph } from "./AgentGlyph";
+import { BrowserPane } from "./BrowserPane";
 import { EmptyPane } from "./EmptyPane";
 import { TerminalView } from "./TerminalView";
 
@@ -15,6 +16,9 @@ export interface PaneActions {
   close: () => void;
   zoom: () => void;
   swapWith: (otherPaneId: string) => void;
+  setContent: (content: PaneContent) => void;
+  /** Shows `url` in the tab's browser pane, or opens one to the right. */
+  preview: (url: string) => void;
 }
 
 const DRAG_TYPE = "application/x-neuralagent-pane";
@@ -64,7 +68,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
   };
 
   const st = session ? STATUS[session.status] : null;
-  const title = session ? session.title : content.kind === "browser" ? "Browser" : "Empty";
+  const title = session ? session.title : content.kind === "browser" ? hostOf(content.url) : "Empty";
 
   const onDragStart = (e: DragEvent) => {
     e.dataTransfer.setData(DRAG_TYPE, paneId);
@@ -118,6 +122,11 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
         {session?.last_line && <span className="min-w-0 flex-1 truncate text-meta text-faint">{session.last_line}</span>}
         {!session?.last_line && <span className="flex-1" />}
         <div className={cn("flex items-center gap-0.5 transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+          {session?.preview_url && (
+            <HeaderButton label={`Preview ${session.preview_url}`} onClick={() => actions.preview(session.preview_url!)}>
+              <Globe size={13} strokeWidth={1.6} />
+            </HeaderButton>
+          )}
           {session && !session.alive && (
             <HeaderButton label="Restart" onClick={() => client.req({ m: "session_restart", p: { id: session.id } }).catch(() => {})}>
               <RotateCw size={13} strokeWidth={1.6} />
@@ -146,8 +155,10 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
       <div className="relative min-h-0 flex-1">
         {sid && session ? (
           <TerminalView sid={sid} focused={focused} startedAt={session.started_at} webgl={webgl} onFocus={actions.focus} />
+        ) : content.kind === "browser" ? (
+          <BrowserPane url={content.url} onFocus={actions.focus} onNavigate={(url) => actions.setContent({ kind: "browser", url })} />
         ) : (
-          <EmptyPane workspaceId={workspaceId} paneId={paneId} onFocus={actions.focus} />
+          <EmptyPane workspaceId={workspaceId} paneId={paneId} onFocus={actions.focus} onBrowser={(url) => actions.setContent({ kind: "browser", url })} />
         )}
         {session && !session.alive && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3">
@@ -162,4 +173,12 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
       </div>
     </div>
   );
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host || "Browser";
+  } catch {
+    return "Browser";
+  }
 }

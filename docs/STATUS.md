@@ -147,6 +147,11 @@ Open items first. Everything else keeps going locally until these are done.
   the diff; "Merge into main" committed, merged, removed worktree and branch and closed the
   agent ("Merged 1 commit into main"). Discard and closing an unchanged agent remove the
   worktree too; a conflicting merge changes nothing (unit test).
+- Browser preview: the daemon notices a dev server address in a terminal's output (checked with
+  Vite on port 5199, whose port is printed in colour); the pane gets a globe button that opens a
+  browser pane next to it with that page (checked: page loaded in the pane). Empty panes also
+  offer "Browser". The page is sandboxed (cannot navigate the NeuralAgent window). On phones a
+  local address is not loaded yet (needs the remote preview tunnel, M5).
 - Fixed on the way: a session busy from its first second stayed "Starting" forever; a closed
   session's process was left as a zombie (the daemon now always reaps it, checked).
 

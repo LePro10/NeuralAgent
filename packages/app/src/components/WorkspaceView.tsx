@@ -2,7 +2,7 @@ import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent
 import { ConfirmSheet, Menu, StatusDot, cn, toast, type MenuEntry } from "@neuralagent/ui";
 import { Download, GitBranch, GitCompare, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeTab, gridOf, newTab, order, panes, removePane, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
+import { activeTab, gridOf, newTab, order, panes, removePane, setContent, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
 import { STATUS, mostUrgent } from "../lib/status";
 import { launchable } from "../lib/profiles";
 import { useCatalogSheet, useChanges, useClient, useDaemon, useUi } from "../lib/store";
@@ -59,6 +59,13 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
       split: (dir) => editTab((t) => splitPane(t, paneId, dir)),
       zoom: () => editTab((t) => ({ ...t, zoomed: t.zoomed === paneId ? undefined : paneId, focused: paneId })),
       swapWith: (other) => editTab((t) => swapPanes(t, other, paneId)),
+      setContent: (content) => editTab((t) => setContent(t, paneId, content)),
+      preview: (url) =>
+        editTab((t) => {
+          const browser = panes(t.root).find((p) => p.content.kind === "browser");
+          if (browser) return { ...setContent(t, browser.id, { kind: "browser", url }), zoomed: undefined };
+          return splitPane(t, paneId, "row", { kind: "browser", url });
+        }),
       close: async () => {
         const pane = panes(tab.root).find((p) => p.id === paneId);
         await save(updateTab(layout, tab.id, (t) => removePane(t, paneId)));

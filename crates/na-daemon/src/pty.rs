@@ -35,9 +35,13 @@ pub struct Spawn {
 
 /// What the reader thread reports to the owner.
 pub enum PtyNote {
-    Output { bytes: usize },
+    Output {
+        bytes: usize,
+    },
     Title(String),
     Bell,
+    /// A local web address was printed (a dev server started).
+    Url(String),
     Exited(Option<i32>),
 }
 
@@ -172,6 +176,11 @@ impl Pty {
                     }
                     if bell {
                         notify(PtyNote::Bell);
+                    }
+                    if buf[..n].windows(4).any(|w| w == b"http")
+                        && let Some(url) = crate::preview::find_url(&buf[..n])
+                    {
+                        notify(PtyNote::Url(url));
                     }
                 }
                 let code = reap.lock().wait().ok().map(|s| s.exit_code() as i32);
