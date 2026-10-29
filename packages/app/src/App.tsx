@@ -1,12 +1,13 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
-import { Folder, FolderGit2, FolderPlus, History, LayoutDashboard, Plug } from "lucide-react";
+import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
 import { ChangesSheet } from "./components/ChangesSheet";
 import { HistoryPage } from "./components/HistoryPage";
+import { UsagePage } from "./components/UsagePage";
 import { McpPage } from "./components/McpPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { WorkspaceView } from "./components/WorkspaceView";
@@ -17,6 +18,7 @@ const ADD = "__add";
 const AGENTS = "__agents";
 const HISTORY = "__history";
 const MCP = "__mcp";
+const USAGE = "__usage";
 const SETTINGS = "__settings";
 
 export function App() {
@@ -31,7 +33,8 @@ export function App() {
   const settingsOpen = workspace === SETTINGS;
   const history = workspace === HISTORY;
   const mcp = workspace === MCP;
-  const current = dashboard || settingsOpen || history || mcp ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const usage = workspace === USAGE;
+  const current = dashboard || settingsOpen || history || mcp || usage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural, …": until the orchestrator exists, show what was heard.
   useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
@@ -76,6 +79,7 @@ export function App() {
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, badge: waiting > 0 ? `${waiting} waiting` : undefined },
     { id: HISTORY, label: "History", Icon: History },
     { id: MCP, label: "MCP", Icon: Plug },
+    { id: USAGE, label: "Usage", Icon: Gauge },
     ...workspaces.map((w) => {
       const statuses = Object.values(state?.sessions ?? {}).filter((s) => s.workspace_id === w.id).map((s) => s.status);
       const urgent = mostUrgent(statuses);
@@ -102,6 +106,8 @@ export function App() {
     <HistoryPage />
   ) : mcp ? (
     <McpPage />
+  ) : usage ? (
+    <UsagePage />
   ) : current ? (
     <WorkspaceView key={current.id} workspaceId={current.id} />
   ) : (
@@ -126,7 +132,7 @@ export function App() {
       sidebar={
         <Sidebar
           items={items}
-          value={dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : (current?.id ?? "")}
+          value={dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : usage ? USAGE : (current?.id ?? "")}
           onChange={(id) => (id === ADD ? void addWorkspace() : setWorkspace(id))}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
           onSettings={() => setWorkspace(SETTINGS)}

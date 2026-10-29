@@ -28,6 +28,8 @@ export function apply(s: State, ev: Event): State {
       return { ...s, profiles: ev.profiles };
     case "mcp_set":
       return { ...s, mcp: ev.servers };
+    case "limits_set":
+      return { ...s, limits: ev.limits };
     case "catalog_set":
       return { ...s, catalog: ev.catalog };
     case "settings_set":

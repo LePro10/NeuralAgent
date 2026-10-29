@@ -21,6 +21,7 @@ mod preview;
 mod profiles;
 mod pty;
 mod server;
+mod usage;
 
 use std::time::Duration;
 
@@ -32,6 +33,10 @@ use crate::paths::{DaemonInfo, Paths, write_private};
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        Some("statusline") => {
+            hooks::statusline_main();
+            Ok(())
+        }
         Some("hook") => {
             hooks::client_main(args.get(1).map(String::as_str).unwrap_or(""), args.get(2).map(String::as_str));
             Ok(())
@@ -108,6 +113,10 @@ fn serve() -> Result<()> {
                     if n.is_multiple_of(15) {
                         let core = core.clone();
                         tokio::task::spawn_blocking(move || core.refresh_git());
+                    }
+                    if n % 30 == 1 {
+                        let core = core.clone();
+                        tokio::task::spawn_blocking(move || core.refresh_usage());
                     }
                     if n.is_multiple_of(3)
                         && let Err(e) = core.save_if_dirty()

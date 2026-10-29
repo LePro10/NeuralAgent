@@ -9,4 +9,4 @@ export type Request = { "m": "workspace_add", "p": { path: string, name?: string
 /**
  * One file, or everything.
  */
-path?: string, } } | { "m": "worktree_merge", "p": { session_id: string, } } | { "m": "worktree_discard", "p": { session_id: string, } } | { "m": "mcp_save", "p": { server: McpServer, values: { [key in string]: string }, } } | { "m": "mcp_delete", "p": { id: string, } } | { "m": "mcp_import" } | { "m": "history_search", "p": { query: string, limit?: number, } };
+path?: string, } } | { "m": "worktree_merge", "p": { session_id: string, } } | { "m": "worktree_discard", "p": { session_id: string, } } | { "m": "mcp_save", "p": { server: McpServer, values: { [key in string]: string }, } } | { "m": "mcp_delete", "p": { id: string, } } | { "m": "mcp_import" } | { "m": "usage_report", "p": { days: number, } } | { "m": "history_search", "p": { query: string, limit?: number, } };

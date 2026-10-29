@@ -18,6 +18,53 @@ pub fn client_main(event: &str, arg: Option<&str>) {
     let _ = send(event, arg);
 }
 
+/// Claude Code's `statusLine` command: forwards the input (it has the subscription limits) and then
+/// runs the user's own statusline command with the same input, so their statusline stays as it was.
+pub fn statusline_main() {
+    let mut input = Vec::new();
+    let _ = std::io::stdin().take(1 << 20).read_to_end(&mut input);
+    let text = String::from_utf8_lossy(&input).into_owned();
+    let _ = send("statusline", Some(&text));
+    let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+    let Some(cmd) = user_statusline(&v) else { return };
+    let mut sh = if cfg!(windows) {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", &cmd]);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.args(["-c", &cmd]);
+        c
+    };
+    let Ok(mut child) = sh.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn() else {
+        return;
+    };
+    if let Some(mut i) = child.stdin.take() {
+        let _ = i.write_all(&input);
+    }
+    if let Ok(out) = child.wait_with_output() {
+        let _ = std::io::stdout().write_all(&out.stdout);
+    }
+}
+
+/// The statusline command the user configured: project-local, project, then user settings.
+fn user_statusline(input: &Value) -> Option<String> {
+    let cwd = input["workspace"]["current_dir"].as_str().or(input["cwd"].as_str()).map(std::path::PathBuf::from);
+    let config = std::env::var_os("CLAUDE_CONFIG_DIR").map(std::path::PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".claude")));
+    let mut files = vec![];
+    if let Some(c) = &cwd {
+        files.push(c.join(".claude/settings.local.json"));
+        files.push(c.join(".claude/settings.json"));
+    }
+    files.extend(config.map(|c| c.join("settings.json")));
+    files.iter().find_map(|f| {
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(f).ok()?).ok()?;
+        let cmd = v["statusLine"]["command"].as_str()?.trim();
+        // never call ourselves
+        (!cmd.is_empty() && !cmd.contains("neuralagentd")).then(|| cmd.to_string())
+    })
+}
+
 fn send(event: &str, arg: Option<&str>) -> std::io::Result<()> {
     let (Ok(sid), Ok(token), Ok(port)) =
         (std::env::var("NEURALAGENT_SESSION"), std::env::var("NEURALAGENT_HOOK_TOKEN"), std::env::var("NEURALAGENT_PORT"))

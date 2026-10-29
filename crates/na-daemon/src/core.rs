@@ -44,6 +44,11 @@ struct Persisted {
     settings: Settings,
     #[serde(default)]
     mcp: Vec<McpServer>,
+    #[serde(default)]
+    limits: Vec<UsageLimit>,
+    /// Agent working time per local day (`YYYY-MM-DD` → ms), for the usage page.
+    #[serde(default)]
+    busy_days: BTreeMap<String, i64>,
 }
 
 /// Runtime data of a live session that is not part of the shared state.
@@ -60,6 +65,7 @@ struct Inner {
     seq: u64,
     ring: VecDeque<(u64, Event)>,
     dirty: bool,
+    busy_days: BTreeMap<String, i64>,
 }
 
 pub struct Core {
@@ -78,6 +84,7 @@ pub struct Core {
     history: crate::history::History,
     /// Serialises changes to the MCP list and its secrets file.
     mcp_lock: Mutex<()>,
+    usage: crate::usage::Usage,
 }
 
 pub struct Subscription {
@@ -100,6 +107,7 @@ impl Core {
             catalog: vec![],
             settings: persisted.settings,
             mcp: persisted.mcp,
+            limits: persisted.limits,
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -120,7 +128,7 @@ impl Core {
         };
         let (events, _) = broadcast::channel(4096);
         Arc::new(Core {
-            inner: Mutex::new(Inner { state, seq: 0, ring: VecDeque::new(), dirty: false }),
+            inner: Mutex::new(Inner { state, seq: 0, ring: VecDeque::new(), dirty: false, busy_days: persisted.busy_days }),
             events,
             live: Mutex::new(HashMap::new()),
             env,
@@ -131,6 +139,7 @@ impl Core {
             closing: std::sync::atomic::AtomicBool::new(false),
             history: Default::default(),
             mcp_lock: Mutex::new(()),
+            usage: Default::default(),
         })
     }
 
@@ -203,6 +212,8 @@ impl Core {
                 profiles: s.profiles.iter().filter(|p| !p.builtin).cloned().collect(),
                 settings: s.settings.clone(),
                 mcp: s.mcp.clone(),
+                limits: s.limits.clone(),
+                busy_days: g.busy_days.clone(),
             })?
         };
         write_private(&self.paths.state(), &data)
@@ -447,6 +458,23 @@ impl Core {
                 self.emit(Event::McpSet { servers: list });
                 Ok(json!(added))
             }
+            Request::UsageReport { days } => {
+                let since = crate::usage::since_day(days.clamp(1, 400));
+                let me = self.clone();
+                tokio::task::spawn_blocking(move || {
+                    me.usage.refresh(&me.env.home);
+                    let ws = me.read(|s| s.workspaces.iter().map(|w| (w.id.clone(), w.path.clone())).collect::<Vec<_>>());
+                    // the workspace with the longest path containing the folder (worktrees are inside theirs)
+                    let workspace = |cwd: &str| {
+                        ws.iter().filter(|(_, p)| Path::new(cwd).starts_with(p)).max_by_key(|(_, p)| p.len()).map(|(id, _)| id.clone())
+                    };
+                    let rows = me.usage.rows(&since, workspace);
+                    let busy_ms: BTreeMap<String, i64> = me.inner.lock().busy_days.range(since.clone()..).map(|(k, v)| (k.clone(), *v)).collect();
+                    json!(UsageReport { rows, busy_ms })
+                })
+                .await
+                .map_err(|e| err(ErrorCode::Internal, e.to_string()))
+            }
             Request::HistorySearch { query, limit } => {
                 // Phones and the orchestrator only see conversations from approved workspaces.
                 let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop)
@@ -510,6 +538,44 @@ impl Core {
             }
         }
         BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Reads new transcript lines: usage of running agents and the Codex limits.
+    pub fn refresh_usage(&self) {
+        static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if BUSY.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        self.usage.refresh(&self.env.home);
+        let codex = self.usage.codex_limits();
+        if !codex.is_empty() {
+            self.set_limits("codex", codex);
+        }
+        let running: Vec<(Id, String, Option<SessionUsage>)> =
+            self.read(|s| s.sessions.values().filter(|x| x.alive).filter_map(|x| Some((x.id.clone(), x.engine_session.clone()?, x.usage.clone()))).collect());
+        for (id, conv, old) in running {
+            let new = self.usage.conversation(&conv);
+            if new.is_some() && new != old {
+                self.update_session(&id, |x| x.usage = new);
+            }
+        }
+        BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Replaces one engine's limits; emits only when something other than the time changed,
+    /// or the last report is over a minute old.
+    fn set_limits(&self, engine: &str, new: Vec<UsageLimit>) {
+        let all = self.read(|s| s.limits.clone());
+        let old: Vec<&UsageLimit> = all.iter().filter(|l| l.engine == engine).collect();
+        let key = |l: &UsageLimit| (l.window.clone(), l.used_percent.to_bits(), l.resets_at);
+        let same = old.len() == new.len()
+            && old.iter().zip(&new).all(|(a, b)| key(a) == key(b) && b.updated_at - a.updated_at < 60_000);
+        if same {
+            return;
+        }
+        let mut limits: Vec<UsageLimit> = all.into_iter().filter(|l| l.engine != engine).collect();
+        limits.extend(new);
+        self.emit(Event::LimitsSet { limits });
     }
 
     fn workspace_add(&self, path: String, name: Option<String>) -> ApiResult {
@@ -587,6 +653,7 @@ impl Core {
             prompt: start.prompt.as_ref().map(|p| p.chars().take(300).collect()),
             worktree,
             preview_url: None,
+            usage: None,
             status_source: StatusSource::Output,
         };
         let s = self.spawn_into(session, start.prompt)?;
@@ -822,6 +889,15 @@ impl Core {
             x.busy_ms += busy_add;
             extra(x);
         });
+        if busy_add > 0 {
+            let mut g = self.inner.lock();
+            *g.busy_days.entry(crate::usage::today()).or_default() += busy_add;
+            // a little over a year is enough for the usage page
+            while g.busy_days.len() > 400 {
+                g.busy_days.pop_first();
+            }
+            g.dirty = true;
+        }
         let kind = match next {
             AgentStatus::Done => Some(AttentionKind::Done),
             AgentStatus::Waiting => Some(AttentionKind::Waiting),
@@ -886,6 +962,14 @@ impl Core {
                 x.engine_session = Some(e.clone());
             }
         };
+        if event == "statusline" {
+            // Claude Code's statusline input: subscription limits, nothing about the status.
+            let limits = crate::usage::claude_limits(payload, now_ms());
+            if !limits.is_empty() {
+                self.set_limits("claude", limits);
+            }
+            return;
+        }
         match event {
             "SessionStart" => {
                 let cur = self.read(|st| st.sessions.get(sid).map(|s| s.status));
@@ -1009,6 +1093,7 @@ pub fn apply(s: &mut State, ev: &Event) {
         }
         Event::ProfilesSet { profiles } => s.profiles = profiles.clone(),
         Event::McpSet { servers } => s.mcp = servers.clone(),
+        Event::LimitsSet { limits } => s.limits = limits.clone(),
         Event::CatalogSet { catalog } => s.catalog = catalog.clone(),
         Event::SettingsSet { settings } => s.settings = settings.clone(),
         Event::Attention { .. } => {}

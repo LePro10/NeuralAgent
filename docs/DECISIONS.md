@@ -197,3 +197,17 @@ as environment variables of that agent: Claude Code `--mcp-config` with `${VAR}`
 the CLIs' own config files, so removing a server here removes it everywhere and the user's own
 settings stay untouched. Import copies servers from Claude Code and Codex once. There is no
 server catalogue or store (by design).
+
+## D25 — Usage comes from the CLIs' transcripts; cost is an API-price estimate
+
+Token counts are read from the transcripts Claude Code and Codex already write (no proxy, no
+API keys, works for conversations started outside NeuralAgent too). Claude repeats a message's
+usage on every line of that message, so messages are counted once by id (also across a resumed
+or forked conversation). Codex reports running totals; the difference to the previous report is
+counted. Cost uses a fixed table of list prices (USD per million tokens, cache writes 1.25×/2×
+input for the 5-minute/1-hour cache); a model id must match exactly or with a date suffix, so a
+new model shows "no price" instead of an older model's price. Subscription users pay their plan,
+the page says so. Limits: Codex writes them into its transcript; Claude Code gives them only to
+its statusline command, so NeuralAgent sets its own statusline command for the agents it starts
+(`--settings`), which records the limits and then runs the user's configured statusline with
+the same input, so nothing visible changes for the user.

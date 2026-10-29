@@ -77,7 +77,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M1 desktop shell, daemon, pane grid | done (2026-10-29) — CI green on Linux/macOS, Windows fix (ConPTY cursor answer) pending CI |
 | M2 agent CLIs: catalog, install, hooks, dashboard | done except a real Codex turn (needs `codex login`) |
 | M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
-| M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | in progress — see below |
+| M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -115,7 +115,7 @@ Open items first. Everything else keeps going locally until these are done.
 - Open: your real voice and microphone (checklist), learn-my-voice with a real recording,
   Windows/Linux voice test.
 
-### M4 verified so far
+### M4 verified
 - Keep awake: a busy shell session makes the daemon hold a macOS "prevent idle sleep" assertion
   (`pmset -g assertions` shows "Agents are working"); it is released a few seconds after the
   work stops, and never taken with the setting Off. "On power" asks the OS once a minute.
@@ -161,6 +161,18 @@ Open items first. Everything else keeps going locally until these are done.
   Secret values are only in a private file (`mcp-secrets.json`, mode 600) and reach an agent
   only through its environment — never in the app state, the command line or the browser
   (checked: saved through the UI, value absent from state.json, gone after delete).
+- Usage & cost: the daemon reads the token counts from Claude Code's and Codex's own
+  transcripts (only new lines each time; subagents count to their conversation; repeated
+  messages are counted once) and prices them at API list prices (unknown models get no price
+  rather than a wrong one). Checked on this Mac: 7 days = ~9,950 Claude calls, first read
+  17.7 s (debug build, in the background), afterwards 13 ms. A running agent shows its own
+  tokens and cost (checked on a resumed conversation: 20k tokens, $0.161, matching the 1-hour
+  cache price by hand). Agent working time per day is recorded. Subscription limits: Claude Code
+  reports them to its statusline command; NeuralAgent now registers its own statusline command,
+  records the limits and then runs your own statusline unchanged (checked: your
+  `statusline.py` output still appears; a test input with 5h/7d limits arrived in the app).
+  Your Claude Code here uses API billing through `ANTHROPIC_BASE_URL`, so it reports no limits;
+  Codex limits come from its transcripts (not logged in here, so unit test only).
 - Fixed on the way: a session busy from its first second stayed "Starting" forever; a closed
   session's process was left as a zombie (the daemon now always reaps it, checked); the Windows
   terminal test (cursor-position answer is now one write); session variables of a Claude Code

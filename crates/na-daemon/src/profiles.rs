@@ -126,7 +126,8 @@ pub fn claude_settings(hook_exe: &Path) -> Value {
         .iter()
         .map(|ev| (ev.to_string(), json!([{ "hooks": [{ "type": "command", "command": format!("{exe} hook {ev}"), "timeout": 10 }] }])))
         .collect();
-    json!({ "hooks": hooks })
+    // The statusline command reports the subscription limits, then runs the user's own one.
+    json!({ "hooks": hooks, "statusLine": { "type": "command", "command": format!("{exe} statusline"), "padding": 0 } })
 }
 
 /// Quotes a path for the shell that runs hook commands (sh on unix, cmd/PowerShell on Windows).

@@ -1,3 +1,4 @@
+import { compact, money, totalTokens } from "../lib/format";
 import type { Session } from "@neuralagent/protocol";
 import { Button, Empty, IconButton, List, Page, Row, StatusDot, toast } from "@neuralagent/ui";
 import { ArrowUpRight, Bot, Download, RotateCw, Square } from "lucide-react";
@@ -75,7 +76,18 @@ export function AgentsDashboard() {
                         <span className="truncate">{s.title}</span>
                       </span>
                     }
-                    detail={said || undefined}
+                    detail={
+                      s.usage ? (
+                        <>
+                          {said && <span className="block truncate">{said}</span>}
+                          <span className="block text-dim">
+                            {[s.usage.cost_usd != null ? money(s.usage.cost_usd) : null, `${compact(totalTokens(s.usage.tokens))} tokens`].filter(Boolean).join(" · ")}
+                          </span>
+                        </>
+                      ) : (
+                        said || undefined
+                      )
+                    }
                     value={`${st.label} · ${since(s.status_since, now)}`}
                     trailing={
                       <span className="flex items-center gap-1">

@@ -167,6 +167,86 @@ pub struct State {
     /// MCP servers every agent gets (Claude Code, Codex, OpenCode).
     #[serde(default)]
     pub mcp: Vec<McpServer>,
+    /// Subscription limits the CLIs last reported (Claude Code, Codex).
+    #[serde(default)]
+    pub limits: Vec<UsageLimit>,
+}
+
+/// Tokens of model calls. `input` excludes cached input; `cache_read` / `cache_write` are the
+/// prompt-cache parts (Codex reports no cache writes).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TokenCounts {
+    #[ts(type = "number")]
+    pub input: u64,
+    #[ts(type = "number")]
+    pub output: u64,
+    #[ts(type = "number")]
+    pub cache_read: u64,
+    #[ts(type = "number")]
+    pub cache_write: u64,
+}
+
+/// What an agent's conversation used so far, from the CLI's transcript.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SessionUsage {
+    pub tokens: TokenCounts,
+    /// What it would cost at API prices (USD); missing when a model's price is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cost_usd: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model: Option<String>,
+}
+
+/// One subscription window, e.g. Claude's 5-hour limit or Codex's weekly limit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UsageLimit {
+    /// "claude" or "codex".
+    pub engine: String,
+    /// "5h", "7d", "7d_opus", ... (`window_minutes` says how long it is when known).
+    pub window: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub window_minutes: Option<u32>,
+    pub used_percent: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub resets_at: Option<Millis>,
+    #[ts(type = "number")]
+    pub updated_at: Millis,
+}
+
+/// Usage of one model on one day (local time) in one folder.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UsageRow {
+    /// `YYYY-MM-DD`.
+    pub day: String,
+    pub engine: String,
+    pub model: String,
+    /// The workspace whose folder the conversation ran in, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_id: Option<Id>,
+    pub tokens: TokenCounts,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cost_usd: Option<f64>,
+    /// Model calls.
+    pub calls: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UsageReport {
+    pub rows: Vec<UsageRow>,
+    /// Agent time per day (`YYYY-MM-DD` → ms working), from sessions run here.
+    #[ts(type = "Record<string, number>")]
+    pub busy_ms: BTreeMap<String, i64>,
 }
 
 /// An MCP server managed in one place. Values of environment variables and headers are kept by
@@ -365,6 +445,9 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub preview_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub usage: Option<SessionUsage>,
     /// Where the status comes from.
     pub status_source: StatusSource,
 }
@@ -512,6 +595,9 @@ pub enum Event {
     },
     McpSet {
         servers: Vec<McpServer>,
+    },
+    LimitsSet {
+        limits: Vec<UsageLimit>,
     },
     CatalogSet {
         catalog: Vec<CatalogEntry>,
@@ -664,6 +750,11 @@ pub enum Request {
     /// Copy the servers configured in Claude Code (`~/.claude.json`) and Codex
     /// (`~/.codex/config.toml`) that are not here yet. Returns how many were added.
     McpImport,
+    /// Token use and cost of Claude Code and Codex conversations of the last `days` days
+    /// (1 = today). Returns `UsageReport`.
+    UsageReport {
+        days: u32,
+    },
     // past agent conversations (Claude Code, Codex) on this computer, newest first
     HistorySearch {
         query: String,

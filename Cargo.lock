@@ -2753,6 +2753,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "chrono",
  "dirs",
  "discord-rich-presence",
  "futures-util",

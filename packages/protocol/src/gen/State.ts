@@ -4,6 +4,7 @@ import type { McpServer } from "./McpServer";
 import type { Profile } from "./Profile";
 import type { Session } from "./Session";
 import type { Settings } from "./Settings";
+import type { UsageLimit } from "./UsageLimit";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceLayout } from "./WorkspaceLayout";
 
@@ -14,4 +15,8 @@ export type State = { workspaces: Array<Workspace>, layouts: { [key in string]: 
 /**
  * MCP servers every agent gets (Claude Code, Codex, OpenCode).
  */
-mcp: Array<McpServer>, };
+mcp: Array<McpServer>, 
+/**
+ * Subscription limits the CLIs last reported (Claude Code, Codex).
+ */
+limits: Array<UsageLimit>, };
