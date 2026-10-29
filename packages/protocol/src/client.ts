@@ -57,10 +57,12 @@ export class DaemonClient {
   private closed = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(
-    private connect: Connect,
-    private client: ClientInfo,
-  ) {
+  private connect: Connect;
+  private client: ClientInfo;
+
+  constructor(connect: Connect, client: ClientInfo) {
+    this.connect = connect;
+    this.client = client;
     void this.open();
   }
 

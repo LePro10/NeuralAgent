@@ -9,6 +9,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { b64, clientStart, exportPublic, fingerprint, generateStaticKey, unb64, type Session } from "../packages/crypto/src/index.ts";
+import { DaemonClient } from "../packages/protocol/src/client.ts";
+import { memoryKeyStore, memoryStore, parsePairLink, RelayLink, RemoteAccount } from "../packages/remote/src/index.ts";
 
 const root = new URL("..", import.meta.url).pathname;
 const RELAY_PORT = 8090;
@@ -237,6 +239,62 @@ await until(
   "shell output on the phone",
 );
 ok(true, "typed on the phone, output streamed back through the relay");
+
+// ───────────── the web remote library (@neuralagent/remote) ─────────────
+
+// A browser pairs by QR link, then drives the computer with the real DaemonClient.
+const pairWeb = parsePairLink(new URL((await desk.req("remote_pair")).url).hash);
+ok(pairWeb, "pairing link parses");
+const webAcc = await RemoteAccount.open({ relay: RELAY, store: memoryStore(), keys: memoryKeyStore(), device: { name: "E2E Browser", platform: "web" } });
+await webAcc.pair(pairWeb!.code, pairWeb!.host, "AAAA-BBBB").then(
+  () => ok(false, "pairing with a wrong fingerprint"),
+  (e) => ok(/does not match/.test(e.message) && !webAcc.signedIn, "library refuses a key that does not match the QR"),
+);
+const pairWeb2 = parsePairLink(new URL((await desk.req("remote_pair")).url).hash)!;
+const host = await webAcc.pair(pairWeb2.code, pairWeb2.host, pairWeb2.fp);
+ok(host.id === redeem.host.id && webAcc.trustedKey(host.id) === redeem.host.pubkey, "library pairs and pins the computer's key");
+const link = new RelayLink(webAcc);
+link.start();
+await until(() => link.status === "online" && link.hosts.some((h) => h.id === host.id && h.online), "link online with the host");
+ok(true, "relay link online, host visible");
+const web = new DaemonClient(link.transport(host.id), { kind: "web", name: "E2E Browser" } as any);
+await until(() => web.state, "web state over the relay");
+ok(web.state!.workspaces.length === 2, "DaemonClient syncs state through the sealed transport");
+await web.req({ m: "remote_pair" } as any).then(
+  () => ok(false, "browser may not pair"),
+  (e) => ok(e.code === "needs_approval", "browser is treated as a phone"),
+);
+let webOut = "";
+const detach = web.attach(s.id, { reset: (snap) => void (webOut = snap), data: (b) => void (webOut += new TextDecoder().decode(b)) });
+await sleep(800);
+await web.req({ m: "term_write", p: { sid: s.id, data: "echo web-$((20+3))\r" } } as any);
+await until(() => webOut.includes("web-23"), "web terminal output");
+ok(true, "browser types into the shell and sees the output");
+detach();
+web.close();
+
+// Signing in on the web with the same account (no QR): the computer's key is trusted on first use.
+const webAcc2 = await RemoteAccount.open({ relay: RELAY, store: memoryStore(), keys: memoryKeyStore(), device: { name: "E2E Laptop", platform: "web" } });
+const start = await webAcc2.signInUrl("test", `${RELAY}/app/`, { email: "owner@e2e.test", name: "Owner" });
+const back = await fetch(start, { redirect: "manual" });
+const loc = new URL(back.headers.get("location")!, RELAY);
+ok(loc.pathname === "/app/" && loc.searchParams.get("code"), "test sign-in returns to /app/ with a code");
+const me = await webAcc2.finishSignIn(loc.searchParams);
+ok(me.email === "owner@e2e.test" && webAcc2.signedIn, "library finishes sign-in (PKCE exchange)");
+const devs = await webAcc2.api("GET", "/api/devices");
+ok(Array.isArray(devs.devices ?? devs), "authenticated API call");
+const link2 = new RelayLink(webAcc2);
+link2.start();
+await until(() => link2.status === "online" && link2.hosts.some((h) => h.online), "second link online");
+const web2 = new DaemonClient(link2.transport(host.id), { kind: "web", name: "E2E Laptop" } as any);
+await until(() => web2.state, "second web state");
+ok(webAcc2.trustedKey(host.id) === redeem.host.pubkey, "signed-in browser reaches the computer and pins its key");
+web2.close();
+await webAcc2.signOut();
+await until(() => link2.status === "signed_out", "library sign out");
+ok(!webAcc2.signedIn, "library signs out");
+link2.stop();
+link.stop();
 
 // The emergency switch works from the phone and cuts the connection.
 await phone.req("remote_enable", { enabled: false });
