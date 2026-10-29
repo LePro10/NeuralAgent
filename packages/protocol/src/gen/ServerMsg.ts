@@ -8,4 +8,4 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * Daemon → client.
  */
-export type ServerMsg = { "t": "hello_ok", v: number, daemon_version: string, host: HostInfo, } | { "t": "res", id: number, ok: boolean, r?: JsonValue, err?: ApiError, } | { "t": "snapshot", seq: number, state: State, } | { "t": "ev", seq: number, ev: Event, } | { "t": "term", sid: string, seq: number, d: string, } | { "t": "pong", at: number, };
+export type ServerMsg = { "t": "hello_ok", v: number, daemon_version: string, host: HostInfo, } | { "t": "res", id: number, ok: boolean, r?: JsonValue, err?: ApiError, } | { "t": "snapshot", seq: number, state: State, } | { "t": "ev", seq: number, ev: Event, } | { "t": "term", sid: string, seq: number, d: string, } | { "t": "term_reset", sid: string, snapshot: string, seq: number, cols: number, rows: number, } | { "t": "pong", at: number, };

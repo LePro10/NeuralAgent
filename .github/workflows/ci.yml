@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (types, tokens, protocol, secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - name: Generated protocol types are up to date
+        run: |
+          pnpm --filter @neuralagent/protocol gen
+          git diff --exit-code -- packages/protocol/src/gen
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm lint:tokens
+      - name: Clean-room name check
+        # The pattern is spelled indirectly so that it does not occur in the repo itself.
+        run: |
+          if git grep -niE 'br[i]dge ?(m[i]nd|sp[a]ce|v[o]ice|c[o]de)' -- . ':!pnpm-lock.yaml'; then
+            echo "::error::Foreign product names found"; exit 1
+          fi
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux webview deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      # tauri-build embeds the frontend, so it has to exist before cargo builds the shell.
+      - run: pnpm --filter @neuralagent/desktop build
+      - run: cargo test --workspace --locked
+      - run: cargo build --workspace --locked
+      - name: Daemon smoke test
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export NEURALAGENT_HOME="$RUNNER_TEMP/na-home"
+          ./target/debug/neuralagentd serve > "$RUNNER_TEMP/daemon.out" 2>&1 &
+          for i in $(seq 1 50); do [ -f "$NEURALAGENT_HOME/daemon.json" ] && break; sleep 0.2; done
+          node scripts/daemon-smoke.mjs
+          kill %1

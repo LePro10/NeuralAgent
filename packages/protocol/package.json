@@ -1,0 +1,16 @@
+{
+  "name": "@neuralagent/protocol",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen": "cd ../.. && cargo test -q -p na-protocol && node scripts/gen-protocol-index.mjs",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2"
+  }
+}

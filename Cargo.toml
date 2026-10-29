@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/na-protocol",
   "crates/na-daemon",
+  "apps/desktop/src-tauri",
 ]
 
 [workspace.package]

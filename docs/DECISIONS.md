@@ -52,3 +52,25 @@ only as external process if at all). VAD Silero + Smart Turn for end of turn.
 
 ## D10 — No Xcode on the build Mac
 iOS is a PWA only; it is tested in Safari's responsive mode, real-iPhone items are marked.
+
+## D11 — Logo: concept C, an "N" built from panes (2026-10-29)
+Three concepts in `docs/brand/`. C wins: it is the product (a grid of terminal panes) and stays
+readable at 16 px; the middle pane carries the ice accent. Icon set generated with
+`pnpm tauri icon docs/brand/neuralagent-icon-1024.png`; uploads in `docs/brand/export/`.
+
+## D12 — Layout is edited by the client, placed by the daemon
+The UI changes the split tree and sends the whole `WorkspaceLayout` (`layout_set`); the daemon
+only places new sessions (requested pane → empty pane → split the largest → new tab at 16).
+Divider drags are local until release; the dragged sizes stay until the daemon echoes the new
+layout (no snap-back). Pane order for ⌘1…9 and presets is on-screen order, not tree order.
+
+## D13 — Terminal rendering
+xterm.js 6 with the WebGL renderer while ≤ 12 terminals are visible (WebGL contexts are limited
+per page), DOM renderer above. Inactive tabs and workspaces unmount and re-attach from the
+daemon snapshot. Colours come from `--color-term-*`, mapped to design tokens (`@theme static`,
+so Tailwind emits them although no utility uses them).
+
+## D14 — Browser dev entry for UI tests
+`apps/desktop/dev.html` runs the same UI in a plain browser against a local daemon (port/token in
+the URL hash). Dev server only, not part of the build. Used with headless WebKit (closest to the
+macOS webview) for automated UI checks; the Tauri window is checked with window screenshots.

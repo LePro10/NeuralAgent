@@ -10,5 +10,8 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r --parallel test",
     "lint:tokens": "node scripts/check-tokens.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
   }
 }

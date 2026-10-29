@@ -1,0 +1,18 @@
+import type { Connect } from "@neuralagent/protocol";
+
+/** What the shell around the shared app provides (Tauri window, browser/PWA, Android). */
+export interface Platform {
+  kind: "desktop" | "web" | "android";
+  /** Device name shown to other clients. */
+  clientName: string;
+  connect: Connect;
+  /** Native folder picker; absent on remote clients (they browse via the daemon). */
+  pickFolder?: () => Promise<string | null>;
+  openExternal: (url: string) => void;
+  notify?: (title: string, body: string) => void;
+  /** Window is focused (for notification decisions). */
+  focused?: () => boolean;
+  /** macOS draws traffic lights over the content at the top left. */
+  trafficLights?: boolean;
+  startDrag?: () => void;
+}

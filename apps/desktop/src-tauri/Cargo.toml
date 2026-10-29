@@ -1,0 +1,28 @@
+[package]
+name = "neuralagent-desktop"
+description = "NeuralAgent desktop shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "neuralagent_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "neuralagent"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow.workspace = true
+dirs = "7.0.0"
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog = "2.8.4"
+tauri-plugin-notification = "2.8.0"
+tauri-plugin-opener = "2.7.2"
+tracing.workspace = true

@@ -59,7 +59,15 @@ Open items first. Everything else keeps going locally until these are done.
 |---|---|
 | Phase 0 (reverse engineering, feature matrix) | done (2026-10-29) |
 | Server .96 base (Ubuntu 26.04.1 LTS, SSH key-only, unattended-upgrades, Docker 29.9, ufw) | done (2026-10-29) |
-| M0 repo, docs, CI, design library, brand | in progress |
+| M0 repo, docs, CI, design library, brand | done (2026-10-29) — CI on 3 OS, secret scan, token check, logo C |
+| M1 desktop shell, daemon, pane grid | in progress — see below |
+
+### M1 verified so far (2026-10-29)
+- Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
+- Split (button, ⌘D / ⌘\), presets 1–16, zoom (⌘↩), divider drag persists in `state.json`.
+- 16 shells with continuous output at once: smooth, daemon ~12 % CPU.
+- App restart (quit + reopen): shells keep running, screens come back intact.
+- Open: agent CLI catalog/install/hooks (M2 part), settings page, session search.
 
 ## Known gaps
 

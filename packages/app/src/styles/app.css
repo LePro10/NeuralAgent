@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import "@neuralagent/ui/styles.css";
+@import "@xterm/xterm/css/xterm.css";
+@import "@fontsource-variable/dm-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/700.css";
+
+@source "../";
+@source "../../../ui/ui";
+
+/*
+ * Terminal palette, derived from the design tokens (read at runtime by TerminalView, because
+ * xterm.js takes concrete colours). Normal colours are the quiet signals, bright ones the glows.
+ */
+@theme static {
+  --color-term-bg: var(--color-chrome);
+  --color-term-fg: var(--color-ink);
+  --color-term-cursor: var(--color-bright);
+  --color-term-selection: var(--color-fill-4);
+  --color-term-black: var(--color-card-3);
+  --color-term-red: var(--color-signal-coral);
+  --color-term-green: var(--color-signal-green);
+  --color-term-yellow: var(--color-signal-amber);
+  --color-term-blue: var(--color-signal-sky);
+  --color-term-magenta: var(--color-signal-violet);
+  --color-term-cyan: var(--color-signal-cyan);
+  --color-term-white: var(--color-ink);
+  --color-term-bright-black: var(--color-dim);
+  --color-term-bright-red: var(--color-danger);
+  --color-term-bright-green: var(--color-mint);
+  --color-term-bright-yellow: var(--color-warning);
+  --color-term-bright-blue: var(--color-live);
+  --color-term-bright-magenta: var(--color-lilac);
+  --color-term-bright-cyan: var(--color-signal-teal);
+  --color-term-bright-white: var(--color-bright);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--color-bg);
+}
+
+/* xterm: no own padding/scrollbar chrome; the pane owns the frame. */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-fill-4) transparent;
+}
+.xterm {
+  height: 100%;
+}
