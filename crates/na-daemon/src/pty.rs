@@ -69,6 +69,8 @@ pub struct Pty {
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     /// Shared with the reader thread, which reaps the child even after the session was closed.
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
+    /// Automatic cursor position answers: (ms after the request, bytes read then). For diagnosis.
+    answers: Mutex<Vec<(u128, u64)>>,
     pub last_input: Mutex<Option<Instant>>,
 }
 
@@ -81,7 +83,9 @@ fn nz(v: u16, fallback: u16) -> NonZeroU16 {
 fn answer_cursor(pty: std::sync::Weak<Pty>, row: u16, col: u16) {
     let _ = std::thread::Builder::new().name("pty-cursor".into()).spawn(move || {
         let mut seen = None;
-        for wait in [0, 300, 1000] {
+        let asked = Instant::now();
+        // Until output moves on: ConPTY may not read its input yet right after starting.
+        for wait in [0, 300, 700, 1500, 2500, 4000] {
             std::thread::sleep(std::time::Duration::from_millis(wait));
             let Some(p) = pty.upgrade() else { return };
             let seq = p.term.lock().seq;
@@ -89,6 +93,7 @@ fn answer_cursor(pty: std::sync::Weak<Pty>, row: u16, col: u16) {
                 return;
             }
             seen = Some(seq);
+            p.answers.lock().push((asked.elapsed().as_millis(), seq));
             let mut w = p.writer.lock();
             let _ = write!(w, "\x1b[{};{}R", row + 1, col + 1);
             let _ = w.flush();
@@ -131,6 +136,7 @@ impl Pty {
             master: Mutex::new(Some(pair.master)),
             child: Arc::new(Mutex::new(child)),
             last_input: Mutex::new(None),
+            answers: Mutex::new(Vec::new()),
         });
 
         let weak = Arc::downgrade(&pty);
@@ -344,7 +350,8 @@ mod tests {
             let later = rx.recv_timeout(std::time::Duration::from_secs(3));
             let (_, seq2, _, _) = pty.attach();
             panic!(
-                "no exit after 10 s; child: {child}; bytes read: {seq}; snapshot: {raw:?}; manual answer: {wrote:?} -> exit {later:?}, bytes {seq2}, screen {:?}",
+                "no exit after 10 s; child: {child}; bytes read: {seq}; auto answers: {:?}; snapshot: {raw:?}; manual answer: {wrote:?} -> exit {later:?}, bytes {seq2}, screen {:?}",
+                pty.answers.lock(),
                 pty.screen_text()
             )
         });
