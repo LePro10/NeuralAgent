@@ -211,3 +211,55 @@ the page says so. Limits: Codex writes them into its transcript; Claude Code giv
 its statusline command, so NeuralAgent sets its own statusline command for the agents it starts
 (`--settings`), which records the limits and then runs the user's configured statusline with
 the same input, so nothing visible changes for the user.
+
+## D26 — Relay: one small Rust service, SQLite, opaque tokens
+
+`crates/na-relay` (axum) does sign-in, accounts, admin, routing and serves the web files; one
+container on .96 with a SQLite file in `/var/lib/neuralagent`. Access tokens are random strings
+kept in memory for 15 minutes (a restart signs everyone in again silently via their refresh
+token); refresh tokens rotate and only their hashes are stored. Using an old refresh token
+again signs that device out (stolen-token signal). No JWT: nothing to verify offline, and
+blocking/deleting must act at once — the relay drops the user's tokens and WebSockets
+immediately. Routing only between devices of the same account, and only while the account is
+approved and remote is on.
+
+## D27 — Desktop sign-in via the daemon's loopback port
+
+The desktop opens the system browser at the relay; the relay sends it back to
+`http://127.0.0.1:<daemon port>/auth/callback` (RFC 8252 loopback redirect, PKCE). No custom
+URL scheme is needed on the desktop (`neuralagent://auth` stays allowed for the Android app).
+The daemon, not the window, holds the account: it keeps working while the window is closed.
+Credentials (refresh token, device key) live in the OS keychain in release builds on macOS and
+Windows, otherwise (dev builds, Linux) in `remote-credentials.json` readable only by the user.
+They never enter the shared state.
+
+## D28 — End-to-end encryption between phone and computer
+
+Each device has an X25519 key registered with the relay. A session is a Noise-like handshake
+(ephemeral + static keys on both sides, `na-crypto`, the same code in Rust and WebCrypto with
+shared test vectors), then AES-256-GCM with strict counters. The computer only accepts a
+handshake whose static key is the one the relay lists for that device, and the QR code carries
+the computer's key fingerprint, so a phone paired by QR also detects a relay that swaps keys.
+Honest limit: a phone added by signing in (not by QR) trusts the relay's key directory on first
+use; the fingerprint is shown on both sides to compare.
+
+## D29 — Remote clients are treated like phones, whatever they claim
+
+The daemon serves relay sessions with the same client loop as local ones, but the client kind
+comes from the relay's device record (Android → `android`, everything else → `web`), never
+from the client's hello. Remote clients cannot change remote access (sign-in, pairing, revoke)
+— except the emergency switch-off, which works from anywhere, including the tray.
+
+## D30 — Admin: passkey as second factor, ES256 only, no attestation
+
+`/admin` needs an admin account (from `ADMIN_EMAILS`, approved automatically) and a passkey.
+The first passkey can be registered right after the first admin sign-in. Only ES256 keys
+(every platform authenticator uses them); attestation is not checked, user verification is
+required and the signature counter must not go backwards.
+
+## D31 — Pull deployment from GHCR with health check and rollback
+
+CI builds the relay image and pushes it to GHCR (only after the relay tests pass). On .96 a
+systemd timer runs `update.sh` every 5 minutes: pull, start, wait for the container's health
+check, otherwise go back to the previous image. No inbound deploy access, no secrets in CI
+for the server. Until the read token is on .96, images are built on the server by hand.

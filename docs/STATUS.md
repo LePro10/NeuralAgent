@@ -4,20 +4,6 @@
 
 Open items first. Everything else keeps going locally until these are done.
 
-- [ ] **NPM proxy host `agent.neuralhub.dev`** (DNS and certificate already work, checked
-      2026-10-29: HTTPS answers 502 because the relay is not deployed yet). Please check in
-      the existing proxy host:
-  1. *Details*: Scheme `http`, Forward Hostname `192.168.30.96`, Port `8080`,
-     **Websockets Support ON**, Block Common Exploits ON.
-  2. *SSL*: Force SSL ON, HTTP/2 ON, HSTS ON.
-  3. *Advanced* → Custom Nginx Configuration:
-     ```
-     client_max_body_size 400m;
-     proxy_read_timeout 3600s;
-     proxy_send_timeout 3600s;
-     proxy_request_buffering off;
-     ```
-     (long-lived WebSockets for agents/calls; CI uploads desktop builds of ~100–300 MB).
 - [ ] **GHCR read token for .96** (pull deployment). `gh` cannot create personal access
       tokens. Steps: github.com → Settings → Developer settings → Personal access tokens →
       Tokens (classic) → *Generate new token (classic)* → note `neuralagent-96-pull`,
@@ -26,13 +12,25 @@ Open items first. Everything else keeps going locally until these are done.
       ```
       ssh root@192.168.30.96 'read -s -p "GHCR token: " T; echo; mkdir -p /etc/neuralagent; umask 077; printf "GHCR_USER=LePro10\nGHCR_TOKEN=%s\n" "$T" > /etc/neuralagent/ghcr.env; echo saved'
       ```
-      Until then I deploy manually over SSH (`docker save | docker load`).
+      Until then I build the image on .96 by hand. After that, every push to `main` that
+      touches the relay deploys itself within ~5 minutes (with rollback).
+- [ ] **Try remote with your real account** (5 min, after the next app build): NeuralAgent →
+      *Remote* (sidebar) → *Continue with GitHub* (or Google). Your address is an admin
+      address, so you are approved at once. Then open `https://agent.neuralhub.dev/admin/` —
+      it asks you to register a **passkey** (Touch ID / iCloud Keychain) on first visit; that
+      passkey is the second factor for the admin area from then on.
+- [ ] **Mail check**: ask someone (or use a second Google account) to request access in
+      NeuralAgent → you should get "Access request: …" from agent@neuralhub.dev; approve it in
+      `/admin` → they get "You're in". Tell me if a mail does not arrive (check spam).
+- [ ] **Tray "Disconnect remote"** (10 s, once signed in): menu bar icon → *Disconnect remote*
+      → the Remote page shows the switch off; again → *Reconnect remote*. (Built and the
+      handler is tested in the UI, but I can't click the real menu bar here.)
 - [ ] **Backups** (store in your password manager / offline, NOT in the repo). They are created
       during the build and listed here as they appear:
   - Android release keystore + its passwords — *without the same keystore no APK update ever
     installs over the old one.*
   - Tauri updater signing key (private key + password) — without it no desktop update.
-  - Relay secrets on .96 (`/etc/neuralagent/relay.env`: JWT key, VAPID keys) and the relay
+  - Relay secrets on .96 (`/etc/neuralagent/relay.env`: OAuth and mail secrets) and the relay
     database `/var/lib/neuralagent/relay.db` (accounts, devices).
 - [ ] **Voice with your own voice** (5 min, when you are back at the Mac): Settings (gear at
       the bottom of the sidebar) → Voice models → download Parakeet, Wake word spotter, Silero.
@@ -55,6 +53,8 @@ Open items first. Everything else keeps going locally until these are done.
 
 ## Done on your side (verified)
 
+- NPM proxy host `agent.neuralhub.dev` → .96:8080: HTTPS and WebSockets work (checked
+  2026-10-30 with the deployed relay).
 - DNS `agent.neuralhub.dev` → 89.217.203.85, certificate valid.
 - `~/.neuralagent-secrets/`: server.env (all keys filled), google-services.json (package
   `dev.neuralhub.neuralagent`), firebase-service-account.json.
@@ -78,6 +78,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M2 agent CLIs: catalog, install, hooks, dashboard | done except a real Codex turn (needs `codex login`) |
 | M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
 | M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
+| M5 relay, accounts, pairing, E2E, remote in the daemon | relay live at agent.neuralhub.dev; desktop side done; admin UI and web remote next |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -177,6 +178,24 @@ Open items first. Everything else keeps going locally until these are done.
   session's process was left as a zombie (the daemon now always reaps it, checked); the Windows
   terminal test (cursor-position answer is now one write); session variables of a Claude Code
   that started NeuralAgent (e.g. its messaging token) no longer leak into agents.
+
+### M5 verified so far (2026-10-30)
+- Relay live: `https://agent.neuralhub.dev/api/health` → ok; Google + GitHub configured, mail
+  configured; WebSockets through the proxy; GitHub sign-in redirects correctly. Container
+  health check, update timer installed (waits for the GHCR token).
+- `na-crypto`: Rust and WebCrypto produce identical handshakes and frames (shared vectors).
+- Relay account flow test (`cargo test -p na-relay --features test-login`): pending users
+  can't pair or route, one admin mail per request, approve unlocks live and mails, pairing
+  code works once and only for the same account, other accounts' devices are unreachable and
+  invisible, refresh-token reuse signs out, blocking cuts WebSockets and tokens at once,
+  passkeys (software authenticator: wrong origin/rp/challenge/signature rejected).
+- `scripts/e2e-remote.ts` (also in CI): real relay + daemon + simulated phone. Sign-in through
+  the browser flow, QR pairing with fingerprint check, foreign-key handshake refused,
+  end-to-end session, phone claiming to be the desktop is treated as a phone, no agents outside
+  approved workspaces, shell started and typed into from the phone with output streamed back,
+  relay sees only ciphertext, emergency switch-off from the phone, revoke, sign out.
+- Desktop Remote page checked in WebKit (signed out, waiting for approval, online with QR and a
+  phone in the device list).
 
 ## Known gaps
 
