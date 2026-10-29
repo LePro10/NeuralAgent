@@ -75,6 +75,26 @@ fn nz(v: u16, fallback: u16) -> NonZeroU16 {
     NonZeroU16::new(v).or(NonZeroU16::new(fallback)).expect("fallback is non-zero")
 }
 
+/// Answers a cursor position request. ConPTY can miss an answer that arrives while it is still
+/// starting up, so answer again (twice at most) while no further output shows it got through.
+fn answer_cursor(pty: std::sync::Weak<Pty>, row: u16, col: u16) {
+    let _ = std::thread::Builder::new().name("pty-cursor".into()).spawn(move || {
+        let mut seen = None;
+        for wait in [0, 300, 1000] {
+            std::thread::sleep(std::time::Duration::from_millis(wait));
+            let Some(p) = pty.upgrade() else { return };
+            let seq = p.term.lock().seq;
+            if seen.is_some_and(|s| s != seq) {
+                return;
+            }
+            seen = Some(seq);
+            let mut w = p.writer.lock();
+            let _ = write!(w, "\x1b[{};{}R", row + 1, col + 1);
+            let _ = w.flush();
+        }
+    });
+}
+
 impl Pty {
     pub fn spawn(spec: Spawn, notify: impl Fn(PtyNote) + Send + Sync + 'static) -> Result<Arc<Pty>> {
         let notify = Arc::new(notify);
@@ -136,12 +156,8 @@ impl Pty {
                         let cb = t.parser.callbacks_mut();
                         (cb.title.take(), std::mem::take(&mut cb.bell), cursor)
                     };
-                    if let Some((row, col)) = cursor
-                        && let Some(p) = weak.upgrade()
-                    {
-                        let mut w = p.writer.lock();
-                        let _ = write!(w, "\x1b[{};{}R", row + 1, col + 1);
-                        let _ = w.flush();
+                    if let Some((row, col)) = cursor {
+                        answer_cursor(weak.clone(), row, col);
                     }
                     notify(PtyNote::Output { bytes: n });
                     if let Some(title) = title {
