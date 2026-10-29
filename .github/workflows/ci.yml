@@ -68,6 +68,11 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # The cache keeps sherpa-onnx's build-script result but prunes the native libs it points
+      # at, so make that build script run (and download them) again.
+      - name: Drop stale sherpa-onnx build output
+        shell: bash
+        run: rm -rf target/*/build/sherpa-onnx-sys-* target/*/.fingerprint/sherpa-onnx-sys-* target/sherpa-onnx-prebuilt
       - run: pnpm install --frozen-lockfile
       # tauri-build embeds the frontend, so it has to exist before cargo builds the shell.
       - run: pnpm --filter @neuralagent/desktop build

@@ -313,7 +313,13 @@ mod tests {
             },
         )
         .unwrap();
-        let code = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        let code = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap_or_else(|_| {
+            // Say what state things are in, so a CI-only hang can be told apart.
+            let child =
+                pty.child.try_lock().map(|mut c| format!("{:?}", c.try_wait())).unwrap_or_else(|| "locked (reader is waiting)".into());
+            let (_, seq, _, _) = pty.attach();
+            panic!("no exit after 10 s; child: {child}; bytes read: {seq}; screen: {:?}", pty.screen_text())
+        });
         assert_eq!(code, Some(0));
         assert!(pty.screen_text().contains("hello-pty"));
         let (snap, seq, _, _) = pty.attach();
