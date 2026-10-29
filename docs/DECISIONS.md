@@ -103,3 +103,18 @@ A sidebar entry "Agents" above the workspaces lists every agent session (not pla
 installers) grouped by workspace, most urgent first, with the last message, time in status and
 stop/restart/open. "Install agents" opens the catalog sheet.
 
+
+## D19 — Dictation STT: Parakeet TDT 0.6B v3 (int8) via sherpa-onnx
+Benchmark (`crates/na-voice/examples/stt_bench.rs`), Apple M4 CPU, 4 threads, 10 German + 10 English
+sentences (synthetic `say` voices, 300 ms leading silence, digits count as errors):
+
+| Model | DE WER | EN WER | RTF | latency / sentence | load |
+|---|---|---|---|---|---|
+| Parakeet TDT 0.6B v3 int8 (offline) | 8.7 % | 4.4 % | 0.075 | ~230 ms | 0.6 s |
+| Nemotron 3.5 streaming 560 ms int8 | 14.0 % | 4.5 % | 0.20 | ~640 ms | 0.4 s |
+| Whisper turbo int8 | 17.8 % | 4.2 % | 0.62 | ~1.9 s | — |
+
+Parakeet is the default for push-to-talk dictation: best German, fast, 25 languages. Nemotron
+stays available as the streaming engine (live partial text, call mode) — it needs leading
+silence or it drops the first word. Whisper is too slow on CPU for <1 s. Models are downloaded on
+demand into `$NEURALAGENT_HOME/models`, never bundled.
