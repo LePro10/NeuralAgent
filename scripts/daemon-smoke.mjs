@@ -12,8 +12,10 @@ function connect() {
   let nextId = 1;
   const pending = new Map();
   const listeners = new Set();
+  const seen = [];
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
+    if (m.t === "ev") seen.push(m);
     if (m.t === "res" && pending.has(m.id)) {
       const { resolve, reject } = pending.get(m.id);
       pending.delete(m.id);
@@ -32,8 +34,11 @@ function connect() {
       pending.set(id, { resolve, reject });
       ws.send(JSON.stringify({ t: "req", id, req: p === undefined ? { m } : { m, p } }));
     });
+  // Events can arrive before the response to the request that caused them: check those too.
   const waitFor = (pred, ms = 8000) =>
     new Promise((resolve, reject) => {
+      const past = seen.find(pred);
+      if (past) return resolve(past);
       const t = setTimeout(() => reject(new Error("timeout")), ms);
       const l = (m) => {
         if (pred(m)) {

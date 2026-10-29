@@ -35,9 +35,6 @@ impl Paths {
     pub fn log(&self) -> PathBuf {
         self.root.join("logs").join("daemon.log")
     }
-    pub fn hooks_dir(&self) -> PathBuf {
-        self.root.join("hooks")
-    }
 }
 
 /// Written at startup, read by the desktop shell and by `neuralagentd hook`.

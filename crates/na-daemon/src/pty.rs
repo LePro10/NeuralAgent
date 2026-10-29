@@ -65,9 +65,9 @@ pub struct Pty {
     term: Arc<Mutex<Term>>,
     tx: broadcast::Sender<Chunk>,
     writer: Mutex<Box<dyn Write + Send>>,
-    master: Mutex<Box<dyn MasterPty + Send>>,
+    /// `None` once closed after the child exited (Windows, see `spawn`).
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
-    pub pid: Option<u32>,
     pub last_input: Mutex<Option<Instant>>,
 }
 
@@ -91,7 +91,6 @@ impl Pty {
         }
         let child = pair.slave.spawn_command(cmd).with_context(|| format!("spawn {}", spec.program))?;
         drop(pair.slave);
-        let pid = child.process_id();
 
         let mut reader = pair.master.try_clone_reader().context("pty reader")?;
         let writer = pair.master.take_writer().context("pty writer")?;
@@ -105,9 +104,8 @@ impl Pty {
             term: term.clone(),
             tx: tx.clone(),
             writer: Mutex::new(writer),
-            master: Mutex::new(pair.master),
+            master: Mutex::new(Some(pair.master)),
             child: Mutex::new(child),
-            pid,
             last_input: Mutex::new(None),
         });
 
@@ -142,6 +140,25 @@ impl Pty {
             })
             .context("spawn reader thread")?;
 
+        // ConPTY keeps the output pipe open after the child exits, so the reader never sees EOF.
+        // Close the pseudo console once the child is gone; the reader then drains and ends.
+        #[cfg(windows)]
+        {
+            let weak = Arc::downgrade(&pty);
+            std::thread::Builder::new()
+                .name("pty-wait".into())
+                .spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    let Some(p) = weak.upgrade() else { break };
+                    if matches!(p.child.lock().try_wait(), Ok(Some(_))) {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        drop(p.master.lock().take());
+                        break;
+                    }
+                })
+                .context("spawn wait thread")?;
+        }
+
         Ok(pty)
     }
 
@@ -173,7 +190,9 @@ impl Pty {
             }
             t.parser.screen_mut().set_size(nz(rows, 24), nz(cols, 80));
         }
-        self.master.lock().resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
+        if let Some(m) = self.master.lock().as_ref() {
+            m.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
+        }
         Ok(())
     }
 
@@ -203,6 +222,7 @@ impl Pty {
     }
 
     /// The visible screen as plain text (for the orchestrator and tests).
+    #[allow(dead_code)]
     pub fn screen_text(&self) -> String {
         self.term.lock().parser.screen().contents()
     }

@@ -12,17 +12,23 @@ use serde_json::Value;
 
 use crate::server::App;
 
-/// Client side. Always exits 0 and prints nothing, whatever happens.
-pub fn client_main(event: &str) {
-    let _ = send(event);
+/// Client side. Always exits 0 and prints nothing, whatever happens. The payload comes on stdin,
+/// or as an argument (Codex `notify` passes its JSON as the last argument).
+pub fn client_main(event: &str, arg: Option<&str>) {
+    let _ = send(event, arg);
 }
 
-fn send(event: &str) -> std::io::Result<()> {
+fn send(event: &str, arg: Option<&str>) -> std::io::Result<()> {
     let (Ok(sid), Ok(token), Ok(port)) = (std::env::var("NEURALAGENT_SESSION"), std::env::var("NEURALAGENT_HOOK_TOKEN"), std::env::var("NEURALAGENT_PORT")) else {
         return Ok(());
     };
     let mut body = Vec::new();
-    std::io::stdin().take(1 << 20).read_to_end(&mut body)?;
+    match arg {
+        Some(a) => body.extend_from_slice(a.as_bytes()),
+        None => {
+            std::io::stdin().take(1 << 20).read_to_end(&mut body)?;
+        }
+    }
     if body.is_empty() {
         body = b"{}".to_vec();
     }

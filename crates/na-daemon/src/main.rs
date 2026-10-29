@@ -7,6 +7,7 @@
 mod core;
 mod env;
 mod fsbrowse;
+mod catalog;
 mod hooks;
 mod layout;
 mod paths;
@@ -26,7 +27,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("hook") => {
-            hooks::client_main(args.get(1).map(String::as_str).unwrap_or(""));
+            hooks::client_main(args.get(1).map(String::as_str).unwrap_or(""), args.get(2).map(String::as_str));
             Ok(())
         }
         Some("info") => {
@@ -65,6 +66,10 @@ fn serve() -> Result<()> {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
         let port = listener.local_addr()?.port();
         *core.port.lock() = port;
+        {
+            let core = core.clone();
+            std::thread::spawn(move || core.refresh_catalog());
+        }
         let token = server::random_token();
         let info = DaemonInfo { port, token: token.clone(), pid: std::process::id(), version: env!("CARGO_PKG_VERSION").into(), protocol: na_protocol::PROTOCOL_VERSION };
         write_private(&paths.daemon_json(), &serde_json::to_vec_pretty(&info)?)?;
@@ -79,11 +84,10 @@ fn serve() -> Result<()> {
                     tick.tick().await;
                     core.tick();
                     n += 1;
-                    if n % 3 == 0 {
-                        if let Err(e) = core.save_if_dirty() {
+                    if n.is_multiple_of(3)
+                        && let Err(e) = core.save_if_dirty() {
                             tracing::error!("saving state: {e:#}");
                         }
-                    }
                 }
             });
         }

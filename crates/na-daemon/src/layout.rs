@@ -161,13 +161,12 @@ fn split_largest(root: &mut LayoutNode, new: LayoutNode) {
     // parent of the target
     if let Some((&last, parent_path)) = path.split_last() {
         let parent = node_at(root, parent_path);
-        if let LayoutNode::Split { dir, sizes, children, .. } = parent {
-            if *dir == want {
+        if let LayoutNode::Split { dir, sizes, children, .. } = parent
+            && *dir == want {
                 children.insert(last + 1, new);
                 *sizes = vec![1.0 / children.len() as f32; children.len()];
                 return;
             }
-        }
     }
     let target = node_at(root, &path);
     let old = std::mem::replace(target, LayoutNode::Pane { id: String::new(), content: PaneContent::Empty });

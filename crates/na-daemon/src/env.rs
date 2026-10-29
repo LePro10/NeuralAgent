@@ -126,11 +126,10 @@ pub fn default_shell() -> String {
     }
     #[cfg(not(windows))]
     {
-        if let Ok(s) = std::env::var("SHELL") {
-            if !s.is_empty() {
+        if let Ok(s) = std::env::var("SHELL")
+            && !s.is_empty() {
                 return s;
             }
-        }
         #[cfg(target_os = "macos")]
         return "/bin/zsh".into();
         #[cfg(not(target_os = "macos"))]

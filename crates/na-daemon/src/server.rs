@@ -59,11 +59,10 @@ struct WsQuery {
 }
 
 async fn ws_upgrade(AxState(app): AxState<App>, Query(q): Query<WsQuery>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
-    if let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok()) {
-        if !ALLOWED_ORIGINS.contains(&origin) {
+    if let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok())
+        && !ALLOWED_ORIGINS.contains(&origin) {
             return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
         }
-    }
     if !ct_eq(q.token.as_bytes(), app.token.as_bytes()) {
         return (StatusCode::UNAUTHORIZED, "bad token").into_response();
     }

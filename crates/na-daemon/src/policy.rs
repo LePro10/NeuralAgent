@@ -17,6 +17,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
     let approved = |ws: &String| core.read(|s| s.workspaces.iter().any(|w| &w.id == ws && w.approved));
     let needs = |what: &str| Err(err(ErrorCode::NeedsApproval, format!("{what} needs confirmation on the desktop")));
     match req {
+        Request::SessionStart(st) if st.profile_id.starts_with(crate::profiles::INSTALL_PREFIX) => needs("installing a CLI"),
         Request::SessionStart(st) if !approved(&st.workspace_id) => needs("starting an agent outside an approved workspace"),
         Request::SessionStart(st) if st.profile_id == "shell" && client.kind == ClientKind::Orchestrator => needs("opening a raw shell"),
         Request::SessionPrompt { id, .. } | Request::SessionStop { id } | Request::SessionRestart { id } => match ws_of_session(id) {
@@ -34,6 +35,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             needs("this change")
         }
         Request::WorkspaceRemove { .. } => needs("removing a workspace"),
+        Request::CatalogRefresh => Ok(()),
         _ => Ok(()),
     }
 }

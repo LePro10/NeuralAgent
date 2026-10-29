@@ -6,6 +6,7 @@
 //! the same thing.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -169,6 +170,14 @@ impl Core {
         write_private(&self.paths.state(), &data)
     }
 
+    /// A profile by id, including the `install:<agent>` pseudo profiles.
+    fn profile(&self, id: &str) -> Option<Profile> {
+        match id.strip_prefix(crate::profiles::INSTALL_PREFIX) {
+            Some(agent) => crate::profiles::install_profile(agent),
+            None => self.read(|s| s.profiles.iter().find(|p| p.id == id).cloned()),
+        }
+    }
+
     fn session(&self, id: &Id) -> std::result::Result<Session, ApiError> {
         self.read(|s| s.sessions.get(id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such session"))
     }
@@ -298,7 +307,11 @@ impl Core {
                 self.emit(Event::ProfilesSet { profiles: list });
                 Ok(Value::Null)
             }
-            Request::CatalogRefresh => Err(err(ErrorCode::Unavailable, "catalog arrives in M2")),
+            Request::CatalogRefresh => {
+                let core = self.clone();
+                let catalog = tokio::task::spawn_blocking(move || core.refresh_catalog()).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                Ok(json!(catalog))
+            }
             Request::SettingsSet { settings } => {
                 self.emit(Event::SettingsSet { settings });
                 Ok(Value::Null)
@@ -335,7 +348,7 @@ impl Core {
 
     pub fn session_start(self: &Arc<Self>, start: StartSession) -> std::result::Result<Session, ApiError> {
         let ws = self.read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
-        let profile = self.read(|s| s.profiles.iter().find(|p| p.id == start.profile_id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
+        let profile = self.profile(&start.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
         let now = now_ms();
         let session = Session {
             id: layout::new_id(),
@@ -370,8 +383,9 @@ impl Core {
 
     /// Starts (or restarts) the process for `session` and publishes it.
     fn spawn_into(self: &Arc<Self>, mut session: Session, prompt: Option<String>) -> std::result::Result<Session, ApiError> {
-        let profile = self.read(|s| s.profiles.iter().find(|p| p.id == session.profile_id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "profile was deleted"))?;
-        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref())?;
+        let profile = self.profile(&session.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "profile was deleted"))?;
+        let exe = std::env::current_exe().map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe)?;
         let hook_token = crate::server::random_token();
         let port = *self.port.lock();
         let mut env: Vec<(String, String)> = self.env.vars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -473,19 +487,17 @@ impl Core {
             l.pty.kill();
         }
         let ws = self.read(|s| s.sessions.get(id).map(|x| x.workspace_id.clone()));
-        if let Some(ws) = ws {
-            if let Some(mut l) = self.read(|s| s.layouts.get(&ws).cloned()) {
-                if layout::clear_session(&mut l, id) {
+        if let Some(ws) = ws
+            && let Some(mut l) = self.read(|s| s.layouts.get(&ws).cloned())
+                && layout::clear_session(&mut l, id) {
                     self.emit(Event::LayoutSet { workspace_id: ws, layout: l });
                 }
-            }
-        }
         self.emit(Event::SessionRemoved { id: id.clone() });
     }
 
     // ───────────── process notes & status ─────────────
 
-    fn on_note(&self, sid: &Id, note: PtyNote) {
+    fn on_note(self: &Arc<Self>, sid: &Id, note: PtyNote) {
         match note {
             PtyNote::Output { bytes } => {
                 let mut live = self.live.lock();
@@ -514,6 +526,12 @@ impl Core {
                     s.status = if code.unwrap_or(0) == 0 { AgentStatus::Exited } else { AgentStatus::Error };
                     s.status_since = now_ms();
                 });
+                let installer = self.read(|s| s.sessions.get(sid).is_some_and(|x| x.profile_id.starts_with(crate::profiles::INSTALL_PREFIX)));
+                if installer {
+                    // A CLI may have appeared: look again.
+                    let core = self.clone();
+                    std::thread::spawn(move || core.refresh_catalog());
+                }
                 if code.unwrap_or(0) != 0 {
                     self.emit(Event::Attention { session_id: sid.clone(), kind: AttentionKind::Error, text: format!("exited with code {}", code.unwrap_or(-1)) });
                 }
@@ -521,60 +539,146 @@ impl Core {
         }
     }
 
+    /// Moves a session to `next`, keeping busy time and raising attention for done/waiting/error.
+    fn transition(&self, id: &Id, next: AgentStatus, attention: Option<String>, extra: impl FnOnce(&mut Session)) {
+        let Some(cur) = self.read(|st| st.sessions.get(id).map(|s| s.status)) else { return };
+        let mut busy_add = 0i64;
+        if next != cur
+            && let Some(l) = self.live.lock().get_mut(id) {
+                if next == AgentStatus::Working {
+                    l.working_since.get_or_insert_with(Instant::now);
+                } else if let Some(t) = l.working_since.take() {
+                    busy_add = t.elapsed().as_millis() as i64;
+                }
+                if next == AgentStatus::Done {
+                    l.prompted = false;
+                }
+            }
+        self.update_session(id, |x| {
+            if x.status != next {
+                x.status = next;
+                x.status_since = now_ms();
+            }
+            x.busy_ms += busy_add;
+            extra(x);
+        });
+        let kind = match next {
+            AgentStatus::Done => Some(AttentionKind::Done),
+            AgentStatus::Waiting => Some(AttentionKind::Waiting),
+            AgentStatus::Error => Some(AttentionKind::Error),
+            _ => None,
+        };
+        if let (Some(kind), true) = (kind, next != cur) {
+            self.emit(Event::Attention { session_id: id.clone(), kind, text: attention.unwrap_or_default() });
+        }
+    }
+
     /// Output-based status for sessions without hooks, plus `last_line` refresh. Runs ~3×/s.
     pub fn tick(&self) {
-        let ids: Vec<(Id, Option<Instant>, Option<Instant>, bool, Arc<Pty>)> =
-            self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.working_since, l.prompted, l.pty.clone())).collect();
-        for (id, last_output, working_since, prompted, pty) in ids {
+        let ids: Vec<(Id, Option<Instant>, bool, Arc<Pty>)> = self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.prompted, l.pty.clone())).collect();
+        for (id, last_output, prompted, pty) in ids {
             let Some(s) = self.read(|st| st.sessions.get(&id).cloned()) else { continue };
             let line = pty.last_line();
             let active = last_output.is_some_and(|t| t.elapsed() < Duration::from_millis(1200));
-            let mut next = s.status;
-            if s.status_source == StatusSource::Output {
-                next = match (s.status, active) {
+            let quiet = last_output.is_some_and(|t| t.elapsed() > Duration::from_millis(2500));
+            let shell = s.profile_id == "shell" || s.profile_id.starts_with(crate::profiles::INSTALL_PREFIX);
+            let next = match s.status_source {
+                // Hooks own the status; output only ends the start phase.
+                StatusSource::Hooks => match s.status {
+                    AgentStatus::Starting if quiet => AgentStatus::Idle,
+                    st => st,
+                },
+                _ => match (s.status, active) {
                     (AgentStatus::Starting, false) if last_output.is_some() => AgentStatus::Idle,
                     (AgentStatus::Starting, _) => AgentStatus::Starting,
-                    (_, true) if prompted || s.profile_id == "shell" => AgentStatus::Working,
-                    (AgentStatus::Working, false) if last_output.is_some_and(|t| t.elapsed() > Duration::from_millis(2500)) => {
-                        if s.profile_id == "shell" { AgentStatus::Idle } else { AgentStatus::Done }
+                    (_, true) if prompted || shell => AgentStatus::Working,
+                    (AgentStatus::Working, false) if quiet => {
+                        if shell { AgentStatus::Idle } else { AgentStatus::Done }
                     }
                     (st, _) => st,
-                };
-            }
-            let mut busy = s.busy_ms;
+                },
+            };
             if next != s.status {
-                let mut live = self.live.lock();
-                if let Some(l) = live.get_mut(&id) {
-                    if next == AgentStatus::Working {
-                        l.working_since = Some(Instant::now());
-                    } else if let Some(t) = working_since {
-                        busy += t.elapsed().as_millis() as i64;
-                        l.working_since = None;
-                    }
-                    if next == AgentStatus::Done {
-                        l.prompted = false;
-                    }
-                }
-            }
-            if next != s.status || line != s.last_line || busy != s.busy_ms {
-                let became_done = next == AgentStatus::Done && s.status != AgentStatus::Done;
-                self.update_session(&id, |x| {
-                    if x.status != next {
-                        x.status = next;
-                        x.status_since = now_ms();
-                    }
-                    x.last_line = line.clone();
-                    x.busy_ms = busy;
-                });
-                if became_done {
-                    self.emit(Event::Attention { session_id: id.clone(), kind: AttentionKind::Done, text: line.unwrap_or_default() });
-                }
+                self.transition(&id, next, line.clone(), |x| x.last_line = line.clone());
+            } else if line != s.last_line {
+                self.update_session(&id, |x| x.last_line = line.clone());
             }
         }
     }
 
-    /// Status from agent hooks (filled in with the hook mapping in M2).
-    pub fn on_hook(&self, _sid: &Id, _event: &str, _payload: &Value) {}
+    /// Status from agent hooks (see `profiles::CLAUDE_EVENTS` and the Codex `notify` call).
+    pub fn on_hook(&self, sid: &Id, event: &str, payload: &Value) {
+        tracing::debug!(%sid, event, "hook");
+        let text = |k: &str| payload.get(k).and_then(Value::as_str).map(|s| s.chars().take(2000).collect::<String>());
+        let engine_session = text("session_id").or_else(|| text("thread-id"));
+        let mark = |x: &mut Session| {
+            x.status_source = StatusSource::Hooks;
+            if let Some(e) = &engine_session {
+                x.engine_session = Some(e.clone());
+            }
+        };
+        match event {
+            "SessionStart" => {
+                let cur = self.read(|st| st.sessions.get(sid).map(|s| s.status));
+                let next = if cur == Some(AgentStatus::Starting) { AgentStatus::Idle } else { cur.unwrap_or(AgentStatus::Idle) };
+                self.transition(sid, next, None, mark);
+            }
+            "UserPromptSubmit" => {
+                let prompt = text("prompt");
+                self.transition(sid, AgentStatus::Working, None, |x| {
+                    mark(x);
+                    if let Some(p) = prompt {
+                        x.prompt = Some(p.chars().take(300).collect());
+                    }
+                });
+            }
+            "PreToolUse" | "PostToolUse" | "PostToolUseFailure" => self.transition(sid, AgentStatus::Working, None, mark),
+            "PermissionRequest" => {
+                let tool = text("tool_name").unwrap_or_else(|| "a tool".into());
+                self.transition(sid, AgentStatus::Waiting, Some(format!("Wants to use {tool}")), mark);
+            }
+            "Notification" => {
+                // Permission prompts need the user; "idle" reminders do not change anything.
+                let kind = text("notification_type").unwrap_or_default();
+                let msg = text("message").unwrap_or_default();
+                if kind == "permission_prompt" || (kind.is_empty() && msg.to_lowercase().contains("permission")) {
+                    self.transition(sid, AgentStatus::Waiting, Some(msg), mark);
+                } else {
+                    self.update_session(sid, mark);
+                }
+            }
+            "Stop" | "codex-notify" => {
+                let msg = text("last_assistant_message")
+                    .or_else(|| text("last-assistant-message"))
+                    .or_else(|| text("transcript_path").and_then(|p| last_assistant_text(Path::new(&p))));
+                let summary = msg.as_deref().map(first_line);
+                self.transition(sid, AgentStatus::Done, summary.clone(), |x| {
+                    mark(x);
+                    if msg.is_some() {
+                        x.last_message = msg.clone();
+                    }
+                });
+            }
+            "StopFailure" => {
+                // Claude also reports failed background requests after a turn already ended with
+                // Stop; only a turn that is still running fails.
+                let cur = self.read(|st| st.sessions.get(sid).map(|s| s.status));
+                if cur == Some(AgentStatus::Done) {
+                    self.update_session(sid, mark);
+                } else {
+                    let msg = text("error").or_else(|| text("message"));
+                    self.transition(sid, AgentStatus::Error, msg, mark);
+                }
+            }
+            _ => self.update_session(sid, mark),
+        }
+    }
+
+    pub fn refresh_catalog(&self) -> Vec<CatalogEntry> {
+        let catalog = crate::catalog::detect(&self.env);
+        self.emit(Event::CatalogSet { catalog: catalog.clone() });
+        catalog
+    }
 
     pub fn shutdown(&self) {
         for (_, l) in self.live.lock().drain() {
@@ -582,6 +686,29 @@ impl Core {
         }
         let _ = self.save_if_dirty();
     }
+}
+
+/// The last assistant text in a Claude Code transcript (JSONL), read from the end of the file.
+fn last_assistant_text(path: &Path) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let start = len.saturating_sub(256 * 1024);
+    f.seek(SeekFrom::Start(start)).ok()?;
+    let mut buf = String::new();
+    f.take(256 * 1024).read_to_string(&mut buf).ok()?;
+    buf.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find_map(|v| {
+        if v.get("type")?.as_str()? != "assistant" {
+            return None;
+        }
+        let parts = v.pointer("/message/content")?.as_array()?;
+        let text: Vec<&str> = parts.iter().filter(|p| p.get("type").and_then(Value::as_str) == Some("text")).filter_map(|p| p.get("text")?.as_str()).collect();
+        (!text.is_empty()).then(|| text.join("\n").chars().take(2000).collect())
+    })
+}
+
+fn first_line(s: &str) -> String {
+    s.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("").chars().take(160).collect()
 }
 
 /// Applies an event to a state. Mirrored in TypeScript; keep both in sync.
