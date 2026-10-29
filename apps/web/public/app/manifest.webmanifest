@@ -1,0 +1,14 @@
+{
+  "name": "NeuralAgent",
+  "short_name": "NeuralAgent",
+  "description": "Your AI coding agents, from any screen.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#080909",
+  "theme_color": "#080909",
+  "icons": [
+    { "src": "/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

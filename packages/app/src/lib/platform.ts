@@ -1,4 +1,5 @@
 import type { Connect } from "@neuralagent/protocol";
+import type { ReactNode } from "react";
 import type { VoiceApi } from "./voice";
 
 /** What the shell around the shared app provides (Tauri window, browser/PWA, Android). */
@@ -21,6 +22,8 @@ export interface Platform {
   trayStatus?: (counts: { running: number; working: number; waiting: number; remote: boolean | null }) => void;
   /** "Disconnect remote" / "Reconnect remote" was picked in the tray menu. */
   onTrayRemote?: (cb: () => void) => () => void;
+  /** Remote clients: their own account page (which computer, devices, sign out) in place of the desktop's Remote page. */
+  account?: { label: string; render: () => ReactNode };
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
 }

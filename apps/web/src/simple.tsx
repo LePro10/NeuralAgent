@@ -5,10 +5,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrandMark } from "./brand";
 
-// One tiny entry for the 404 page and the web-remote placeholder (picked by <body data-page>).
+// One tiny entry for simple pages like 404 (picked by <body data-page>).
 const PAGES: Record<string, { title: string; text: string }> = {
   "404": { title: "Page not found", text: "This page does not exist." },
-  app: { title: "Web remote coming soon", text: "Soon you can reach your agents from any browser. For now, use the NeuralAgent desktop app." },
 };
 
 function Simple({ page }: { page: string }) {

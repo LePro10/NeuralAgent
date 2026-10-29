@@ -97,7 +97,11 @@ export function App() {
     { id: HISTORY, label: "History", Icon: History },
     { id: MCP, label: "MCP", Icon: Plug },
     { id: USAGE, label: "Usage", Icon: Gauge },
-    { id: REMOTE, label: "Remote", Icon: Smartphone, badge: state?.remote.status === "pending" ? "Waiting" : undefined },
+    ...(platform.account
+      ? [{ id: REMOTE, label: platform.account.label, Icon: Smartphone }]
+      : platform.kind === "desktop"
+        ? [{ id: REMOTE, label: "Remote", Icon: Smartphone, badge: state?.remote.status === "pending" ? "Waiting" : undefined }]
+        : []),
     ...workspaces.map((w) => {
       const statuses = Object.values(state?.sessions ?? {}).filter((s) => s.workspace_id === w.id).map((s) => s.status);
       const urgent = mostUrgent(statuses);
@@ -127,7 +131,7 @@ export function App() {
   ) : usage ? (
     <UsagePage />
   ) : remotePage ? (
-    <RemotePage />
+    platform.account ? platform.account.render() : <RemotePage />
   ) : current ? (
     <WorkspaceView key={current.id} workspaceId={current.id} />
   ) : (

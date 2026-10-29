@@ -1,7 +1,7 @@
 // Remote client for phones and browsers: the account at the relay, pairing, the relay
 // connection, and an end-to-end sealed transport to a computer that `DaemonClient` uses like
 // the local WebSocket. Shared by the web remote (/app) and the Android app.
-import { b64, clientStart, exportPublic, fingerprint, generateStaticKey, unb64, type Session } from "@neuralagent/crypto";
+import { b64, clientStart, exportPublic, fingerprint, generateStaticKey, importPrivateRaw, unb64, type Session } from "@neuralagent/crypto";
 import type { Transport } from "@neuralagent/protocol";
 
 // ───────────── storage ─────────────
@@ -14,6 +14,8 @@ export interface Store {
 
 /** Keeps this device's X25519 key; on the web a non-extractable key in IndexedDB. */
 export interface KeyStore {
+  /** A new key in the form this store can keep (default: non-extractable). */
+  generate?(): Promise<CryptoKeyPair>;
   load(): Promise<CryptoKeyPair | null>;
   save(key: CryptoKeyPair): Promise<void>;
   clear(): Promise<void>;
@@ -39,8 +41,12 @@ export function memoryKeyStore(): KeyStore {
   return { load: async () => key, save: async (k) => void (key = k), clear: async () => void (key = null) };
 }
 
-/** IndexedDB keeps CryptoKey objects as they are, so the private key never becomes bytes. */
-export function idbKeyStore(name = "neuralagent-remote"): KeyStore {
+/**
+ * The browser's key store. IndexedDB keeps CryptoKey objects as they are, so the private key
+ * never becomes bytes. Some browsers can't store them (WebKit in some modes stores nothing):
+ * then the private key is kept as bytes in `fallback`, which is no worse than the token next to it.
+ */
+export function webKeyStore(fallback: Store, name = "neuralagent-remote"): KeyStore {
   const db = () =>
     new Promise<IDBDatabase>((resolve, reject) => {
       const r = indexedDB.open(name, 1);
@@ -56,10 +62,38 @@ export function idbKeyStore(name = "neuralagent-remote"): KeyStore {
       r.onerror = () => reject(r.error);
     });
   };
+  const idbGet = () => tx<CryptoKeyPair | undefined>("readonly", (s) => s.get("device")).catch(() => undefined);
+  let idbWorks: Promise<boolean> | null = null;
+  const probe = () =>
+    (idbWorks ??= (async () => {
+      try {
+        if ((await idbGet())?.privateKey) return true;
+        const k = await generateStaticKey();
+        await tx("readwrite", (s) => s.put(k, "probe"));
+        const back = await tx<CryptoKeyPair | undefined>("readonly", (s) => s.get("probe"));
+        await tx("readwrite", (s) => s.delete("probe"));
+        return !!back?.privateKey;
+      } catch {
+        return false;
+      }
+    })());
   return {
-    load: async () => (await tx<CryptoKeyPair | undefined>("readonly", (s) => s.get("device"))) ?? null,
-    save: async (k) => void (await tx("readwrite", (s) => s.put(k, "device"))),
-    clear: async () => void (await tx("readwrite", (s) => s.delete("device"))),
+    generate: async () => generateStaticKey(!(await probe())),
+    load: async () => {
+      const k = await idbGet();
+      if (k?.privateKey) return k;
+      const d = await fallback.get("key");
+      return d ? importPrivateRaw(unb64(d)) : null;
+    },
+    save: async (k) => {
+      if (await probe()) return void (await tx("readwrite", (s) => s.put(k, "device")));
+      const jwk = await crypto.subtle.exportKey("jwk", k.privateKey);
+      await fallback.set("key", jwk.d!);
+    },
+    clear: async () => {
+      await tx("readwrite", (s) => s.delete("device")).catch(() => {});
+      await fallback.set("key", null);
+    },
   };
 }
 
@@ -130,6 +164,7 @@ export class RemoteAccount {
   private saved: Saved | null = null;
   private accessToken: { token: string; until: number } | null = null;
   private refreshing: Promise<string> | null = null;
+  private key: CryptoKeyPair | null = null;
   private listeners = new Set<() => void>();
 
   private o: AccountOptions;
@@ -173,12 +208,13 @@ export class RemoteAccount {
 
   /** The key the computers check in every handshake; created on first use. */
   async deviceKey(): Promise<CryptoKeyPair> {
+    if (this.key) return this.key;
     let k = await this.o.keys.load();
     if (!k) {
-      k = await generateStaticKey();
+      k = (await this.o.keys.generate?.()) ?? (await generateStaticKey());
       await this.o.keys.save(k);
     }
-    return k;
+    return (this.key = k);
   }
 
   private async newDevice() {
@@ -329,6 +365,7 @@ export class RelayLink {
   private backoff = 1000;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
+  private opening = false;
   private ready: Promise<void> = Promise.resolve();
   private markReady: () => void = () => {};
 
@@ -358,8 +395,11 @@ export class RelayLink {
     return this.devices.filter((d) => d.kind === "host");
   }
 
+  /** Connects if not connected yet; safe to call again (e.g. right after signing in). */
   start() {
     this.stopped = false;
+    if (this.opening || (this.ws && this.ws.readyState <= WebSocket.OPEN)) return;
+    clearTimeout(this.timer);
     void this.connect();
   }
 
@@ -388,13 +428,17 @@ export class RelayLink {
     if (this.status !== "waiting" && this.status !== "blocked") this.set("connecting");
     this.ready = new Promise((r) => (this.markReady = r));
     let token: string;
+    this.opening = true;
     try {
       token = await this.account.access();
     } catch (e) {
+      this.opening = false;
       if (!this.account.signedIn) return this.set("signed_out", (e as Error).message);
       if (e instanceof RemoteError && e.status === 403) return this.set("blocked");
       return this.retry((e as Error).message);
     }
+    this.opening = false;
+    if (this.stopped) return;
     const ws = new WebSocket(this.account.relay.replace(/^http/, "ws") + "/ws");
     this.ws = ws;
     ws.onopen = () => ws.send(JSON.stringify({ t: "auth", token }));
