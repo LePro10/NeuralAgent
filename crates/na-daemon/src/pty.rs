@@ -98,8 +98,11 @@ fn answer_cursor(pty: std::sync::Weak<Pty>, row: u16, col: u16) {
             }
             seen = Some(seq);
             p.answers.lock().push((asked.elapsed().as_millis(), seq));
+            // One write: `write!` would send the pieces separately, and ConPTY does not
+            // recognise a reply that arrives split up.
+            let reply = format!("\x1b[{};{}R", row + 1, col + 1);
             let mut w = p.writer.lock();
-            let _ = write!(w, "\x1b[{};{}R", row + 1, col + 1);
+            let _ = w.write_all(reply.as_bytes());
             let _ = w.flush();
         }
     });
