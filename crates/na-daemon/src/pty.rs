@@ -76,7 +76,10 @@ fn nz(v: u16, fallback: u16) -> NonZeroU16 {
 }
 
 impl Pty {
-    pub fn spawn(spec: Spawn, notify: impl Fn(PtyNote) + Send + 'static) -> Result<Arc<Pty>> {
+    pub fn spawn(spec: Spawn, notify: impl Fn(PtyNote) + Send + Sync + 'static) -> Result<Arc<Pty>> {
+        let notify = Arc::new(notify);
+        // Exactly one Exited note, from whichever thread sees the end first.
+        let exited = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let size = PtySize { rows: spec.rows.max(2), cols: spec.cols.max(10), pixel_width: 0, pixel_height: 0 };
         let pair = native_pty_system().openpty(size).context("openpty")?;
 
@@ -110,9 +113,11 @@ impl Pty {
         });
 
         let weak = Arc::downgrade(&pty);
+        let (note, done) = (notify.clone(), exited.clone());
         std::thread::Builder::new()
             .name("pty-read".into())
             .spawn(move || {
+                let notify = note;
                 let mut buf = vec![0u8; 64 * 1024];
                 loop {
                     let n = match reader.read(&mut buf) {
@@ -136,28 +141,39 @@ impl Pty {
                     }
                 }
                 let code = weak.upgrade().and_then(|p| p.child.lock().wait().ok()).map(|s| s.exit_code() as i32);
-                notify(PtyNote::Exited(code));
+                if !done.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    notify(PtyNote::Exited(code));
+                }
             })
             .context("spawn reader thread")?;
 
-        // ConPTY keeps the output pipe open after the child exits, so the reader never sees EOF.
-        // Close the pseudo console once the child is gone; the reader then drains and ends.
+        // ConPTY may keep the output pipe open after the child exits, so the reader cannot be
+        // trusted to see EOF. Watch the child instead: give the reader a moment to drain the last
+        // output, report the exit, then close the pseudo console.
         #[cfg(windows)]
         {
             let weak = Arc::downgrade(&pty);
             std::thread::Builder::new()
                 .name("pty-wait".into())
-                .spawn(move || loop {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    let Some(p) = weak.upgrade() else { break };
-                    if matches!(p.child.lock().try_wait(), Ok(Some(_))) {
-                        std::thread::sleep(std::time::Duration::from_millis(200));
-                        drop(p.master.lock().take());
-                        break;
+                .spawn(move || {
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        let Some(p) = weak.upgrade() else { break };
+                        let status = p.child.lock().try_wait();
+                        if let Ok(Some(st)) = status {
+                            std::thread::sleep(std::time::Duration::from_millis(300));
+                            if !exited.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                notify(PtyNote::Exited(Some(st.exit_code() as i32)));
+                            }
+                            drop(p.master.lock().take());
+                            break;
+                        }
                     }
                 })
                 .context("spawn wait thread")?;
         }
+        #[cfg(not(windows))]
+        let _ = (notify, exited);
 
         Ok(pty)
     }

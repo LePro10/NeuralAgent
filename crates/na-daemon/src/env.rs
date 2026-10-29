@@ -127,9 +127,10 @@ pub fn default_shell() -> String {
     #[cfg(not(windows))]
     {
         if let Ok(s) = std::env::var("SHELL")
-            && !s.is_empty() {
-                return s;
-            }
+            && !s.is_empty()
+        {
+            return s;
+        }
         #[cfg(target_os = "macos")]
         return "/bin/zsh".into();
         #[cfg(not(target_os = "macos"))]
@@ -181,10 +182,7 @@ fn capture_unix(shell: &str) -> Option<BTreeMap<String, String>> {
     use std::process::{Command, Stdio};
     const MARK: &str = "__NEURALAGENT_ENV__";
     let mut cmd = Command::new(shell);
-    cmd.args(["-ilc", &format!("printf '\\0{MARK}\\0'; env -0")])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.args(["-ilc", &format!("printf '\\0{MARK}\\0'; env -0")]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     for k in STRIP {
         cmd.env_remove(k);
     }

@@ -235,10 +235,7 @@ impl Agent {
 pub fn detect(env: &LoginEnv) -> Vec<CatalogEntry> {
     let found: Vec<_> = AGENTS.iter().map(|a| (a, env.which(a.command))).collect();
     let versions: Vec<Option<String>> = std::thread::scope(|s| {
-        let handles: Vec<_> = found
-            .iter()
-            .map(|(_, p)| s.spawn(move || p.as_deref().and_then(|p| version(env, p))))
-            .collect();
+        let handles: Vec<_> = found.iter().map(|(_, p)| s.spawn(move || p.as_deref().and_then(|p| version(env, p)))).collect();
         handles.into_iter().map(|h| h.join().ok().flatten()).collect()
     });
     found

@@ -27,9 +27,7 @@ fn p(id: &str, name: &str, engine: &str, command: &str) -> Profile {
 
 /// A terminal plus one profile per known agent CLI (the UI only offers installed ones).
 pub fn builtin() -> Vec<Profile> {
-    std::iter::once(p("shell", "Terminal", "shell", ""))
-        .chain(catalog::AGENTS.iter().map(|a| p(a.id, a.name, a.id, a.command)))
-        .collect()
+    std::iter::once(p("shell", "Terminal", "shell", "")).chain(catalog::AGENTS.iter().map(|a| p(a.id, a.name, a.id, a.command))).collect()
 }
 
 pub fn install_profile(agent_id: &str) -> Option<Profile> {
@@ -47,7 +45,10 @@ pub struct Launch {
 
 fn login_shell(env: &LoginEnv, command: Option<&str>) -> Launch {
     let (program, args) = match (cfg!(windows), command) {
-        (true, Some(c)) => ("powershell.exe".to_string(), vec!["-NoProfile".into(), "-ExecutionPolicy".into(), "Bypass".into(), "-Command".into(), c.into()]),
+        (true, Some(c)) => (
+            "powershell.exe".to_string(),
+            vec!["-NoProfile".into(), "-ExecutionPolicy".into(), "Bypass".into(), "-Command".into(), c.into()],
+        ),
         (true, None) => (env.shell.clone(), vec![]),
         (false, Some(c)) => (env.shell.clone(), vec!["-lc".into(), c.into()]),
         (false, None) => (env.shell.clone(), vec!["-l".into()]),
@@ -63,7 +64,10 @@ pub fn launch(env: &LoginEnv, profile: &Profile, prompt: Option<&str>, resume: O
     }
     let program = env
         .which(&profile.command)
-        .ok_or_else(|| ApiError { code: ErrorCode::NotFound, message: format!("{} is not installed (command `{}` not found)", profile.name, profile.command) })?
+        .ok_or_else(|| ApiError {
+            code: ErrorCode::NotFound,
+            message: format!("{} is not installed (command `{}` not found)", profile.name, profile.command),
+        })?
         .to_string_lossy()
         .into_owned();
     let Some(agent) = catalog::agent(&profile.engine) else {
@@ -94,8 +98,17 @@ pub fn launch(env: &LoginEnv, profile: &Profile, prompt: Option<&str>, resume: O
 }
 
 /// The Claude Code events we listen to. Hooks from `--settings` merge with the user's own.
-pub const CLAUDE_EVENTS: &[&str] =
-    &["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Notification", "Stop", "StopFailure", "SessionEnd"];
+pub const CLAUDE_EVENTS: &[&str] = &[
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "PermissionRequest",
+    "Notification",
+    "Stop",
+    "StopFailure",
+    "SessionEnd",
+];
 
 pub fn claude_settings(hook_exe: &Path) -> Value {
     let exe = shell_quote(&hook_exe.to_string_lossy());

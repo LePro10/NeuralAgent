@@ -22,13 +22,8 @@ use tokio::task::JoinHandle;
 use crate::core::Core;
 
 /// Origins of our own webviews. Requests without an Origin come from native code.
-const ALLOWED_ORIGINS: &[&str] = &[
-    "tauri://localhost",
-    "http://tauri.localhost",
-    "https://tauri.localhost",
-    "http://localhost:1420",
-    "http://127.0.0.1:1420",
-];
+const ALLOWED_ORIGINS: &[&str] =
+    &["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost", "http://localhost:1420", "http://127.0.0.1:1420"];
 
 pub fn random_token() -> String {
     let bytes: [u8; 32] = rand::random();
@@ -47,7 +42,10 @@ pub struct App {
 
 pub fn router(app: App) -> Router {
     Router::new()
-        .route("/health", get(|| async { axum::Json(json!({"ok": true, "version": env!("CARGO_PKG_VERSION"), "protocol": PROTOCOL_VERSION})) }))
+        .route(
+            "/health",
+            get(|| async { axum::Json(json!({"ok": true, "version": env!("CARGO_PKG_VERSION"), "protocol": PROTOCOL_VERSION})) }),
+        )
         .route("/ws", get(ws_upgrade))
         .route("/hook", post(crate::hooks::receive))
         .with_state(app)
@@ -60,9 +58,10 @@ struct WsQuery {
 
 async fn ws_upgrade(AxState(app): AxState<App>, Query(q): Query<WsQuery>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
     if let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok())
-        && !ALLOWED_ORIGINS.contains(&origin) {
-            return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
-        }
+        && !ALLOWED_ORIGINS.contains(&origin)
+    {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
     if !ct_eq(q.token.as_bytes(), app.token.as_bytes()) {
         return (StatusCode::UNAUTHORIZED, "bad token").into_response();
     }
@@ -90,7 +89,9 @@ async fn serve_socket(core: Arc<Core>, socket: WebSocket) {
         }
     };
     tracing::info!(kind = ?client.kind, name = %client.name, "client connected");
-    let _ = out.send(ServerMsg::HelloOk { v: PROTOCOL_VERSION, daemon_version: env!("CARGO_PKG_VERSION").into(), host: core.host.clone() }).await;
+    let _ = out
+        .send(ServerMsg::HelloOk { v: PROTOCOL_VERSION, daemon_version: env!("CARGO_PKG_VERSION").into(), host: core.host.clone() })
+        .await;
     run_client(core, client, out, &mut stream).await;
     writer.abort();
 }
@@ -110,7 +111,12 @@ async fn next_msg(stream: &mut (impl StreamExt<Item = Result<Message, axum::Erro
 }
 
 /// Transport-independent client loop; the relay client reuses it for remote devices.
-pub async fn run_client(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin)) {
+pub async fn run_client(
+    core: Arc<Core>,
+    client: ClientInfo,
+    out: mpsc::Sender<ServerMsg>,
+    stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
+) {
     let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())) };
     while let Some(msg) = next_msg(stream).await {
         conn.on_msg(msg).await;
@@ -151,7 +157,15 @@ impl Conn {
                     let res = match self.core.pty(&sid) {
                         Ok(pty) => {
                             let (snapshot, seq, (cols, rows), rx) = pty.attach();
-                            let _ = self.out.send(ServerMsg::Res { id, ok: true, r: Some(json!(AttachResult { snapshot, seq, cols, rows })), err: None }).await;
+                            let _ = self
+                                .out
+                                .send(ServerMsg::Res {
+                                    id,
+                                    ok: true,
+                                    r: Some(json!(AttachResult { snapshot, seq, cols, rows })),
+                                    err: None,
+                                })
+                                .await;
                             let task = tokio::spawn(forward_term(sid.clone(), pty, rx, self.out.clone()));
                             if let Some(old) = self.attached.lock().insert(sid, task) {
                                 old.abort();

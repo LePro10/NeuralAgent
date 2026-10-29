@@ -1,10 +1,11 @@
 import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent/protocol";
 import { ConfirmSheet, Menu, StatusDot, cn, toast, type MenuEntry } from "@neuralagent/ui";
-import { LayoutGrid, Plus, X } from "lucide-react";
+import { Download, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeTab, gridOf, newTab, order, panes, removePane, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
 import { STATUS, mostUrgent } from "../lib/status";
-import { useClient, useDaemon } from "../lib/store";
+import { launchable } from "../lib/profiles";
+import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
 import { AgentGlyph } from "./AgentGlyph";
 import type { PaneActions } from "./Pane";
 import { PaneTree, type TreeCtx } from "./PaneTree";
@@ -23,6 +24,8 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const layout = useDaemon((c) => c.state?.layouts[workspaceId]);
   const sessions = useDaemon((c) => c.state?.sessions);
   const profiles = useDaemon((c) => c.state?.profiles);
+  const catalog = useDaemon((c) => c.state?.catalog);
+  const openCatalog = useCatalogSheet((c) => c.setOpen);
   const tab = layout ? activeTab(layout) : undefined;
   const [closing, setClosing] = useState<{ tab: Tab; live: number } | null>(null);
 
@@ -133,11 +136,15 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
     disabled: n < count,
     onSelect: () => arrange(n),
   }));
-  const agentItems: MenuEntry[] = (profiles ?? []).map((p) => ({
-    label: p.name,
-    glyph: <AgentGlyph engine={p.engine} className="text-dim" />,
-    onSelect: () => start(p.id),
-  }));
+  const agentItems: MenuEntry[] = [
+    ...launchable(profiles, catalog).map((p) => ({
+      id: p.id,
+      label: p.name,
+      glyph: <AgentGlyph engine={p.engine} className="text-dim" />,
+      onSelect: () => start(p.id),
+    })),
+    { label: "Install agents…", Icon: Download, divider: true, onSelect: () => openCatalog(true) },
+  ];
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ paddingLeft: "var(--sidebar-space)" }}>

@@ -11,7 +11,13 @@ pub fn new_id() -> Id {
 
 pub fn new_tab(title: &str) -> Tab {
     let pane = new_id();
-    Tab { id: new_id(), title: title.into(), root: LayoutNode::Pane { id: pane.clone(), content: PaneContent::Empty }, focused: pane, zoomed: None }
+    Tab {
+        id: new_id(),
+        title: title.into(),
+        root: LayoutNode::Pane { id: pane.clone(), content: PaneContent::Empty },
+        focused: pane,
+        zoomed: None,
+    }
 }
 
 pub fn default_layout() -> WorkspaceLayout {
@@ -151,22 +157,19 @@ fn split_largest(root: &mut LayoutNode, new: LayoutNode) {
     let mut panes = vec![];
     collect(root, &mut vec![], 16.0, 10.0, &mut panes);
     // ties go to the first pane in reading order (max_by keeps the last maximum, so reverse)
-    let (path, w, h) = panes
-        .into_iter()
-        .rev()
-        .max_by(|a, b| (a.1 * a.2).partial_cmp(&(b.1 * b.2)).unwrap())
-        .expect("tree has a pane");
+    let (path, w, h) = panes.into_iter().rev().max_by(|a, b| (a.1 * a.2).partial_cmp(&(b.1 * b.2)).unwrap()).expect("tree has a pane");
     let want = if w >= h { SplitDir::Row } else { SplitDir::Column };
 
     // parent of the target
     if let Some((&last, parent_path)) = path.split_last() {
         let parent = node_at(root, parent_path);
         if let LayoutNode::Split { dir, sizes, children, .. } = parent
-            && *dir == want {
-                children.insert(last + 1, new);
-                *sizes = vec![1.0 / children.len() as f32; children.len()];
-                return;
-            }
+            && *dir == want
+        {
+            children.insert(last + 1, new);
+            *sizes = vec![1.0 / children.len() as f32; children.len()];
+            return;
+        }
     }
     let target = node_at(root, &path);
     let old = std::mem::replace(target, LayoutNode::Pane { id: String::new(), content: PaneContent::Empty });
@@ -188,11 +191,9 @@ mod tests {
     fn shape(n: &LayoutNode) -> String {
         match n {
             LayoutNode::Pane { .. } => "p".into(),
-            LayoutNode::Split { dir, children, .. } => format!(
-                "{}({})",
-                if *dir == SplitDir::Row { "R" } else { "C" },
-                children.iter().map(shape).collect::<Vec<_>>().join(",")
-            ),
+            LayoutNode::Split { dir, children, .. } => {
+                format!("{}({})", if *dir == SplitDir::Row { "R" } else { "C" }, children.iter().map(shape).collect::<Vec<_>>().join(","))
+            }
         }
     }
 

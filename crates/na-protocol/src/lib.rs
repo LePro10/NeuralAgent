@@ -25,12 +25,27 @@ pub type Millis = i64;
 #[serde(tag = "t", rename_all = "snake_case")]
 #[ts(export)]
 pub enum ClientMsg {
-    Hello { v: u32, client: ClientInfo },
-    Req { #[ts(type = "number")] id: u64, req: Request },
+    Hello {
+        v: u32,
+        client: ClientInfo,
+    },
+    Req {
+        #[ts(type = "number")]
+        id: u64,
+        req: Request,
+    },
     /// Subscribe to state. With `since` the daemon replays missed events if it still has
     /// them, otherwise it sends a fresh snapshot.
-    Sub { #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] #[ts(type = "number")] since: Option<u64> },
-    Ping { #[ts(type = "number")] at: Millis },
+    Sub {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[ts(type = "number")]
+        since: Option<u64>,
+    },
+    Ping {
+        #[ts(type = "number")]
+        at: Millis,
+    },
 }
 
 /// Daemon → client.
@@ -38,15 +53,52 @@ pub enum ClientMsg {
 #[serde(tag = "t", rename_all = "snake_case")]
 #[ts(export)]
 pub enum ServerMsg {
-    HelloOk { v: u32, daemon_version: String, host: HostInfo },
-    Res { #[ts(type = "number")] id: u64, ok: bool, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] r: Option<Value>, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] err: Option<ApiError> },
-    Snapshot { #[ts(type = "number")] seq: u64, state: State },
-    Ev { #[ts(type = "number")] seq: u64, ev: Event },
+    HelloOk {
+        v: u32,
+        daemon_version: String,
+        host: HostInfo,
+    },
+    Res {
+        #[ts(type = "number")]
+        id: u64,
+        ok: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        r: Option<Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        err: Option<ApiError>,
+    },
+    Snapshot {
+        #[ts(type = "number")]
+        seq: u64,
+        state: State,
+    },
+    Ev {
+        #[ts(type = "number")]
+        seq: u64,
+        ev: Event,
+    },
     /// Raw terminal output (base64) for an attached session, in order.
-    Term { sid: Id, #[ts(type = "number")] seq: u64, d: String },
+    Term {
+        sid: Id,
+        #[ts(type = "number")]
+        seq: u64,
+        d: String,
+    },
     /// The client fell behind or the stream restarted: reset the terminal and write this.
-    TermReset { sid: Id, snapshot: String, #[ts(type = "number")] seq: u64, cols: u16, rows: u16 },
-    Pong { #[ts(type = "number")] at: Millis },
+    TermReset {
+        sid: Id,
+        snapshot: String,
+        #[ts(type = "number")]
+        seq: u64,
+        cols: u16,
+        rows: u16,
+    },
+    Pong {
+        #[ts(type = "number")]
+        at: Millis,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -55,7 +107,8 @@ pub struct ClientInfo {
     pub kind: ClientKind,
     /// Human readable, e.g. "MacBook Pro" or "Pixel 9".
     pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub device_id: Option<Id>,
 }
 
@@ -122,9 +175,12 @@ pub struct Workspace {
     /// Orchestrator and phones may start/prompt/stop agents here without asking.
     pub approved: bool,
     pub pinned: bool,
-    #[ts(type = "number")] pub order: i64,
-    #[ts(type = "number")] pub created_at: Millis,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[ts(type = "number")]
+    pub order: i64,
+    #[ts(type = "number")]
+    pub created_at: Millis,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub git: Option<GitSummary>,
 }
 
@@ -152,7 +208,8 @@ pub struct Tab {
     pub title: String,
     pub root: LayoutNode,
     pub focused: Id,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub zoomed: Option<Id>,
 }
 
@@ -202,28 +259,37 @@ pub struct Session {
     pub title: String,
     pub cwd: String,
     pub status: AgentStatus,
-    #[ts(type = "number")] pub status_since: Millis,
-    #[ts(type = "number")] pub started_at: Millis,
+    #[ts(type = "number")]
+    pub status_since: Millis,
+    #[ts(type = "number")]
+    pub started_at: Millis,
     /// Time spent in `working`, summed (ms).
-    #[ts(type = "number")] pub busy_ms: i64,
+    #[ts(type = "number")]
+    pub busy_ms: i64,
     pub cols: u16,
     pub rows: u16,
     pub alive: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub exit_code: Option<i32>,
     /// The CLI's own conversation id, used for resume.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub engine_session: Option<String>,
     /// Last meaningful line of output (plain text).
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub last_line: Option<String>,
     /// Last assistant message (from hooks/transcripts), shortened.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub last_message: Option<String>,
     /// The first prompt, shortened; good for titles and the dashboard.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub prompt: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub worktree: Option<WorktreeInfo>,
     /// Where the status comes from.
     pub status_source: StatusSource,
@@ -286,14 +352,18 @@ pub struct CatalogEntry {
     pub vendor: String,
     pub command: String,
     pub installed: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub version: Option<String>,
     /// Install command for this OS, shown before it runs.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub install: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub install_note: Option<String>,
     pub docs_url: String,
     pub hooks: bool,
@@ -345,16 +415,37 @@ pub enum DiscordPresence {
 #[serde(tag = "e", rename_all = "snake_case")]
 #[ts(export)]
 pub enum Event {
-    WorkspaceUpsert { workspace: Workspace },
-    WorkspaceRemoved { id: Id },
-    LayoutSet { workspace_id: Id, layout: WorkspaceLayout },
-    SessionUpsert { session: Session },
-    SessionRemoved { id: Id },
-    ProfilesSet { profiles: Vec<Profile> },
-    CatalogSet { catalog: Vec<CatalogEntry> },
-    SettingsSet { settings: Settings },
+    WorkspaceUpsert {
+        workspace: Workspace,
+    },
+    WorkspaceRemoved {
+        id: Id,
+    },
+    LayoutSet {
+        workspace_id: Id,
+        layout: WorkspaceLayout,
+    },
+    SessionUpsert {
+        session: Session,
+    },
+    SessionRemoved {
+        id: Id,
+    },
+    ProfilesSet {
+        profiles: Vec<Profile>,
+    },
+    CatalogSet {
+        catalog: Vec<CatalogEntry>,
+    },
+    SettingsSet {
+        settings: Settings,
+    },
     /// Something the user should notice (agent done / needs input / error).
-    Attention { session_id: Id, kind: AttentionKind, text: String },
+    Attention {
+        session_id: Id,
+        kind: AttentionKind,
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -373,32 +464,88 @@ pub enum AttentionKind {
 #[ts(export)]
 pub enum Request {
     // workspaces
-    WorkspaceAdd { path: String, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] name: Option<String> },
-    WorkspaceUpdate { id: Id, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] name: Option<String>, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] approved: Option<bool>, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] pinned: Option<bool>, #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)] #[ts(type = "number")] order: Option<i64> },
-    WorkspaceRemove { id: Id },
+    WorkspaceAdd {
+        path: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        name: Option<String>,
+    },
+    WorkspaceUpdate {
+        id: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        approved: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        pinned: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[ts(type = "number")]
+        order: Option<i64>,
+    },
+    WorkspaceRemove {
+        id: Id,
+    },
     // layout
-    LayoutSet { workspace_id: Id, layout: WorkspaceLayout },
+    LayoutSet {
+        workspace_id: Id,
+        layout: WorkspaceLayout,
+    },
     // sessions
     SessionStart(StartSession),
-    SessionStop { id: Id },
-    SessionClose { id: Id },
-    SessionRestart { id: Id },
-    SessionRename { id: Id, title: String },
+    SessionStop {
+        id: Id,
+    },
+    SessionClose {
+        id: Id,
+    },
+    SessionRestart {
+        id: Id,
+    },
+    SessionRename {
+        id: Id,
+        title: String,
+    },
     /// Type a prompt into an agent and press Enter.
-    SessionPrompt { id: Id, text: String },
+    SessionPrompt {
+        id: Id,
+        text: String,
+    },
     // terminals
-    TermAttach { sid: Id },
-    TermDetach { sid: Id },
-    TermWrite { sid: Id, data: String },
-    TermResize { sid: Id, cols: u16, rows: u16 },
+    TermAttach {
+        sid: Id,
+    },
+    TermDetach {
+        sid: Id,
+    },
+    TermWrite {
+        sid: Id,
+        data: String,
+    },
+    TermResize {
+        sid: Id,
+        cols: u16,
+        rows: u16,
+    },
     // profiles / catalog
-    ProfileSave { profile: Profile },
-    ProfileDelete { id: Id },
+    ProfileSave {
+        profile: Profile,
+    },
+    ProfileDelete {
+        id: Id,
+    },
     CatalogRefresh,
     // settings
-    SettingsSet { settings: Settings },
+    SettingsSet {
+        settings: Settings,
+    },
     // filesystem (read-only browsing, for picking folders)
-    FsList { path: String },
+    FsList {
+        path: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -406,19 +553,25 @@ pub enum Request {
 pub struct StartSession {
     pub workspace_id: Id,
     pub profile_id: Id,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub prompt: Option<String>,
     /// Pane that should show the new session; created if missing.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub pane_id: Option<Id>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub cols: Option<u16>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub rows: Option<u16>,
     /// Continue a previous CLI conversation.
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub resume: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub worktree: Option<bool>,
 }
 
@@ -429,7 +582,8 @@ pub struct StartSession {
 pub struct AttachResult {
     /// ANSI that reproduces scrollback + screen + modes.
     pub snapshot: String,
-    #[ts(type = "number")] pub seq: u64,
+    #[ts(type = "number")]
+    pub seq: u64,
     pub cols: u16,
     pub rows: u16,
 }

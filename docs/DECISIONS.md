@@ -74,3 +74,32 @@ so Tailwind emits them although no utility uses them).
 `apps/desktop/dev.html` runs the same UI in a plain browser against a local daemon (port/token in
 the URL hash). Dev server only, not part of the build. Used with headless WebKit (closest to the
 macOS webview) for automated UI checks; the Tauri window is checked with window screenshots.
+
+## D15 — Agent catalog and one-click install
+The daemon knows 13 agent CLIs (`crates/na-daemon/src/catalog.rs`): command, vendor install
+command per OS (from the vendor docs), how a first prompt is passed (positional, flag, or typed
+in) and how a session is resumed. Detection is `which` + `--version` (parallel, 6 s timeout).
+Install runs the vendor command visibly in a pane (`install:<id>` pseudo profile) so the user can
+see and answer every step (installers ask questions, e.g. sudo or "start now?"). The catalog is
+refreshed when an install pane exits or is closed, and on demand. Launchers only offer installed
+CLIs. Phones need approval to start an install (policy).
+
+## D16 — Status from hooks, output as fallback
+Claude Code: our hook commands are passed per process with `--settings <json>` (merged with the
+user's own hooks, nothing written to their config). Codex: `-c notify=[<daemon>, "hook",
+"codex-notify"]`, the JSON arrives as argv. Hook events set the status (SessionStart → idle,
+prompt/tool use → working, permission → waiting, Stop/notify → done with the last message,
+StopFailure → error). A StopFailure after a turn already ended with Stop is ignored (Claude
+reports failed background requests that way). Other CLIs use output heuristics.
+
+## D17 — Codex verified with a simulated notify call
+No OpenAI account on this machine, and the NeuralHub gateway only offers Claude models, which
+fail with Codex (prefill errors / 429). Codex install was tested for real; the notify path was
+tested by running exactly the call Codex makes (`<daemon> hook codex-notify '<json>'`) inside a
+daemon session. A real Codex turn needs the user's login (`codex login`).
+
+## D18 — Agents dashboard
+A sidebar entry "Agents" above the workspaces lists every agent session (not plain terminals or
+installers) grouped by workspace, most urgent first, with the last message, time in status and
+stop/restart/open. "Install agents" opens the catalog sheet.
+

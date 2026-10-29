@@ -52,6 +52,7 @@ Open items first. Everything else keeps going locally until these are done.
 | Date | Spent (cumulative) | What |
 |---|---|---|
 | 2026-10-29 | $0.00 | model list only |
+| 2026-10-29 | < $0.05 | 2 Codex test calls (Claude Haiku via NeuralHub, failed) |
 
 ## Progress
 
@@ -60,14 +61,24 @@ Open items first. Everything else keeps going locally until these are done.
 | Phase 0 (reverse engineering, feature matrix) | done (2026-10-29) |
 | Server .96 base (Ubuntu 26.04.1 LTS, SSH key-only, unattended-upgrades, Docker 29.9, ufw) | done (2026-10-29) |
 | M0 repo, docs, CI, design library, brand | done (2026-10-29) — CI on 3 OS, secret scan, token check, logo C |
-| M1 desktop shell, daemon, pane grid | in progress — see below |
+| M1 desktop shell, daemon, pane grid | done (2026-10-29) — CI green on Linux/macOS, Windows fix pending CI |
+| M2 agent CLIs: catalog, install, hooks, dashboard | in progress — see below |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
 - Split (button, ⌘D / ⌘\), presets 1–16, zoom (⌘↩), divider drag persists in `state.json`.
 - 16 shells with continuous output at once: smooth, daemon ~12 % CPU.
 - App restart (quit + reopen): shells keep running, screens come back intact.
-- Open: agent CLI catalog/install/hooks (M2 part), settings page, session search.
+
+### M2 verified so far (2026-10-29)
+- Catalog of 13 CLIs; detection shows Claude Code 2.1.312, Codex 0.166.0, OpenCode 2.0.25.
+- One-click install of Codex in a pane: vendor installer ran, catalog shows it afterwards.
+- Claude Code live (Haiku): idle → working → waiting ("Wants to use Bash") → approve → working
+  → done with the last message; notification-ready attention events; no false error after done.
+- Codex status via notify (simulated call, see D17): done + thread id + last message.
+- Launcher and "New agent" offer only installed CLIs plus "Install agents…"; catalog sheet with
+  versions, install command, docs; Agents dashboard across workspaces.
+- Open: resume from dashboard/session search, custom profile editor, real Codex turn (needs login).
 
 ## Known gaps
 

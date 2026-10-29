@@ -19,7 +19,9 @@ pub fn client_main(event: &str, arg: Option<&str>) {
 }
 
 fn send(event: &str, arg: Option<&str>) -> std::io::Result<()> {
-    let (Ok(sid), Ok(token), Ok(port)) = (std::env::var("NEURALAGENT_SESSION"), std::env::var("NEURALAGENT_HOOK_TOKEN"), std::env::var("NEURALAGENT_PORT")) else {
+    let (Ok(sid), Ok(token), Ok(port)) =
+        (std::env::var("NEURALAGENT_SESSION"), std::env::var("NEURALAGENT_HOOK_TOKEN"), std::env::var("NEURALAGENT_PORT"))
+    else {
         return Ok(());
     };
     let mut body = Vec::new();

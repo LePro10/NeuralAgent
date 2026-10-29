@@ -31,9 +31,10 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Some(_) => needs("typing into an agent outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
-        Request::WorkspaceUpdate { approved: Some(_), .. } | Request::SettingsSet { .. } | Request::ProfileSave { .. } | Request::ProfileDelete { .. } => {
-            needs("this change")
-        }
+        Request::WorkspaceUpdate { approved: Some(_), .. }
+        | Request::SettingsSet { .. }
+        | Request::ProfileSave { .. }
+        | Request::ProfileDelete { .. } => needs("this change"),
         Request::WorkspaceRemove { .. } => needs("removing a workspace"),
         Request::CatalogRefresh => Ok(()),
         _ => Ok(()),

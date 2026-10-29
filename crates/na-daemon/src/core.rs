@@ -140,7 +140,8 @@ impl Core {
         if let Some(since) = since {
             let oldest = g.ring.front().map(|(s, _)| *s).unwrap_or(g.seq + 1);
             if since <= g.seq && since + 1 >= oldest {
-                let replay = g.ring.iter().filter(|(s, _)| *s > since).map(|(seq, ev)| ServerMsg::Ev { seq: *seq, ev: ev.clone() }).collect();
+                let replay =
+                    g.ring.iter().filter(|(s, _)| *s > since).map(|(seq, ev)| ServerMsg::Ev { seq: *seq, ev: ev.clone() }).collect();
                 return Subscription { first: ServerMsg::Pong { at: now_ms() }, replay, rx };
             }
         }
@@ -208,7 +209,9 @@ impl Core {
         match req {
             Request::WorkspaceAdd { path, name } => self.workspace_add(path, name),
             Request::WorkspaceUpdate { id, name, approved, pinned, order } => {
-                let mut ws = self.read(|s| s.workspaces.iter().find(|w| w.id == id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
+                let mut ws = self
+                    .read(|s| s.workspaces.iter().find(|w| w.id == id).cloned())
+                    .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
                 if let Some(v) = name {
                     ws.name = v;
                 }
@@ -309,7 +312,9 @@ impl Core {
             }
             Request::CatalogRefresh => {
                 let core = self.clone();
-                let catalog = tokio::task::spawn_blocking(move || core.refresh_catalog()).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+                let catalog = tokio::task::spawn_blocking(move || core.refresh_catalog())
+                    .await
+                    .map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 Ok(json!(catalog))
             }
             Request::SettingsSet { settings } => {
@@ -347,7 +352,9 @@ impl Core {
     }
 
     pub fn session_start(self: &Arc<Self>, start: StartSession) -> std::result::Result<Session, ApiError> {
-        let ws = self.read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
+        let ws = self
+            .read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned())
+            .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
         let profile = self.profile(&start.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
         let now = now_ms();
         let session = Session {
@@ -435,7 +442,13 @@ impl Core {
         session.started_at = now;
         self.live.lock().insert(
             session.id.clone(),
-            Live { pty: pty.clone(), hook_token, last_output: None, working_since: None, prompted: launch.prompt_in_args && prompt.is_some() },
+            Live {
+                pty: pty.clone(),
+                hook_token,
+                last_output: None,
+                working_since: None,
+                prompted: launch.prompt_in_args && prompt.is_some(),
+            },
         );
         self.emit(Event::SessionUpsert { session: session.clone() });
 
@@ -482,16 +495,22 @@ impl Core {
         Ok(())
     }
 
-    fn session_close(&self, id: &Id) {
+    fn session_close(self: &Arc<Self>, id: &Id) {
         if let Some(l) = self.live.lock().remove(id) {
             l.pty.kill();
+            // Installers often end with a question ("Start now?"); closing the pane still counts.
+            if self.read(|s| s.sessions.get(id).is_some_and(|x| x.profile_id.starts_with(crate::profiles::INSTALL_PREFIX))) {
+                let core = self.clone();
+                std::thread::spawn(move || core.refresh_catalog());
+            }
         }
         let ws = self.read(|s| s.sessions.get(id).map(|x| x.workspace_id.clone()));
         if let Some(ws) = ws
             && let Some(mut l) = self.read(|s| s.layouts.get(&ws).cloned())
-                && layout::clear_session(&mut l, id) {
-                    self.emit(Event::LayoutSet { workspace_id: ws, layout: l });
-                }
+            && layout::clear_session(&mut l, id)
+        {
+            self.emit(Event::LayoutSet { workspace_id: ws, layout: l });
+        }
         self.emit(Event::SessionRemoved { id: id.clone() });
     }
 
@@ -526,14 +545,19 @@ impl Core {
                     s.status = if code.unwrap_or(0) == 0 { AgentStatus::Exited } else { AgentStatus::Error };
                     s.status_since = now_ms();
                 });
-                let installer = self.read(|s| s.sessions.get(sid).is_some_and(|x| x.profile_id.starts_with(crate::profiles::INSTALL_PREFIX)));
+                let installer =
+                    self.read(|s| s.sessions.get(sid).is_some_and(|x| x.profile_id.starts_with(crate::profiles::INSTALL_PREFIX)));
                 if installer {
                     // A CLI may have appeared: look again.
                     let core = self.clone();
                     std::thread::spawn(move || core.refresh_catalog());
                 }
                 if code.unwrap_or(0) != 0 {
-                    self.emit(Event::Attention { session_id: sid.clone(), kind: AttentionKind::Error, text: format!("exited with code {}", code.unwrap_or(-1)) });
+                    self.emit(Event::Attention {
+                        session_id: sid.clone(),
+                        kind: AttentionKind::Error,
+                        text: format!("exited with code {}", code.unwrap_or(-1)),
+                    });
                 }
             }
         }
@@ -544,16 +568,17 @@ impl Core {
         let Some(cur) = self.read(|st| st.sessions.get(id).map(|s| s.status)) else { return };
         let mut busy_add = 0i64;
         if next != cur
-            && let Some(l) = self.live.lock().get_mut(id) {
-                if next == AgentStatus::Working {
-                    l.working_since.get_or_insert_with(Instant::now);
-                } else if let Some(t) = l.working_since.take() {
-                    busy_add = t.elapsed().as_millis() as i64;
-                }
-                if next == AgentStatus::Done {
-                    l.prompted = false;
-                }
+            && let Some(l) = self.live.lock().get_mut(id)
+        {
+            if next == AgentStatus::Working {
+                l.working_since.get_or_insert_with(Instant::now);
+            } else if let Some(t) = l.working_since.take() {
+                busy_add = t.elapsed().as_millis() as i64;
             }
+            if next == AgentStatus::Done {
+                l.prompted = false;
+            }
+        }
         self.update_session(id, |x| {
             if x.status != next {
                 x.status = next;
@@ -575,7 +600,8 @@ impl Core {
 
     /// Output-based status for sessions without hooks, plus `last_line` refresh. Runs ~3×/s.
     pub fn tick(&self) {
-        let ids: Vec<(Id, Option<Instant>, bool, Arc<Pty>)> = self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.prompted, l.pty.clone())).collect();
+        let ids: Vec<(Id, Option<Instant>, bool, Arc<Pty>)> =
+            self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.prompted, l.pty.clone())).collect();
         for (id, last_output, prompted, pty) in ids {
             let Some(s) = self.read(|st| st.sessions.get(&id).cloned()) else { continue };
             let line = pty.last_line();
@@ -593,7 +619,11 @@ impl Core {
                     (AgentStatus::Starting, _) => AgentStatus::Starting,
                     (_, true) if prompted || shell => AgentStatus::Working,
                     (AgentStatus::Working, false) if quiet => {
-                        if shell { AgentStatus::Idle } else { AgentStatus::Done }
+                        if shell {
+                            AgentStatus::Idle
+                        } else {
+                            AgentStatus::Done
+                        }
                     }
                     (st, _) => st,
                 },
@@ -702,7 +732,11 @@ fn last_assistant_text(path: &Path) -> Option<String> {
             return None;
         }
         let parts = v.pointer("/message/content")?.as_array()?;
-        let text: Vec<&str> = parts.iter().filter(|p| p.get("type").and_then(Value::as_str) == Some("text")).filter_map(|p| p.get("text")?.as_str()).collect();
+        let text: Vec<&str> = parts
+            .iter()
+            .filter(|p| p.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|p| p.get("text")?.as_str())
+            .collect();
         (!text.is_empty()).then(|| text.join("\n").chars().take(2000).collect())
     })
 }

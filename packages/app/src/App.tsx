@@ -1,13 +1,16 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
-import { Folder, FolderGit2, FolderPlus } from "lucide-react";
+import { Folder, FolderGit2, FolderPlus, LayoutDashboard } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { AgentCatalog } from "./components/AgentCatalog";
+import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 
 const ADD = "__add";
+const AGENTS = "__agents";
 
 export function App() {
   const client = useClient();
@@ -17,7 +20,8 @@ export function App() {
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
-  const current = workspaces.find((w) => w.id === workspace) ?? workspaces[0];
+  const dashboard = workspace === AGENTS;
+  const current = dashboard ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // Notify when an agent finishes or needs input while the window is in the background.
   useEffect(() => {
@@ -40,7 +44,10 @@ export function App() {
     }
   };
 
+  const allStatuses = Object.values(state?.sessions ?? {}).map((s) => s.status);
+  const waiting = allStatuses.filter((s) => s === "waiting").length;
   const items: NavItem[] = [
+    { id: AGENTS, label: "Agents", Icon: LayoutDashboard, badge: waiting > 0 ? `${waiting} waiting` : undefined },
     ...workspaces.map((w) => {
       const statuses = Object.values(state?.sessions ?? {}).filter((s) => s.workspace_id === w.id).map((s) => s.status);
       const urgent = mostUrgent(statuses);
@@ -59,6 +66,8 @@ export function App() {
     <div className="grid h-full place-items-center">
       {status === "offline" ? <Callout tone="danger" title="Daemon not reachable">Trying to reconnect…</Callout> : <Spinner label="Connecting" />}
     </div>
+  ) : dashboard ? (
+    <AgentsDashboard />
   ) : current ? (
     <WorkspaceView key={current.id} workspaceId={current.id} />
   ) : (
@@ -83,7 +92,7 @@ export function App() {
       sidebar={
         <Sidebar
           items={items}
-          value={current?.id ?? ""}
+          value={dashboard ? AGENTS : (current?.id ?? "")}
           onChange={(id) => (id === ADD ? void addWorkspace() : setWorkspace(id))}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
           pinned={sidebarPinned}
@@ -99,6 +108,7 @@ export function App() {
         </div>
       )}
       {body}
+      {state && <AgentCatalog />}
       <Toaster />
     </AppShell>
   );

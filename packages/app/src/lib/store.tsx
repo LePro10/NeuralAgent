@@ -52,3 +52,9 @@ export const useUi = create<UiState>()(
     { name: "neuralagent.ui" },
   ),
 );
+
+/** The agent catalog sheet (install CLIs), opened from launchers and the dashboard. */
+export const useCatalogSheet = create<{ open: boolean; setOpen: (open: boolean) => void }>()((set) => ({
+  open: false,
+  setOpen: (open) => set({ open }),
+}));

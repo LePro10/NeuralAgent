@@ -4,10 +4,10 @@
 //! `neuralagentd hook <ev>`  forward an agent hook event (used inside agent processes)
 //! `neuralagentd info`       print where the daemon listens (no secrets)
 
+mod catalog;
 mod core;
 mod env;
 mod fsbrowse;
-mod catalog;
 mod hooks;
 mod layout;
 mod paths;
@@ -71,7 +71,13 @@ fn serve() -> Result<()> {
             std::thread::spawn(move || core.refresh_catalog());
         }
         let token = server::random_token();
-        let info = DaemonInfo { port, token: token.clone(), pid: std::process::id(), version: env!("CARGO_PKG_VERSION").into(), protocol: na_protocol::PROTOCOL_VERSION };
+        let info = DaemonInfo {
+            port,
+            token: token.clone(),
+            pid: std::process::id(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            protocol: na_protocol::PROTOCOL_VERSION,
+        };
         write_private(&paths.daemon_json(), &serde_json::to_vec_pretty(&info)?)?;
         tracing::info!(port, "listening");
 
@@ -85,9 +91,10 @@ fn serve() -> Result<()> {
                     core.tick();
                     n += 1;
                     if n.is_multiple_of(3)
-                        && let Err(e) = core.save_if_dirty() {
-                            tracing::error!("saving state: {e:#}");
-                        }
+                        && let Err(e) = core.save_if_dirty()
+                    {
+                        tracing::error!("saving state: {e:#}");
+                    }
                 }
             });
         }

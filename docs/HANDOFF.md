@@ -4,14 +4,15 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-29)
-- M0 done: protocol (`crates/na-protocol` → TS `packages/protocol/src/gen`), daemon
-  (`crates/na-daemon`), CI (`.github/workflows/ci.yml`), logo C (`docs/brand/`).
-- M1 in progress: desktop shell `apps/desktop` (Tauri; `src-tauri/src/daemon.rs` starts the
-  daemon detached), shared UI `packages/app` (App → WorkspaceView → PaneTree → Pane →
-  TerminalView/EmptyPane). Grid, tabs, presets, shortcuts, persistence verified.
-- Next in M1: settings page (keep-awake, theme, Discord mode), session list/search/resume, tab
-  rename, pane drag-to-swap check, keep-awake implementation; then M2 (agent catalog with
-  detection/one-click install, hooks per CLI, dashboard) — use `research-local/analysis/cli-research.md`.
+- M0, M1 done. M2 in progress (see STATUS "M2 verified so far").
+- Daemon: `catalog.rs` (13 CLIs, detect/install), `profiles.rs` (launch args, hook injection),
+  `core.rs::on_hook` (hook → status mapping), Windows exit detection in `pty.rs` (wait thread).
+- UI: `AgentCatalog.tsx` (sheet, opened via `useCatalogSheet`), `AgentsDashboard.tsx` (sidebar
+  "Agents"), `lib/profiles.ts::launchable` (installed-only launchers).
+- Next in M2: custom profile editor (name, CLI, extra args), check notifications in the Tauri
+  app, CI green on Windows. Then M3 per PLAN.md. Settings page, session search/resume and
+  keep-awake are still open from the M1 extras.
+- Codex: installed at `~/.local/bin/codex`, not logged in (D17).
 
 ## How to run
 - `pnpm dev` (Tauri dev; set `NEURALAGENT_HOME=/tmp/na-dev` to keep test state separate).
@@ -21,4 +22,6 @@ decisions: `DECISIONS.md`.
 - `cargo test --workspace`; `pnpm typecheck && pnpm test && pnpm lint:tokens`.
 - Daemon smoke: `NEURALAGENT_HOME=/tmp/na-smoke ./target/debug/neuralagentd &` then
   `NEURALAGENT_HOME=/tmp/na-smoke node scripts/daemon-smoke.mjs`.
+- Hook tests: scripts in `/tmp/na-drive` (`perm2.mjs` permission flow, `notify-sim.mjs` Codex
+  notify, `install.mjs <agent>` install pane). Claude test profiles use `--model haiku`.
 - Window screenshot: `research-local/tools/winid neuralagent` → `screencapture -x -o -l <id>`.
