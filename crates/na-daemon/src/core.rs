@@ -68,6 +68,11 @@ pub struct Core {
     pub paths: Paths,
     pub host: HostInfo,
     pub port: Mutex<u16>,
+    /// Sessions that were running when the previous daemon stopped (for `resume_on_start`).
+    was_running: Mutex<Vec<Id>>,
+    /// Set while shutting down: exits caused by the shutdown are not saved, so the next start
+    /// still knows what was running.
+    closing: std::sync::atomic::AtomicBool,
 }
 
 pub struct Subscription {
@@ -92,8 +97,10 @@ impl Core {
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
+        let mut was_running = vec![];
         for s in state.sessions.values_mut() {
             if s.alive {
+                was_running.push(s.id.clone());
                 s.alive = false;
                 s.status = AgentStatus::Exited;
                 s.status_since = now_ms();
@@ -114,7 +121,28 @@ impl Core {
             paths,
             host,
             port: Mutex::new(0),
+            was_running: Mutex::new(was_running),
+            closing: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+
+    /// Restarts what ran before the daemon stopped (setting `resume_on_start`). Agents with a
+    /// known conversation id continue that conversation; others start fresh in the same pane.
+    pub fn resume_after_restart(self: &Arc<Self>) {
+        let ids = std::mem::take(&mut *self.was_running.lock());
+        if ids.is_empty() || !self.read(|s| s.settings.resume_on_start) {
+            return;
+        }
+        for id in ids {
+            let Some(s) = self.read(|st| st.sessions.get(&id).cloned()) else { continue };
+            if s.profile_id.starts_with(crate::profiles::INSTALL_PREFIX) {
+                continue; // an install finished or failed; running it again is not wanted
+            }
+            match self.spawn_into(s, None) {
+                Ok(s) => tracing::info!(session = %s.id, resumed = s.engine_session.is_some(), "restarted after daemon restart"),
+                Err(e) => tracing::warn!(session = %id, "could not restart: {}", e.message),
+            }
+        }
     }
 
     // ───────────── state plumbing ─────────────
@@ -155,7 +183,7 @@ impl Core {
     pub fn save_if_dirty(&self) -> Result<()> {
         let data = {
             let mut g = self.inner.lock();
-            if !g.dirty {
+            if !g.dirty || self.closing.load(std::sync::atomic::Ordering::SeqCst) {
                 return Ok(());
             }
             g.dirty = false;
@@ -715,10 +743,12 @@ impl Core {
     }
 
     pub fn shutdown(&self) {
+        // Save first, while sessions still count as running, then stop them.
+        let _ = self.save_if_dirty();
+        self.closing.store(true, std::sync::atomic::Ordering::SeqCst);
         for (_, l) in self.live.lock().drain() {
             l.pty.kill();
         }
-        let _ = self.save_if_dirty();
     }
 }
 

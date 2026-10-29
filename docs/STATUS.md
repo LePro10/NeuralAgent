@@ -122,6 +122,10 @@ Open items first. Everything else keeps going locally until these are done.
 - Discord presence: unit test for what is shown (General: only "Working with AI agents";
   Detailed: workspace + agent count; plain shells do not count; nothing while no agent runs).
   Live check with Discord is on your checklist (Discord was closed).
+- Resume after a restart: a running session is started again in the same pane when the daemon
+  restarts (checked: alive again, accepts input); with the setting off it stays stopped. Agents
+  with a known conversation id get their CLI's resume argument (Claude `--resume <id>`).
+  Exits caused by the shutdown itself are no longer saved, so the next start knows what ran.
 - Fixed on the way: a session busy from its first second stayed "Starting" forever.
 
 ## Known gaps
