@@ -86,7 +86,11 @@ fn cost(price: Price, t: &TokenCounts, write_1h: u64) -> f64 {
         (input, output) = (i, o);
     }
     let write_5m = t.cache_write.saturating_sub(write_1h);
-    (t.input as f64 * input + t.output as f64 * output + t.cache_read as f64 * read + write_5m as f64 * input * 1.25 + write_1h as f64 * input * 2.0)
+    (t.input as f64 * input
+        + t.output as f64 * output
+        + t.cache_read as f64 * read
+        + write_5m as f64 * input * 1.25
+        + write_1h as f64 * input * 2.0)
         / 1e6
 }
 
@@ -271,10 +275,21 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn jsonl(dir: &Path) -> Vec<PathBuf> {
-    std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "jsonl")).collect()
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
+        .collect()
 }
 
-fn read_from(path: &Path, f: &mut FileUsage, seen: &mut HashSet<String>, limits: &mut Option<(Millis, Vec<UsageLimit>)>) -> std::io::Result<()> {
+fn read_from(
+    path: &Path,
+    f: &mut FileUsage,
+    seen: &mut HashSet<String>,
+    limits: &mut Option<(Millis, Vec<UsageLimit>)>,
+) -> std::io::Result<()> {
     let mut file = std::fs::File::open(path)?;
     file.seek(SeekFrom::Start(f.offset))?;
     let mut r = BufReader::new(file);
@@ -415,12 +430,22 @@ fn codex_line(f: &mut FileUsage, line: &[u8], limits: &mut Option<(Millis, Vec<U
     }
     let n = |k: &str| u[k].as_u64().unwrap_or(0);
     // OpenAI counts cached input inside input_tokens.
-    let total = TokenCounts { input: n("input_tokens").saturating_sub(n("cached_input_tokens")), output: n("output_tokens"), cache_read: n("cached_input_tokens"), cache_write: 0 };
+    let total = TokenCounts {
+        input: n("input_tokens").saturating_sub(n("cached_input_tokens")),
+        output: n("output_tokens"),
+        cache_read: n("cached_input_tokens"),
+        cache_write: 0,
+    };
     let prev = f.codex_total;
     let d = if total.input < prev.input || total.output < prev.output || total.cache_read < prev.cache_read {
         total
     } else {
-        TokenCounts { input: total.input - prev.input, output: total.output - prev.output, cache_read: total.cache_read - prev.cache_read, cache_write: 0 }
+        TokenCounts {
+            input: total.input - prev.input,
+            output: total.output - prev.output,
+            cache_read: total.cache_read - prev.cache_read,
+            cache_write: 0,
+        }
     };
     f.codex_total = total;
     if d == TokenCounts::default() {
@@ -442,7 +467,14 @@ fn codex_limits(r: &Value, ts: Option<&str>) -> Option<Vec<UsageLimit>> {
             let used = w["used_percent"].as_f64()?;
             let minutes = w["window_minutes"].as_u64().map(|m| m as u32);
             let resets_at = w["resets_at"].as_i64().map(|s| s * 1000).or_else(|| w["resets_in_seconds"].as_i64().map(|s| at + s * 1000));
-            Some(UsageLimit { engine: "codex".into(), window: window_name(minutes, k), window_minutes: minutes, used_percent: used, resets_at, updated_at: at })
+            Some(UsageLimit {
+                engine: "codex".into(),
+                window: window_name(minutes, k),
+                window_minutes: minutes,
+                used_percent: used,
+                resets_at,
+                updated_at: at,
+            })
         })
         .collect();
     (!out.is_empty()).then_some(out)
@@ -469,7 +501,10 @@ pub fn claude_limits(payload: &Value, now: Millis) -> Vec<UsageLimit> {
             let (window, minutes) = match k.as_str() {
                 "five_hour" => ("5h".to_string(), Some(300)),
                 "seven_day" => ("7d".to_string(), Some(10080)),
-                other => (other.strip_prefix("seven_day_").map_or_else(|| other.to_string(), |m| format!("7d_{m}")), other.starts_with("seven_day").then_some(10080)),
+                other => (
+                    other.strip_prefix("seven_day_").map_or_else(|| other.to_string(), |m| format!("7d_{m}")),
+                    other.starts_with("seven_day").then_some(10080),
+                ),
             };
             let resets_at = match &w["resets_at"] {
                 Value::Number(n) => n.as_i64().map(|s| if s < 100_000_000_000 { s * 1000 } else { s }),

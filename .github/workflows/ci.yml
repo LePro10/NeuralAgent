@@ -77,6 +77,8 @@ jobs:
       # tauri-build embeds the frontend, so it has to exist before cargo builds the shell.
       - run: pnpm --filter @neuralagent/desktop build
       - run: cargo test --workspace --locked
+      # The relay account-flow test needs the test sign-in (a feature never built into the image).
+      - run: cargo test -p na-relay --features test-login --locked
       - run: cargo build --workspace --locked
       - name: Daemon smoke test
         if: runner.os != 'Windows'

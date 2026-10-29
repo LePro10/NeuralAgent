@@ -4,6 +4,8 @@ members = [
   "crates/na-protocol",
   "crates/na-daemon",
   "crates/na-voice",
+  "crates/na-crypto",
+  "crates/na-relay",
   "apps/desktop/src-tauri",
 ]
 
@@ -31,6 +33,12 @@ ts-rs = { version = "12", features = ["serde-compat", "uuid-impl", "serde-json-i
 na-protocol = { path = "crates/na-protocol" }
 na-voice = { path = "crates/na-voice" }
 sherpa-onnx = "2.0.1"
+na-crypto = { path = "crates/na-crypto" }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+zeroize = "1"
 
 [profile.release]
 lto = "thin"

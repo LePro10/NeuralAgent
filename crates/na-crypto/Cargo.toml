@@ -1,0 +1,16 @@
+[package]
+name = "na-crypto"
+description = "NeuralAgent end-to-end encryption (X25519 handshake + AES-256-GCM session), v1."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+x25519-dalek.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+aes-gcm.workspace = true
+base64.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+serde_json.workspace = true

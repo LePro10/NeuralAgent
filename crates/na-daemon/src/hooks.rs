@@ -36,7 +36,9 @@ pub fn statusline_main() {
         c.args(["-c", &cmd]);
         c
     };
-    let Ok(mut child) = sh.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn() else {
+    let Ok(mut child) =
+        sh.stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()
+    else {
         return;
     };
     if let Some(mut i) = child.stdin.take() {
@@ -50,7 +52,8 @@ pub fn statusline_main() {
 /// The statusline command the user configured: project-local, project, then user settings.
 fn user_statusline(input: &Value) -> Option<String> {
     let cwd = input["workspace"]["current_dir"].as_str().or(input["cwd"].as_str()).map(std::path::PathBuf::from);
-    let config = std::env::var_os("CLAUDE_CONFIG_DIR").map(std::path::PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".claude")));
+    let config =
+        std::env::var_os("CLAUDE_CONFIG_DIR").map(std::path::PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".claude")));
     let mut files = vec![];
     if let Some(c) = &cwd {
         files.push(c.join(".claude/settings.local.json"));

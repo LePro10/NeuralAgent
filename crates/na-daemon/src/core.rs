@@ -469,7 +469,8 @@ impl Core {
                         ws.iter().filter(|(_, p)| Path::new(cwd).starts_with(p)).max_by_key(|(_, p)| p.len()).map(|(id, _)| id.clone())
                     };
                     let rows = me.usage.rows(&since, workspace);
-                    let busy_ms: BTreeMap<String, i64> = me.inner.lock().busy_days.range(since.clone()..).map(|(k, v)| (k.clone(), *v)).collect();
+                    let busy_ms: BTreeMap<String, i64> =
+                        me.inner.lock().busy_days.range(since.clone()..).map(|(k, v)| (k.clone(), *v)).collect();
                     json!(UsageReport { rows, busy_ms })
                 })
                 .await
@@ -551,8 +552,13 @@ impl Core {
         if !codex.is_empty() {
             self.set_limits("codex", codex);
         }
-        let running: Vec<(Id, String, Option<SessionUsage>)> =
-            self.read(|s| s.sessions.values().filter(|x| x.alive).filter_map(|x| Some((x.id.clone(), x.engine_session.clone()?, x.usage.clone()))).collect());
+        let running: Vec<(Id, String, Option<SessionUsage>)> = self.read(|s| {
+            s.sessions
+                .values()
+                .filter(|x| x.alive)
+                .filter_map(|x| Some((x.id.clone(), x.engine_session.clone()?, x.usage.clone())))
+                .collect()
+        });
         for (id, conv, old) in running {
             let new = self.usage.conversation(&conv);
             if new.is_some() && new != old {
@@ -568,8 +574,7 @@ impl Core {
         let all = self.read(|s| s.limits.clone());
         let old: Vec<&UsageLimit> = all.iter().filter(|l| l.engine == engine).collect();
         let key = |l: &UsageLimit| (l.window.clone(), l.used_percent.to_bits(), l.resets_at);
-        let same = old.len() == new.len()
-            && old.iter().zip(&new).all(|(a, b)| key(a) == key(b) && b.updated_at - a.updated_at < 60_000);
+        let same = old.len() == new.len() && old.iter().zip(&new).all(|(a, b)| key(a) == key(b) && b.updated_at - a.updated_at < 60_000);
         if same {
             return;
         }
