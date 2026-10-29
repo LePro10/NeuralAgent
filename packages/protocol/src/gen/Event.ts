@@ -3,10 +3,11 @@ import type { AttentionKind } from "./AttentionKind";
 import type { CatalogEntry } from "./CatalogEntry";
 import type { McpServer } from "./McpServer";
 import type { Profile } from "./Profile";
+import type { RemoteState } from "./RemoteState";
 import type { Session } from "./Session";
 import type { Settings } from "./Settings";
 import type { UsageLimit } from "./UsageLimit";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceLayout } from "./WorkspaceLayout";
 
-export type Event = { "e": "workspace_upsert", workspace: Workspace, } | { "e": "workspace_removed", id: string, } | { "e": "layout_set", workspace_id: string, layout: WorkspaceLayout, } | { "e": "session_upsert", session: Session, } | { "e": "session_removed", id: string, } | { "e": "profiles_set", profiles: Array<Profile>, } | { "e": "mcp_set", servers: Array<McpServer>, } | { "e": "limits_set", limits: Array<UsageLimit>, } | { "e": "catalog_set", catalog: Array<CatalogEntry>, } | { "e": "settings_set", settings: Settings, } | { "e": "attention", session_id: string, kind: AttentionKind, text: string, };
+export type Event = { "e": "workspace_upsert", workspace: Workspace, } | { "e": "workspace_removed", id: string, } | { "e": "layout_set", workspace_id: string, layout: WorkspaceLayout, } | { "e": "session_upsert", session: Session, } | { "e": "session_removed", id: string, } | { "e": "profiles_set", profiles: Array<Profile>, } | { "e": "mcp_set", servers: Array<McpServer>, } | { "e": "limits_set", limits: Array<UsageLimit>, } | { "e": "remote_set", remote: RemoteState, } | { "e": "catalog_set", catalog: Array<CatalogEntry>, } | { "e": "settings_set", settings: Settings, } | { "e": "attention", session_id: string, kind: AttentionKind, text: string, };

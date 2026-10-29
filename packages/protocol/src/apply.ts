@@ -16,6 +16,8 @@ export function apply(s: State, ev: Event): State {
       const sessions = Object.fromEntries(Object.entries(s.sessions).filter(([, x]) => x?.workspace_id !== ev.id));
       return { ...s, workspaces: s.workspaces.filter((w) => w.id !== ev.id), layouts, sessions };
     }
+    case "remote_set":
+      return { ...s, remote: ev.remote };
     case "layout_set":
       return { ...s, layouts: { ...s.layouts, [ev.workspace_id]: ev.layout } };
     case "session_upsert":

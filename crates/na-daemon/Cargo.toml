@@ -20,6 +20,7 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 base64.workspace = true
 rand.workspace = true
+sha2.workspace = true
 futures-util.workspace = true
 portable-pty = "0.9.0"
 vt100 = "0.18.1"
@@ -32,6 +33,14 @@ keepawake = "0.6.1"
 discord-rich-presence = "1.1.0"
 toml = "1.1.8"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+na-crypto = { version = "0.1.0", path = "../na-crypto" }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "query"] }
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+url = "2.5.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_System_Power"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native"] }

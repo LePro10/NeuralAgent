@@ -89,3 +89,8 @@ jobs:
           for i in $(seq 1 50); do [ -f "$NEURALAGENT_HOME/daemon.json" ] && break; sleep 0.2; done
           node scripts/daemon-smoke.mjs
           kill %1
+      - name: Remote end-to-end test (relay, daemon, simulated phone)
+        if: runner.os != 'Windows'
+        run: |
+          cargo build -p na-relay --features test-login --locked
+          node --experimental-strip-types scripts/e2e-remote.ts

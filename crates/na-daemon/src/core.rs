@@ -85,6 +85,7 @@ pub struct Core {
     /// Serialises changes to the MCP list and its secrets file.
     mcp_lock: Mutex<()>,
     usage: crate::usage::Usage,
+    pub remote: crate::remote::Remote,
 }
 
 pub struct Subscription {
@@ -108,6 +109,7 @@ impl Core {
             settings: persisted.settings,
             mcp: persisted.mcp,
             limits: persisted.limits,
+            remote: Default::default(),
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -140,6 +142,7 @@ impl Core {
             history: Default::default(),
             mcp_lock: Mutex::new(()),
             usage: Default::default(),
+            remote: Default::default(),
         })
     }
 
@@ -255,6 +258,12 @@ impl Core {
     pub async fn handle(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
         crate::policy::check(self, client, &req)?;
         match req {
+            r @ (Request::RemoteSignIn { .. }
+            | Request::RemoteSignOut
+            | Request::RemoteSignOutEverywhere
+            | Request::RemoteEnable { .. }
+            | Request::RemotePair
+            | Request::RemoteRevoke { .. }) => crate::remote::handle(self, r).await,
             Request::WorkspaceAdd { path, name } => self.workspace_add(path, name),
             Request::WorkspaceUpdate { id, name, approved, pinned, order } => {
                 let mut ws = self
@@ -1078,6 +1087,7 @@ fn first_line(s: &str) -> String {
 /// Applies an event to a state. Mirrored in TypeScript; keep both in sync.
 pub fn apply(s: &mut State, ev: &Event) {
     match ev {
+        Event::RemoteSet { remote } => s.remote = remote.clone(),
         Event::WorkspaceUpsert { workspace } => match s.workspaces.iter_mut().find(|w| w.id == workspace.id) {
             Some(w) => *w = workspace.clone(),
             None => s.workspaces.push(workspace.clone()),

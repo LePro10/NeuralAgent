@@ -17,6 +17,14 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
     let approved = |ws: &String| core.read(|s| s.workspaces.iter().any(|w| &w.id == ws && w.approved));
     let needs = |what: &str| Err(err(ErrorCode::NeedsApproval, format!("{what} needs confirmation on the desktop")));
     match req {
+        // The emergency switch works from anywhere; everything else about the account is desktop-only.
+        Request::RemoteEnable { enabled: false } => Ok(()),
+        Request::RemoteSignIn { .. }
+        | Request::RemoteSignOut
+        | Request::RemoteSignOutEverywhere
+        | Request::RemoteEnable { .. }
+        | Request::RemotePair
+        | Request::RemoteRevoke { .. } => needs("changing remote access"),
         Request::SessionStart(st) if st.profile_id.starts_with(crate::profiles::INSTALL_PREFIX) => needs("installing a CLI"),
         Request::SessionStart(st) if !approved(&st.workspace_id) => needs("starting an agent outside an approved workspace"),
         Request::SessionStart(st) if st.profile_id == "shell" && client.kind == ClientKind::Orchestrator => needs("opening a raw shell"),

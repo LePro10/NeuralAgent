@@ -2,6 +2,7 @@
 import type { CatalogEntry } from "./CatalogEntry";
 import type { McpServer } from "./McpServer";
 import type { Profile } from "./Profile";
+import type { RemoteState } from "./RemoteState";
 import type { Session } from "./Session";
 import type { Settings } from "./Settings";
 import type { UsageLimit } from "./UsageLimit";
@@ -19,4 +20,8 @@ mcp: Array<McpServer>,
 /**
  * Subscription limits the CLIs last reported (Claude Code, Codex).
  */
-limits: Array<UsageLimit>, };
+limits: Array<UsageLimit>, 
+/**
+ * Remote access through the relay (account, connection, devices). Never holds secrets.
+ */
+remote: RemoteState, };

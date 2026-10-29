@@ -48,6 +48,7 @@ pub fn router(app: App) -> Router {
         )
         .route("/ws", get(ws_upgrade))
         .route("/hook", post(crate::hooks::receive))
+        .route("/auth/callback", get(crate::remote::callback))
         .with_state(app)
 }
 
@@ -119,6 +120,15 @@ pub async fn run_client(
 ) {
     let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())) };
     while let Some(msg) = next_msg(stream).await {
+        conn.on_msg(msg).await;
+    }
+    conn.close();
+}
+
+/// The same loop for clients that arrive over another channel (remote devices via the relay).
+pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, rx: &mut mpsc::Receiver<ClientMsg>) {
+    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())) };
+    while let Some(msg) = rx.recv().await {
         conn.on_msg(msg).await;
     }
     conn.close();

@@ -20,6 +20,7 @@ mod policy;
 mod preview;
 mod profiles;
 mod pty;
+mod remote;
 mod server;
 mod usage;
 
@@ -78,6 +79,7 @@ fn serve() -> Result<()> {
         let port = listener.local_addr()?.port();
         *core.port.lock() = port;
         core.resume_after_restart();
+        remote::start(&core);
         {
             let core = core.clone();
             std::thread::spawn(move || core.refresh_catalog());

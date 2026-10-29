@@ -170,6 +170,85 @@ pub struct State {
     /// Subscription limits the CLIs last reported (Claude Code, Codex).
     #[serde(default)]
     pub limits: Vec<UsageLimit>,
+    /// Remote access through the relay (account, connection, devices). Never holds secrets.
+    #[serde(default)]
+    pub remote: RemoteState,
+}
+
+/// Connection to the relay, as the desktop sees it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum RemoteStatus {
+    /// Not signed in (remote is invite-only).
+    #[default]
+    SignedOut,
+    /// Signed in, waiting for the admin's approval.
+    Pending,
+    Denied,
+    Blocked,
+    /// Approved, but switched off here ("Disconnect remote") or by the admin.
+    Off,
+    Connecting,
+    Online,
+    /// Approved and switched on, but the relay cannot be reached right now.
+    Offline,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RemoteState {
+    pub status: RemoteStatus,
+    /// Relay base URL, e.g. `https://agent.neuralhub.dev`.
+    pub relay: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account: Option<RemoteAccount>,
+    /// The account's devices (this computer included).
+    #[serde(default)]
+    pub devices: Vec<RemoteDevice>,
+    /// This computer's key fingerprint (phones check it when pairing).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fingerprint: Option<String>,
+    /// Last problem worth showing (sign-in failed, relay unreachable, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RemoteAccount {
+    pub email: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub avatar: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RemoteDevice {
+    pub id: Id,
+    pub name: String,
+    /// `macos`, `windows`, `linux`, `android`, `ios` or `web`.
+    pub platform: String,
+    pub online: bool,
+    /// Unix seconds.
+    #[ts(type = "number")]
+    pub last_seen: i64,
+    /// This computer.
+    pub this: bool,
+}
+
+/// Answer to `RemotePair`: what the QR code shows.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RemotePairCode {
+    /// Opens the web remote (or the app) and pairs; the code is in the URL fragment.
+    pub url: String,
+    pub expires_in: u32,
 }
 
 /// Tokens of model calls. `input` excludes cached input; `cache_read` / `cache_write` are the
@@ -599,6 +678,9 @@ pub enum Event {
     LimitsSet {
         limits: Vec<UsageLimit>,
     },
+    RemoteSet {
+        remote: RemoteState,
+    },
     CatalogSet {
         catalog: Vec<CatalogEntry>,
     },
@@ -754,6 +836,27 @@ pub enum Request {
     /// (1 = today). Returns `UsageReport`.
     UsageReport {
         days: u32,
+    },
+    // remote access (desktop only)
+    /// Starts a sign-in in the system browser; returns the URL to open. `message` is the
+    /// optional "Why do you want access?" for a new request.
+    RemoteSignIn {
+        provider: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        message: Option<String>,
+    },
+    RemoteSignOut,
+    /// Signs out every device of the account (this one too).
+    RemoteSignOutEverywhere,
+    /// "Disconnect remote": `false` closes the relay connection at once and keeps it closed.
+    RemoteEnable {
+        enabled: bool,
+    },
+    /// "Add phone": a one-time code (2 minutes, this account only). Returns `RemotePairCode`.
+    RemotePair,
+    RemoteRevoke {
+        device_id: Id,
     },
     // past agent conversations (Claude Code, Codex) on this computer, newest first
     HistorySearch {
