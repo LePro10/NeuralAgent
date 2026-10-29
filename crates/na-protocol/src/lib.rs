@@ -462,6 +462,8 @@ pub enum DiscordPresence {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "e", rename_all = "snake_case")]
 #[ts(export)]
+// Events are built, sent and dropped right away; boxing the big ones buys nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     WorkspaceUpsert {
         workspace: Workspace,
