@@ -164,6 +164,32 @@ pub struct State {
     pub profiles: Vec<Profile>,
     pub catalog: Vec<CatalogEntry>,
     pub settings: Settings,
+    /// MCP servers every agent gets (Claude Code, Codex, OpenCode).
+    #[serde(default)]
+    pub mcp: Vec<McpServer>,
+}
+
+/// An MCP server managed in one place. Values of environment variables and headers are kept by
+/// the daemon only (they are often API keys); clients see their names.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct McpServer {
+    /// Also the server's name inside the agents: letters, digits, `-` and `_`.
+    pub id: Id,
+    pub enabled: bool,
+    pub transport: McpTransport,
+    /// Names of the secret values (environment variables for `stdio`, headers for `http`).
+    pub secrets: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(export)]
+pub enum McpTransport {
+    /// A local program the agent starts.
+    Stdio { command: String, args: Vec<String> },
+    /// A server reached over HTTP (streamable HTTP).
+    Http { url: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -484,6 +510,9 @@ pub enum Event {
     ProfilesSet {
         profiles: Vec<Profile>,
     },
+    McpSet {
+        servers: Vec<McpServer>,
+    },
     CatalogSet {
         catalog: Vec<CatalogEntry>,
     },
@@ -622,6 +651,19 @@ pub enum Request {
     WorktreeDiscard {
         session_id: Id,
     },
+    // MCP servers. `values` sets secret values by name (others are kept; names no longer in
+    // `server.secrets` are dropped).
+    McpSave {
+        server: McpServer,
+        #[serde(default)]
+        values: BTreeMap<String, String>,
+    },
+    McpDelete {
+        id: Id,
+    },
+    /// Copy the servers configured in Claude Code (`~/.claude.json`) and Codex
+    /// (`~/.codex/config.toml`) that are not here yet. Returns how many were added.
+    McpImport,
     // past agent conversations (Claude Code, Codex) on this computer, newest first
     HistorySearch {
         query: String,

@@ -185,3 +185,15 @@ left uncommitted, `git merge` into the branch checked out in the workspace, remo
 and branch, close the agent. On a conflict the merge is aborted and nothing changes; the agent
 is told to merge the main branch first. Closing an agent whose worktree has no changes removes
 it; one with changes stays until merged or discarded.
+
+## D24 — MCP secrets live only in the daemon and the agent's environment
+
+MCP servers are part of the shared state (every client sees name, command/URL and the *names*
+of its secrets). The values are kept in `mcp-secrets.json` (mode 600) next to the state and are
+never sent to any client. At launch each CLI gets the servers in its own form and the values
+as environment variables of that agent: Claude Code `--mcp-config` with `${VAR}`, Codex
+`-c mcp_servers.<id>.env_vars / env_http_headers`, OpenCode `OPENCODE_CONFIG_CONTENT` with
+`{env:VAR}`. HTTP header values use `NEURALAGENT_MCP_<ID>_<HEADER>`. Nothing is written into
+the CLIs' own config files, so removing a server here removes it everywhere and the user's own
+settings stay untouched. Import copies servers from Claude Code and Codex once. There is no
+server catalogue or store (by design).

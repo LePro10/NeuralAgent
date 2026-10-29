@@ -56,7 +56,16 @@ fn login_shell(env: &LoginEnv, command: Option<&str>) -> Launch {
     Launch { program, args, env: vec![], prompt_in_args: false }
 }
 
-pub fn launch(env: &LoginEnv, profile: &Profile, prompt: Option<&str>, resume: Option<&str>, hook_exe: &Path) -> Result<Launch, ApiError> {
+/// `extra` (MCP servers) goes before the hook options: Claude's `--mcp-config` takes any number
+/// of values, so the next option has to end it.
+pub fn launch(
+    env: &LoginEnv,
+    profile: &Profile,
+    prompt: Option<&str>,
+    resume: Option<&str>,
+    hook_exe: &Path,
+    extra: &[String],
+) -> Result<Launch, ApiError> {
     match profile.engine.as_str() {
         "shell" if profile.command.is_empty() => return Ok(login_shell(env, None)),
         "install" => return Ok(login_shell(env, Some(&profile.command))),
@@ -79,6 +88,7 @@ pub fn launch(env: &LoginEnv, profile: &Profile, prompt: Option<&str>, resume: O
     if let Some(r) = resume.filter(|_| !agent.resume.is_empty()) {
         args.extend(agent.resume.iter().map(|a| a.replace("{}", r)));
     }
+    args.extend(extra.iter().cloned());
     match agent.hooks {
         Hooks::ClaudeSettings => args.extend(["--settings".into(), claude_settings(hook_exe).to_string()]),
         Hooks::CodexNotify => args.extend(["-c".into(), format!("notify={}", json!([hook_exe.to_string_lossy(), "hook", "codex-notify"]))]),

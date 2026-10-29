@@ -14,6 +14,7 @@ mod git;
 mod history;
 mod hooks;
 mod layout;
+mod mcp;
 mod paths;
 mod policy;
 mod preview;

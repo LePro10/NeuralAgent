@@ -265,6 +265,8 @@ mod tests {
         let d = std::env::temp_dir().join(format!("na-git-{}", rand::random::<u32>()));
         std::fs::create_dir_all(&d).unwrap();
         git(&d, &["init", "-q", "-b", "main"]).unwrap();
+        // Windows runners convert line endings on checkout; the tests compare bytes.
+        git(&d, &["config", "core.autocrlf", "false"]).unwrap();
         std::fs::write(d.join("a.txt"), "one\ntwo\n").unwrap();
         git(&d, &["add", "."]).unwrap();
         let mut c = identity(&d);

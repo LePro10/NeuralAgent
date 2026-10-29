@@ -44,6 +44,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         | Request::ProfileSave { .. }
         | Request::ProfileDelete { .. } => needs("this change"),
         Request::WorkspaceRemove { .. } => needs("removing a workspace"),
+        Request::McpSave { .. } | Request::McpDelete { .. } | Request::McpImport => needs("changing MCP servers"),
         Request::CatalogRefresh => Ok(()),
         _ => Ok(()),
     }

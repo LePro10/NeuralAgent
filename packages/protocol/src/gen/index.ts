@@ -20,6 +20,8 @@ export type * from "./HistoryEntry";
 export type * from "./HostInfo";
 export type * from "./KeepAwake";
 export type * from "./LayoutNode";
+export type * from "./McpServer";
+export type * from "./McpTransport";
 export type * from "./PaneContent";
 export type * from "./Profile";
 export type * from "./Request";

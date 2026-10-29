@@ -30,6 +30,7 @@ hostname = "0.4.2"
 tokio-util = "0.7.20"
 keepawake = "0.6.1"
 discord-rich-presence = "1.1.0"
+toml = "1.1.8"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_System_Power"] }

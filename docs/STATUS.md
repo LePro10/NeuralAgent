@@ -152,8 +152,19 @@ Open items first. Everything else keeps going locally until these are done.
   browser pane next to it with that page (checked: page loaded in the pane). Empty panes also
   offer "Browser". The page is sandboxed (cannot navigate the NeuralAgent window). On phones a
   local address is not loaded yet (needs the remote preview tunnel, M5).
+- MCP servers (sidebar → MCP): one list for all agents; add a command or HTTP server with
+  secret environment variables / headers, switch it off, or import the servers already set up
+  in Claude Code (`~/.claude.json`) and Codex (`config.toml`). Each Claude Code, Codex and
+  OpenCode started afterwards gets them. Checked with a small test server: Claude Code's
+  `/mcp` listed it as connected with its tool, and the server saw its secret; Codex accepted
+  the generated options (`codex mcp list/get` showed command, env var and HTTP header).
+  Secret values are only in a private file (`mcp-secrets.json`, mode 600) and reach an agent
+  only through its environment — never in the app state, the command line or the browser
+  (checked: saved through the UI, value absent from state.json, gone after delete).
 - Fixed on the way: a session busy from its first second stayed "Starting" forever; a closed
-  session's process was left as a zombie (the daemon now always reaps it, checked).
+  session's process was left as a zombie (the daemon now always reaps it, checked); the Windows
+  terminal test (cursor-position answer is now one write); session variables of a Claude Code
+  that started NeuralAgent (e.g. its messaging token) no longer leak into agents.
 
 ## Known gaps
 

@@ -42,6 +42,8 @@ struct Persisted {
     /// User-defined profiles only; built-ins are added at startup.
     profiles: Vec<Profile>,
     settings: Settings,
+    #[serde(default)]
+    mcp: Vec<McpServer>,
 }
 
 /// Runtime data of a live session that is not part of the shared state.
@@ -74,6 +76,8 @@ pub struct Core {
     /// still knows what was running.
     closing: std::sync::atomic::AtomicBool,
     history: crate::history::History,
+    /// Serialises changes to the MCP list and its secrets file.
+    mcp_lock: Mutex<()>,
 }
 
 pub struct Subscription {
@@ -95,6 +99,7 @@ impl Core {
             profiles: crate::profiles::builtin(),
             catalog: vec![],
             settings: persisted.settings,
+            mcp: persisted.mcp,
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -125,6 +130,7 @@ impl Core {
             was_running: Mutex::new(was_running),
             closing: std::sync::atomic::AtomicBool::new(false),
             history: Default::default(),
+            mcp_lock: Mutex::new(()),
         })
     }
 
@@ -196,6 +202,7 @@ impl Core {
                 sessions: s.sessions.clone(),
                 profiles: s.profiles.iter().filter(|p| !p.builtin).cloned().collect(),
                 settings: s.settings.clone(),
+                mcp: s.mcp.clone(),
             })?
         };
         write_private(&self.paths.state(), &data)
@@ -387,6 +394,59 @@ impl Core {
                 self.session_close(&session_id);
                 Ok(Value::Null)
             }
+            Request::McpSave { server, values } => {
+                if !crate::mcp::valid_id(&server.id) {
+                    return Err(err(ErrorCode::BadRequest, "use letters, digits, - and _ for the name (up to 48)"));
+                }
+                if let Some(bad) = server.secrets.iter().find(|n| n.is_empty() || n.contains(['=', '\0', '\n'])) {
+                    return Err(err(ErrorCode::BadRequest, format!("{bad:?} is not a valid name")));
+                }
+                let _guard = self.mcp_lock.lock();
+                let mut secrets = crate::mcp::load_secrets(&self.paths.root);
+                let vals = secrets.entry(server.id.clone()).or_default();
+                vals.extend(values);
+                vals.retain(|k, _| server.secrets.contains(k));
+                crate::mcp::save_secrets(&self.paths.root, &secrets).map_err(|e| err(ErrorCode::Internal, format!("{e:#}")))?;
+                let mut list = self.read(|s| s.mcp.clone());
+                match list.iter_mut().find(|s| s.id == server.id) {
+                    Some(s) => *s = server,
+                    None => list.push(server),
+                }
+                self.emit(Event::McpSet { servers: list });
+                Ok(Value::Null)
+            }
+            Request::McpDelete { id } => {
+                let _guard = self.mcp_lock.lock();
+                let mut secrets = crate::mcp::load_secrets(&self.paths.root);
+                if secrets.remove(&id).is_some() {
+                    crate::mcp::save_secrets(&self.paths.root, &secrets).map_err(|e| err(ErrorCode::Internal, format!("{e:#}")))?;
+                }
+                let list: Vec<McpServer> = self.read(|s| s.mcp.iter().filter(|x| x.id != id).cloned().collect());
+                self.emit(Event::McpSet { servers: list });
+                Ok(Value::Null)
+            }
+            Request::McpImport => {
+                let home = self.env.home.clone();
+                let codex_home = self.env.vars.get("CODEX_HOME").map(std::path::PathBuf::from).unwrap_or_else(|| home.join(".codex"));
+                let found = blocking(move || Ok(crate::mcp::import(&home, &codex_home))).await?;
+                let _guard = self.mcp_lock.lock();
+                let mut list = self.read(|s| s.mcp.clone());
+                let mut secrets = crate::mcp::load_secrets(&self.paths.root);
+                let mut added = 0;
+                for (server, vals) in found {
+                    if list.iter().any(|s| s.id == server.id) {
+                        continue;
+                    }
+                    if !vals.is_empty() {
+                        secrets.insert(server.id.clone(), vals);
+                    }
+                    list.push(server);
+                    added += 1;
+                }
+                crate::mcp::save_secrets(&self.paths.root, &secrets).map_err(|e| err(ErrorCode::Internal, format!("{e:#}")))?;
+                self.emit(Event::McpSet { servers: list });
+                Ok(json!(added))
+            }
             Request::HistorySearch { query, limit } => {
                 // Phones and the orchestrator only see conversations from approved workspaces.
                 let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop)
@@ -545,7 +605,9 @@ impl Core {
         // A dev server from the previous run is gone.
         session.preview_url = None;
         let exe = std::env::current_exe().map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
-        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe)?;
+        let secrets = crate::mcp::load_secrets(&self.paths.root);
+        let mcp = self.read(|s| crate::mcp::for_engine(&profile.engine, &s.mcp, &secrets));
+        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe, &mcp.args)?;
         let hook_token = crate::server::random_token();
         let port = *self.port.lock();
         let mut env: Vec<(String, String)> = self.env.vars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -564,6 +626,7 @@ impl Core {
         if !self.env.vars.contains_key("LANG") && !cfg!(windows) {
             env.push(("LANG".into(), "en_US.UTF-8".into()));
         }
+        env.extend(mcp.env);
         env.extend(profile.env.iter().map(|(k, v)| (k.clone(), v.clone())));
         env.extend(launch.env);
 
@@ -945,6 +1008,7 @@ pub fn apply(s: &mut State, ev: &Event) {
             s.sessions.remove(id);
         }
         Event::ProfilesSet { profiles } => s.profiles = profiles.clone(),
+        Event::McpSet { servers } => s.mcp = servers.clone(),
         Event::CatalogSet { catalog } => s.catalog = catalog.clone(),
         Event::SettingsSet { settings } => s.settings = settings.clone(),
         Event::Attention { .. } => {}
