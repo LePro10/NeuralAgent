@@ -139,3 +139,20 @@ everyday speech). Settings will ask for three recordings. Real-voice check is on
 A dedicated multilingual wake model can replace this later without changing the API.
 `na_voice::vad` (Silero, 0.5 s pause) cut 52/52 test utterances correctly; it ends dictation and
 call turns.
+
+## D21 — Voice replies: Supertonic 3 (int8), 4 steps
+Benchmark (`examples/tts_bench.rs`, M4 CPU, 4 threads, the 20 corpus sentences). "Round-trip WER" =
+the speech transcribed again by Parakeet — a cheap intelligibility check (Parakeet alone scores
+8.7 % / 4.4 % on the `say` recordings).
+
+| Model | DE WER | EN WER | RTF | first audio (one sentence) |
+|---|---|---|---|---|
+| Supertonic 3 int8, 8 steps | 10.9 % | 6.7 % | 0.19 | ~700 ms |
+| **Supertonic 3 int8, 4 steps** | 13.0 % | 2.0 % | 0.10 | ~380 ms |
+| Supertonic 3 int8, 2 steps | 60 % | 30 % | 0.06 | ~220 ms |
+| Pocket TTS int8 (cloned voice) | — (English only) | 8.9 % | 0.15 | ~330 ms |
+
+Supertonic 3 speaks 31 languages (German included), loads in 0.2 s, MIT code + OpenRAIL-M
+weights. Replies are spoken sentence by sentence, so the first audio comes after the first
+sentence, not the whole answer. Pocket TTS is the English alternative with voice cloning. Piper
+was dropped: sherpa-onnx 2.x no longer bundles espeak, so it would need our own phonemizer.

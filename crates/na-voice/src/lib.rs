@@ -4,6 +4,7 @@
 
 pub mod stt;
 pub mod text;
+pub mod tts;
 pub mod vad;
 pub mod wake;
 

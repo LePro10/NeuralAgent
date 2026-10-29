@@ -2511,6 +2511,7 @@ name = "na-voice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde_json",
  "sherpa-onnx",
 ]
 
