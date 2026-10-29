@@ -78,7 +78,8 @@ Open items first. Everything else keeps going locally until these are done.
 | M2 agent CLIs: catalog, install, hooks, dashboard | done except a real Codex turn (needs `codex login`) |
 | M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
 | M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
-| M5 relay, accounts, pairing, E2E, remote in the daemon | relay live at agent.neuralhub.dev; desktop side done; admin UI and web remote next |
+| M5 relay, accounts, pairing, E2E, remote in the daemon | done: relay, admin `/admin/`, landing, desktop side; real OAuth + mail on your list |
+| M6 web remote, phone layout, Android | web remote live at `/app` with phone layout; Android (Capacitor, push, widget, tile) next |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -196,6 +197,19 @@ Open items first. Everything else keeps going locally until these are done.
   relay sees only ciphertext, emergency switch-off from the phone, revoke, sign out.
 - Desktop Remote page checked in WebKit (signed out, waiting for approval, online with QR and a
   phone in the device list).
+- `apps/web` live (`/`, `/admin/`, `/app/`, `/imprint/` … → 200). Admin checked in Chromium with
+  a virtual authenticator against a test relay: test sign-in, passkey create + unlock, approve
+  a request, users with devices and remote switch, stats, sign out.
+
+### M6 verified so far (2026-10-30)
+- `@neuralagent/remote` (account, pairing, relay link, sealed transport): the remote E2E drives
+  a real `DaemonClient` through the relay — wrong QR fingerprint refused, pairing pins the key,
+  state sync, a browser is treated as a phone, typing into a shell, sign-in by PKCE without QR
+  (key trusted on first use), sign out.
+- Web remote in WebKit against a local relay + daemon (`/tmp/na-drive/web-remote.mjs`): phone
+  size sign-in → computer list → agent UI with a tab bar and More menu; the terminal key bar
+  answers a prompt (`read` → `got-yes`); a second browser paired by QR link at desktop size sees
+  the same session; "This device" page (switch computer, Disconnect remote, sign out).
 
 ## Known gaps
 

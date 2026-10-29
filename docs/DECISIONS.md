@@ -263,3 +263,18 @@ CI builds the relay image and pushes it to GHCR (only after the relay tests pass
 systemd timer runs `update.sh` every 5 minutes: pull, start, wait for the container's health
 check, otherwise go back to the previous image. No inbound deploy access, no secrets in CI
 for the server. Until the read token is on .96, images are built on the server by hand.
+
+## D32 — Web remote keys: IndexedDB CryptoKeys, bytes only as a fallback (2026-10-30)
+
+The browser's device key is a non-extractable X25519 CryptoKey kept in IndexedDB, so script
+can use it but never read it. WebKit in some modes stores nothing there; the store probes
+once and then keeps the private key as bytes in localStorage, next to the refresh token that
+already grants the same access. A private window without IndexedDB keeps the key only for
+the tab. A computer's key is pinned at QR pairing; signed in without a QR it is trusted on
+first use and refused if it changes later.
+
+## D33 — One app, two navigations
+
+The shared app gives AppShell both its hand-made desktop sidebar and a `nav` list; the shell
+picks by its own width. Phones get Agents, the workspaces, then History/Usage/MCP/This device/
+Settings under More. Terminals on phones get a key bar for keys a phone keyboard lacks.
