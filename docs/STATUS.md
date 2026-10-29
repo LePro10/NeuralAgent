@@ -71,7 +71,8 @@ Open items first. Everything else keeps going locally until these are done.
 | M0 repo, docs, CI, design library, brand | done (2026-10-29) — CI on 3 OS, secret scan, token check, logo C |
 | M1 desktop shell, daemon, pane grid | done (2026-10-29) — CI green on Linux/macOS, Windows fix (ConPTY cursor answer) pending CI |
 | M2 agent CLIs: catalog, install, hooks, dashboard | done except a real Codex turn (needs `codex login`) |
-| M3 voice: local STT/TTS, push-to-talk, wake word | in progress — see below |
+| M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
+| M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | in progress — see below |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -108,6 +109,12 @@ Open items first. Everything else keeps going locally until these are done.
   in the other app).
 - Open: your real voice and microphone (checklist), learn-my-voice with a real recording,
   Windows/Linux voice test.
+
+### M4 verified so far
+- Keep awake: a busy shell session makes the daemon hold a macOS "prevent idle sleep" assertion
+  (`pmset -g assertions` shows "Agents are working"); it is released a few seconds after the
+  work stops, and never taken with the setting Off. "On power" asks the OS once a minute.
+- Fixed on the way: a session busy from its first second stayed "Starting" forever.
 
 ## Known gaps
 

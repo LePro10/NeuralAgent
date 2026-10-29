@@ -318,7 +318,18 @@ mod tests {
             let child =
                 pty.child.try_lock().map(|mut c| format!("{:?}", c.try_wait())).unwrap_or_else(|| "locked (reader is waiting)".into());
             let (_, seq, _, _) = pty.attach();
-            panic!("no exit after 10 s; child: {child}; bytes read: {seq}; screen: {:?}", pty.screen_text())
+            let raw = pty.attach().0;
+            // Answer the cursor request by hand: if that unblocks it, the automatic answer never ran.
+            let wrote = {
+                let mut w = pty.writer.lock();
+                write!(w, "\x1b[1;1R").and_then(|_| w.flush()).map_err(|e| e.to_string())
+            };
+            let later = rx.recv_timeout(std::time::Duration::from_secs(3));
+            let (_, seq2, _, _) = pty.attach();
+            panic!(
+                "no exit after 10 s; child: {child}; bytes read: {seq}; snapshot: {raw:?}; manual answer: {wrote:?} -> exit {later:?}, bytes {seq2}, screen {:?}",
+                pty.screen_text()
+            )
         });
         assert_eq!(code, Some(0));
         assert!(pty.screen_text().contains("hello-pty"));

@@ -616,6 +616,10 @@ impl Core {
                 },
                 _ => match (s.status, active) {
                     (AgentStatus::Starting, false) if last_output.is_some() => AgentStatus::Idle,
+                    // Busy from the first second on (a shell running a loop): working, not starting.
+                    (AgentStatus::Starting, true) if (prompted || shell) && now_ms().saturating_sub(s.started_at) > 4000 => {
+                        AgentStatus::Working
+                    }
                     (AgentStatus::Starting, _) => AgentStatus::Starting,
                     (_, true) if prompted || shell => AgentStatus::Working,
                     (AgentStatus::Working, false) if quiet => {

@@ -4,6 +4,7 @@
 //! `neuralagentd hook <ev>`  forward an agent hook event (used inside agent processes)
 //! `neuralagentd info`       print where the daemon listens (no secrets)
 
+mod awake;
 mod catalog;
 mod core;
 mod env;
@@ -83,6 +84,7 @@ fn serve() -> Result<()> {
 
         {
             let core = core.clone();
+            let awake = awake::Awake::start();
             tokio::spawn(async move {
                 let mut tick = tokio::time::interval(Duration::from_millis(333));
                 let mut n = 0u32;
@@ -90,6 +92,11 @@ fn serve() -> Result<()> {
                     tick.tick().await;
                     core.tick();
                     n += 1;
+                    if n.is_multiple_of(3) {
+                        let (setting, working) = core
+                            .read(|s| (s.settings.keep_awake, s.sessions.values().any(|x| x.status == na_protocol::AgentStatus::Working)));
+                        awake.update(setting, working);
+                    }
                     if n.is_multiple_of(3)
                         && let Err(e) = core.save_if_dirty()
                     {
