@@ -1,0 +1,11 @@
+[package]
+name = "na-protocol"
+description = "Wire types shared by the NeuralAgent daemon, desktop UI, relay and remote clients."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true

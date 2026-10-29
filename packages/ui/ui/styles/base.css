@@ -1,0 +1,59 @@
+/*
+ * Base layer: document defaults that make the tokens behave.
+ * The app never scrolls the document — only its `.scroller`s — so there is
+ * no rubber-band of the whole page and no body scroll lock is needed.
+ */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html {
+    color-scheme: dark;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection { background: #9da49a; color: #080909; }
+  button { cursor: pointer; font: inherit; color: inherit; }
+  button:disabled { cursor: default; }
+  input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 1.5px solid var(--color-accent); outline-offset: 2px; }
+
+  /* Icons are blocks, so flex/grid centring is exact (no baseline gap). */
+  svg.lucide { display: block; flex-shrink: 0; }
+
+  /* Text fields would claim sideways pans; horizontal swipes belong to the pager. */
+  :is(input:not([type=range]), textarea, [contenteditable="true"]) { touch-action: pan-y; }
+}
+
+/* Touch devices: long-press menus own the gesture; selection only where text is read. */
+@media (hover: none) {
+  .touch-noselect { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
+
+/* Native shells (Capacitor/WebView): add `.native-app` to <html>. */
+html.native-app, html.native-app body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
+html.native-app :is(input, textarea, [contenteditable="true"], .selectable, .selectable *) {
+  user-select: text; -webkit-user-select: text; -webkit-touch-callout: default;
+}
+
+/* Reduced motion — system setting or `.reduce-motion` on <html> (in-app switch).
+   CSS reaches keyframes and transitions; JS springs ask `prefersReducedMotion()`. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important;
+}
+
+/* Rest mode: decorative loops (`.deko`) hold exactly where they are — on an idle
+   screen (`html.rest`), on hidden pages (`[inert]`) — and pick up without a jump. */
+html.rest .deko, html.rest .deko *, [inert] .deko, [inert] .deko * { animation-play-state: paused !important; }

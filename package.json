@@ -1,0 +1,14 @@
+{
+  "name": "neuralagent",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "dev": "pnpm --filter @neuralagent/desktop tauri dev",
+    "dev:web": "pnpm --filter @neuralagent/web dev",
+    "build:web": "pnpm --filter @neuralagent/web build",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "pnpm -r --parallel test",
+    "lint:tokens": "node scripts/check-tokens.mjs"
+  }
+}

@@ -1,0 +1,9 @@
+/*
+ * Everything the components need, in order. In a project:
+ *
+ *   @import "tailwindcss";
+ *   @import "./ui/styles/index.css";
+ */
+@import "./tokens.css";
+@import "./base.css";
+@import "./effects.css";

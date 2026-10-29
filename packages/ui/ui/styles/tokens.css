@@ -1,0 +1,299 @@
+/*
+ * NeuralHub tokens — the single source of truth for colour, type, radius,
+ * elevation and motion. Tailwind v4 turns every `--color-*`, `--text-*`,
+ * `--radius-*`, `--shadow-*` and `--ease-*` below into utilities
+ * (`bg-card`, `text-body`, `rounded-field`, `shadow-float`, `ease-out-soft`).
+ *
+ * Rule of thumb: the UI is grey-green ink on near-black, drawn with
+ * hairlines and light type. Colour is light, and light is content: each tab
+ * owns one signal colour (--color-tab) that appears in exactly three places —
+ * the light at the top, the one hero figure, the active tab. Never a surface.
+ *
+ * Accent and glass are themeable at runtime: set `data-accent` and
+ * `data-glass` on <html> (or any subtree). See the blocks further down.
+ */
+@theme {
+  /* ── Ground & surfaces (stepped, darkest first) ─────────────────────── */
+  --color-bg: #080909;        /* page ground */
+  --color-chrome: #0b0c0c;    /* sidebar, canvases */
+  --color-raised: #0e100f;    /* inset wells */
+  --color-card: #121413;      /* solid card */
+  --color-sheet: #111312;     /* sheets, dialogs */
+  --color-popover: #161817;   /* menus, toasts, tab-bar badge ring */
+  --color-card-2: #181a19;
+  --color-card-3: #202321;
+
+  /* Translucent fills — the only allowed "white on dark" steps. */
+  --color-fill-1: rgb(255 255 255 / 0.025); /* resting field, track */
+  --color-fill-2: rgb(255 255 255 / 0.04);  /* hover, quiet tile */
+  --color-fill-3: rgb(255 255 255 / 0.065); /* icon button, bubble */
+  --color-fill-4: rgb(255 255 255 / 0.1);   /* switch off, strong chip */
+
+  /* Hairlines — drawn at var(--hair) width: 1px, 0.5px on retina (see :root). */
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-line-2: rgb(255 255 255 / 0.13);
+
+  /* Ink, brightest first */
+  --color-bright: #eef1ee;    /* titles, primary text, solid primary button */
+  --color-ink: #c6c9c6;       /* body text */
+  --color-dim: #7d847f;       /* secondary text, inactive icons */
+  --color-faint: #4a504c;     /* hints, chevrons, disabled */
+
+  /* ── Glow palette — light, not paint ───────────────────────────────── */
+  --color-ice: #b9d3ff;
+  --color-azure: #3b5bff;
+  --color-lilac: #a898ff;
+  --color-sand: #eadcbc;
+  --color-ember: #ff8a5c;     /* badge, "over limit", running now */
+  --color-mint: #9fe7c8;      /* success */
+  --color-live: #5b9bff;      /* something is live right now (stream, remote screen) */
+
+  /* Status */
+  --color-danger: #ff6b6b;
+  --color-warning: #ffb454;
+
+  /* Accent (themed below). Default = ice. Focus rings, links, selection. */
+  --color-accent: #b9d3ff;
+  --color-accent-deep: #3b5bff;
+
+  /* Signal colours — one per place (tab). Similar lightness, so no tab shouts.
+     Set a place with data-signal="amber" (or Page/TabBar `signal`); inside it,
+     text-tab / bg-tab / border-tab use that colour. */
+  --color-signal-silver: #d6dad6;
+  --color-signal-periwinkle: #9aaeff;
+  --color-signal-amber: #f0b35e;
+  --color-signal-teal: #62c6bc;
+  --color-signal-coral: #ff8470;
+  --color-signal-sky: #74b2ff;
+  --color-signal-cyan: #62cfe6;
+  --color-signal-green: #84d391;
+  --color-signal-sage: #a9c7a6;
+  --color-signal-sand: #e2c792;
+  --color-signal-violet: #b7a2ff;
+  --color-signal-rose: #ff8fb0;
+  --color-tab: var(--color-accent);
+
+  /* Data series — chosen for separation on dark, not for brand. */
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+  --color-series-4: #a898ff;
+
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-sans: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+
+  /* One scale. Every size in the UI is one of these. Small and light on purpose:
+     hierarchy comes from brightness and space, not from size or weight. */
+  --text-micro: 9px;      --text-micro--line-height: 1.2;   /* .eyebrow */
+  --text-tiny: 10px;      --text-tiny--line-height: 1.2;    /* tab labels, kbd, axis */
+  --text-meta: 11.5px;    --text-meta--line-height: 1.4;    /* timestamps, counts */
+  --text-detail: 12px;    --text-detail--line-height: 1.45; /* row detail, footnotes */
+  --text-small: 12.5px;   --text-small--line-height: 1.45;  /* secondary copy */
+  --text-chip: 13px;      --text-chip--line-height: 1.3;    /* chips, menu items */
+  --text-button: 13.5px;  --text-button--line-height: 1.3;  /* buttons, desktop fields */
+  --text-body: 14.5px;    --text-body--line-height: 1.5;    /* row titles, copy */
+  --text-input: 16px;     --text-input--line-height: 1.4;   /* phone fields (no zoom) */
+  --text-lead: 16px;      --text-lead--line-height: 1.55;
+  --text-title: 18px;     --text-title--line-height: 1.25;  /* stat values, card titles */
+  --text-headline: 22px;  --text-headline--line-height: 1.15; /* panel titles */
+  --text-display: 28px;   --text-display--line-height: 1.05; /* page title, phone */
+  --text-display-lg: 42px; --text-display-lg--line-height: 1.04; /* page title, desktop */
+  --text-hero: 52px;      --text-hero--line-height: 1;      /* big numbers */
+
+  /* Lighter weights: "medium" is a touch above regular, never bold. */
+  --font-weight-medium: 460;
+  --font-weight-semibold: 540;
+
+  /* ── Shape — named by what wears it ────────────────────────────────
+     Corners are continuous (a superellipse, like iOS) where the browser can
+     draw it, and every radius is then scaled by --rk so the curve reads the
+     same size. Nested corners are concentric: inner = outer − the gap
+     between them (menu 13 − 4px padding = item 9). */
+  --radius-xs: calc(5px * var(--rk));     /* kbd, inline code, square check */
+  --radius-chip: calc(6px * var(--rk));   /* tiny tiles, bubble tail */
+  --radius-tile: calc(8px * var(--rk));   /* icon tile in a row */
+  --radius-item: calc(9px * var(--rk));   /* item inside a menu / palette (13 − 4) */
+  --radius-field: calc(10px * var(--rk)); /* inputs, search, sidebar items, code */
+  --radius-menu: calc(13px * var(--rk));  /* pull-down menus, popovers */
+  --radius-stat: calc(14px * var(--rk));  /* stat tiles, small cards */
+  --radius-list: calc(16px * var(--rk));  /* grouped lists, cards in lists */
+  --radius-card: calc(18px * var(--rk));  /* .card, bubbles */
+  --radius-dialog: calc(20px * var(--rk)); /* desktop dialog, composer */
+  --radius-sheet: calc(24px * var(--rk)); /* full-height panel on phones, nav island */
+
+  /* ── Depth — light from above ──────────────────────────────────────
+     Five levels, told apart by light, not by lines:
+       well    −1  sunk: fields, tracks         fill-1 + shadow-well
+       ground   0  the page                     bg
+       surface +1  lists, cards, tiles           .surface (fill + shadow-edge)
+       raised  +2  on a surface: thumbs, knobs   fill-3 + shadow-raise
+       float   +3  over everything: menus, bars  .glass + shadow-float
+     The edge is lit at the top and fades round the sides, so a surface
+     reads as lifted without a drawn border. */
+  --color-surface: rgb(255 255 255 / 0.028);
+  --color-surface-hi: rgb(255 255 255 / 0.042);
+  --shadow-edge: inset 0 var(--hair) 0 rgb(255 255 255 / 0.075), inset 0 0 0 var(--hair) rgb(255 255 255 / 0.04);
+  --shadow-raise: inset 0 var(--hair) 0 rgb(255 255 255 / 0.13), 0 1px 2px rgb(0 0 0 / 0.32), 0 0 0 var(--hair) rgb(0 0 0 / 0.2);
+  --shadow-well: inset 0 1px 1.5px rgb(0 0 0 / 0.32), inset 0 0 0 var(--hair) rgb(255 255 255 / 0.065);
+  --shadow-well-focus: inset 0 1px 1.5px rgb(0 0 0 / 0.32), inset 0 0 0 var(--hair) rgb(255 255 255 / 0.24);
+  /* A solid bright pill, lit like a bead: a bright top lip, a shaded foot. */
+  --shadow-lit: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px -6px rgb(0 0 0 / 0.5);
+  /* A tinted fill (tint, danger): only its top lip catches the light. */
+  --shadow-lip: inset 0 var(--hair) 0 rgb(255 255 255 / 0.09);
+  /* A keycap. */
+  --shadow-key: inset 0 -1px 0 rgb(0 0 0 / 0.35), inset 0 var(--hair) 0 rgb(255 255 255 / 0.08), 0 0 0 var(--hair) rgb(255 255 255 / 0.05);
+  --shadow-rim: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --shadow-float: 0 16px 44px -16px rgb(0 0 0 / 0.7), 0 2px 6px -3px rgb(0 0 0 / 0.4);
+  --shadow-menu: 0 12px 36px -10px rgb(0 0 0 / 0.65), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-sheet: 0 -24px 64px -20px rgb(0 0 0 / 0.75);
+  --shadow-dialog: 0 32px 90px -28px rgb(0 0 0 / 0.85), 0 4px 12px -6px rgb(0 0 0 / 0.5);
+  --shadow-fab: 0 6px 20px -8px rgb(0 0 0 / 0.75);
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);  /* default for everything that arrives */
+  --ease-in-out-draw: cubic-bezier(0.65, 0, 0.35, 1); /* strokes drawing, curtains */
+  --ease-pf: cubic-bezier(0.77, 0, 0.18, 1);        /* big page-level moves */
+  --ease-bounce-land: cubic-bezier(0.3, 0, 0.3, 1);  /* hops, drops */
+
+  --animate-spin-fast: spin 0.8s linear infinite;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Hairline width: one device pixel on retina screens. */
+  --hair: 1px;
+  /* Radius scale: 1 for round corners, 1.3 where corners are continuous (see below). */
+  --rk: 1;
+
+  /* Durations for CSS transitions. Springs live in ui/lib/motion.ts. */
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 450ms;
+
+  /* Safe areas, once. Never write env() in components. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Space a floating tab bar takes (incl. gap to the edge). 0 on desktop. */
+  --tabbar-space: calc(88px + var(--safe-bottom));
+
+  /* Z layers — never invent another. */
+  --z-header: 30;
+  --z-sidebar: 40;
+  --z-tabbar: 50;
+  --z-sheet: 80;
+  --z-context: 85;
+  --z-search: 88;
+    --z-toast: 95;
+  --z-popover: 120;
+  --z-intro: 200;
+
+  /* Orb + glow recipe of the active accent (see themes). */
+  --orb-1: #4a68ff;
+  --orb-2: #2437c9;
+  --orb-3: #0d1356;
+  --orb-swirl-a: #a898ff;
+  --orb-swirl-b: #b9d3ff;
+  --orb-blob: rgb(234 220 188 / 0.75);
+  --ring-a: #b9d3ff;   /* light-border sweep, bright end */
+  --ring-b: #96ffdc;   /* light-border sweep, tail */
+
+  /* Glass recipe (see data-glass). */
+  --glass-bg: rgb(28 30 29 / 0.58);
+  --glass-blur: 22px;
+  --glass-sat: 160%;
+  --glass-rim: rgb(255 255 255 / 0.1);
+  --glass-hi: rgb(255 255 255 / 0.07);
+}
+@media (min-width: 900px) {
+  :root { --tabbar-space: 0px; }
+}
+@media (min-resolution: 2dppx) {
+  :root { --hair: 0.5px; }
+}
+
+/* ── Continuous corners ───────────────────────────────────────────────
+   Where `corner-shape` exists, every tokened corner becomes a superellipse
+   and radii grow by 1.3 so the curve reads the same size. Circles and pills
+   (rounded-full) stay round. Opt out with data-corners="round" on <html>.
+   Browsers without it draw ordinary round corners at the base radius. */
+@supports (corner-shape: superellipse(1.4)) {
+  :root:not([data-corners="round"]) { --rk: 1.3; }
+  :root:not([data-corners="round"]) :is([class*="rounded-"]:not([class*="rounded-full"]), .card, .surface, .light-border, .light-border-content, .skeleton) {
+    corner-shape: superellipse(1.4);
+  }
+}
+
+/* ── Signal per place ─────────────────────────────────────────────────── */
+[data-signal="silver"] { --color-tab: var(--color-signal-silver); }
+[data-signal="periwinkle"] { --color-tab: var(--color-signal-periwinkle); }
+[data-signal="amber"] { --color-tab: var(--color-signal-amber); }
+[data-signal="teal"] { --color-tab: var(--color-signal-teal); }
+[data-signal="coral"] { --color-tab: var(--color-signal-coral); }
+[data-signal="sky"] { --color-tab: var(--color-signal-sky); }
+[data-signal="cyan"] { --color-tab: var(--color-signal-cyan); }
+[data-signal="green"] { --color-tab: var(--color-signal-green); }
+[data-signal="sage"] { --color-tab: var(--color-signal-sage); }
+[data-signal="sand"] { --color-tab: var(--color-signal-sand); }
+[data-signal="violet"] { --color-tab: var(--color-signal-violet); }
+[data-signal="rose"] { --color-tab: var(--color-signal-rose); }
+
+/* ── Accent themes ─────────────────────────────────────────────────────
+   Each theme recolours the accent, the deep accent (switch on, glow),
+   the orb and the light-border sweep. Surfaces and ink never change. */
+[data-accent="ice"] {
+  --color-accent: #b9d3ff; --color-accent-deep: #3b5bff;
+  --orb-1: #4a68ff; --orb-2: #2437c9; --orb-3: #0d1356;
+  --orb-swirl-a: #a898ff; --orb-swirl-b: #b9d3ff; --orb-blob: rgb(234 220 188 / 0.75);
+  --ring-a: #b9d3ff; --ring-b: #96ffdc;
+}
+[data-accent="mint"] {
+  --color-accent: #9fe7c8; --color-accent-deep: #13a77a;
+  --orb-1: #2fd3a0; --orb-2: #0f7f68; --orb-3: #032b27;
+  --orb-swirl-a: #6fd3ff; --orb-swirl-b: #c8ffe9; --orb-blob: rgb(234 255 214 / 0.7);
+  --ring-a: #b6ffe2; --ring-b: #7cc8ff;
+}
+[data-accent="ember"] {
+  --color-accent: #ffc0a3; --color-accent-deep: #f0622c;
+  --orb-1: #ff7a45; --orb-2: #b83a10; --orb-3: #3a0d04;
+  --orb-swirl-a: #ffd27a; --orb-swirl-b: #ffb8a0; --orb-blob: rgb(255 230 200 / 0.75);
+  --ring-a: #ffc9a8; --ring-b: #ffe28a;
+}
+[data-accent="lilac"] {
+  --color-accent: #cfc6ff; --color-accent-deep: #7b66e8;
+  --orb-1: #8b74ff; --orb-2: #4b33c9; --orb-3: #170c52;
+  --orb-swirl-a: #ff9fd8; --orb-swirl-b: #cfc6ff; --orb-blob: rgb(255 220 240 / 0.7);
+  --ring-a: #d9d0ff; --ring-b: #ffaee0;
+}
+[data-accent="sand"] {
+  --color-accent: #eadcbc; --color-accent-deep: #b88a4a;
+  --orb-1: #d9b77a; --orb-2: #8a6b3a; --orb-3: #281c0b;
+  --orb-swirl-a: #fff1cf; --orb-swirl-b: #b9d3ff; --orb-blob: rgb(255 248 230 / 0.7);
+  --ring-a: #f3e6c6; --ring-b: #b9d3ff;
+}
+[data-accent="graphite"] {
+  --color-accent: #eef1ee; --color-accent-deep: #8b938d;
+  --orb-1: #9aa39d; --orb-2: #4a504c; --orb-3: #121413;
+  --orb-swirl-a: #ffffff; --orb-swirl-b: #c6c9c6; --orb-blob: rgb(255 255 255 / 0.55);
+  --ring-a: #ffffff; --ring-b: #9aa39d;
+}
+
+/* ── Glass levels ──────────────────────────────────────────────────────
+   default = the dashboard. subtle = more opaque (busy backgrounds, low-end
+   phones). strong = more blur, more colour. clear = liquid, see-through. */
+[data-glass="subtle"] {
+  --glass-bg: rgb(20 22 21 / 0.82); --glass-blur: 16px; --glass-sat: 130%;
+  --glass-rim: rgb(255 255 255 / 0.08); --glass-hi: rgb(255 255 255 / 0.06);
+}
+[data-glass="strong"] {
+  --glass-bg: rgb(24 27 26 / 0.46); --glass-blur: 36px; --glass-sat: 190%;
+  --glass-rim: rgb(255 255 255 / 0.12); --glass-hi: rgb(255 255 255 / 0.14);
+}
+[data-glass="clear"] {
+  --glass-bg: rgb(30 33 32 / 0.2); --glass-blur: 10px; --glass-sat: 180%;
+  --glass-rim: rgb(255 255 255 / 0.16); --glass-hi: rgb(255 255 255 / 0.22);
+}

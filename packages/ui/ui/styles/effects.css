@@ -1,0 +1,304 @@
+/*
+ * Surfaces, voices and effects. Performance contract for everything here:
+ * loops animate only `transform` and `opacity` (compositor, no repaint),
+ * a blur never sits on an element that moves, and every decorative loop
+ * carries `.deko` so rest mode / hidden pages / reduced motion stop it.
+ */
+@layer components {
+  /* ── Voices ─────────────────────────────────────────────────────────── */
+  /* Small uppercase mono label — the "index" voice. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--text-micro); letter-spacing: .14em; text-transform: uppercase; line-height: 1.2;
+    font-weight: 400; color: var(--color-dim);
+  }
+  /* Light, tight display type. */
+  .display {
+    font-family: var(--font-sans); font-weight: 300; letter-spacing: -.035em; line-height: 1.04;
+    color: var(--color-bright);
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* ── Surfaces ───────────────────────────────────────────────────────── */
+  /* Surface (+1): lists, cards, tiles. A fill that is a touch brighter at the
+     top and an edge lit from above — lifted without a drawn border. */
+  .surface {
+    background: linear-gradient(180deg, var(--color-surface-hi), var(--color-surface) 96px);
+    box-shadow: var(--shadow-edge);
+  }
+  /* The card: a surface with the card radius. */
+  .card {
+    background: linear-gradient(180deg, var(--color-surface-hi), var(--color-surface) 96px);
+    box-shadow: var(--shadow-edge);
+    border-radius: var(--radius-card);
+  }
+  /* Raised (+2): something resting on a surface (thumbs, knobs, active segment). */
+  .raised { background: var(--color-fill-3); box-shadow: var(--shadow-raise); }
+  /* Well (−1): sunk into the page (fields, tracks). Its rim brightens on focus. */
+  .well {
+    background: var(--color-fill-1); box-shadow: var(--shadow-well);
+    transition: box-shadow .2s var(--ease-out-soft), background-color .2s var(--ease-out-soft);
+  }
+  .well:is(:focus, :focus-within) { background: var(--color-fill-2); box-shadow: var(--shadow-well-focus); }
+  .well[aria-invalid="true"] { box-shadow: inset 0 1px 1.5px rgb(0 0 0 / .32), inset 0 0 0 var(--hair) color-mix(in oklab, var(--color-danger) 55%, transparent); }
+  /* Glass for things that float over content (tab bar, toolbars, toasts). */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border: var(--hair) solid var(--glass-rim);
+    box-shadow: var(--shadow-float), inset 0 1px 0 var(--glass-hi);
+  }
+  /* Liquid-glass body (the tab-bar lens): faint fill + specular rim + inner bevel.
+     Light comes from the top-left, so the rim is brightest there. */
+  .glass-lens {
+    background: linear-gradient(180deg, rgb(255 255 255 / .16), rgb(255 255 255 / .06));
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / .14),
+      inset 1.5px 2px 0 -1px rgb(255 255 255 / .55),
+      inset -1px -2px 0 -1px rgb(255 255 255 / .25),
+      inset 0 -6px 12px -8px color-mix(in oklab, var(--color-accent) 45%, transparent),
+      0 6px 16px -6px rgb(0 0 0 / .6);
+  }
+  /* Non-uniform rim: a real glass edge is brightest where the light hits (top). */
+  .rim { position: relative; }
+  .rim::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: var(--hair); pointer-events: none;
+    background: linear-gradient(180deg, rgb(255 255 255 / .24), rgb(255 255 255 / .05) 38%, rgb(255 255 255 / .02) 70%, rgb(255 255 255 / .08));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  /* Blocked / not allowed: hatched in a status colour (default danger). */
+  .hatched {
+    --hatch: var(--color-danger);
+    border-color: color-mix(in oklab, var(--hatch) 32%, transparent) !important;
+    background:
+      repeating-linear-gradient(135deg, color-mix(in oklab, var(--hatch) 5%, transparent) 0 9px, transparent 9px 18px),
+      linear-gradient(165deg, color-mix(in oklab, var(--hatch) 16%, transparent), color-mix(in oklab, var(--hatch) 4%, transparent) 55%, transparent);
+  }
+  /* Canvas dot grid (whiteboards, empty boards). Shift with --grid-x/--grid-y. */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgb(255 255 255 / .09) 1px, transparent 1.2px);
+    background-size: 22px 22px;
+    background-position: var(--grid-x, 0) var(--grid-y, 0);
+  }
+
+  /* ── Interaction ────────────────────────────────────────────────────── */
+  .pressable { transition: transform .3s var(--ease-out-soft), background-color .2s, border-color .2s, opacity .2s, color .2s; }
+  .pressable:active { transform: scale(.97); transition-duration: .08s; }
+  @media (hover: hover) and (pointer: fine) {
+    .hoverable:hover { background-color: var(--color-fill-1); }
+  }
+  /* A gloss band that sweeps once across on hover (buttons, primary CTAs). */
+  .sheen { position: relative; overflow: hidden; isolation: isolate; }
+  .sheen::after {
+    content: ''; position: absolute; inset: -1px; pointer-events: none; z-index: 1;
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / var(--sheen, .35)) 48%, transparent 66%);
+    transform: translateX(-110%);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sheen:hover::after { transform: translateX(110%); transition: transform .8s var(--ease-out-soft); }
+  }
+
+  /* ── Scroll containers ──────────────────────────────────────────────── */
+  .scroller {
+    overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .scroller::-webkit-scrollbar, .rail::-webkit-scrollbar, .scroll-x::-webkit-scrollbar { display: none; }
+  /* Small windows you should notice are scrollable (logs, thoughts): a quiet bar. */
+  .scroller-subtle { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .14) transparent; }
+  .scroller-subtle::-webkit-scrollbar { display: block; width: 6px; }
+  .scroller-subtle::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .14); border-radius: 99px; }
+  /* Pages only claim vertical pans, so horizontal swipes reach a pager. */
+  .page-scroll { touch-action: pan-y; }
+  /* Horizontal rail with snap (chips, cards). Bleeds to the screen edge on phones. */
+  .rail {
+    display: flex; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory; scroll-padding-inline: 16px; touch-action: pan-x pan-y;
+  }
+  .rail > * { scroll-snap-align: start; }
+  /* Horizontal scroll without snapping (tables, attachment strips). */
+  .scroll-x { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
+
+  /* Top edge while scrolled: content sinks into black under a frosted, tapering blur. */
+  .top-fade {
+    position: absolute; inset: 0 0 -28px 0; pointer-events: none;
+    background: linear-gradient(180deg, rgb(8 9 9 / .88) 0%, rgb(8 9 9 / .6) 55%, rgb(8 9 9 / 0) 100%);
+  }
+  .top-fade-solid {
+    background: linear-gradient(180deg, rgb(8 9 9 / .98) 0%, rgb(8 9 9 / .97) 60%, rgb(8 9 9 / .7) 76%, rgb(8 9 9 / .28) 89%, rgb(8 9 9 / 0) 100%);
+  }
+  .top-fade::before, .top-fade-solid::before {
+    content: ''; position: absolute; inset: 0;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 55%, transparent 100%);
+  }
+  /* Masked edges for scrolling windows. */
+  .fade-y { -webkit-mask-image: linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent); }
+  .fade-x { -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+
+  /* ── Text motion ────────────────────────────────────────────────────── */
+  /* "Working…" shimmer: band and text move in opposite directions, so the text stays put.
+     Markup: <Shimmer> (ui/components/effects/Shimmer.tsx). */
+  .shimmer { position: relative; display: inline-block; max-width: 100%; vertical-align: bottom; color: var(--color-dim); }
+  .shimmer-band {
+    position: absolute; inset: 0; pointer-events: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 6%, #000 50%, transparent 94%);
+    mask-image: linear-gradient(90deg, transparent 6%, #000 50%, transparent 94%);
+    animation: shimmer-band var(--shimmer-speed, 1.5s) linear infinite;
+  }
+  .shimmer-band > span {
+    position: absolute; inset: 0; color: var(--shimmer-color, var(--color-bright));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    animation: shimmer-text var(--shimmer-speed, 1.5s) linear infinite;
+  }
+  /* Streamed words arrive by colour, not blur (a blur makes every word its own layer). */
+  .word-in { animation: word-in .45s var(--ease-out-soft) both; }
+  .fade-in { animation: fade-in .3s var(--ease-out-soft) both; }
+  .rise-in { animation: rise-in .6s var(--ease-out-soft) both; }
+  /* Blinking caret at the end of a stream. */
+  .caret::after {
+    content: ''; display: inline-block; width: .5em; height: 1.05em; margin-left: 2px; vertical-align: -.16em;
+    border-radius: 2px; background: var(--color-accent); animation: caret 1s steps(1) infinite;
+  }
+
+  /* ── Status ─────────────────────────────────────────────────────────── */
+  /* Live ping: a dot sending out a ring. */
+  .ping { position: relative; display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--ping, var(--color-live)); }
+  .ping::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: inherit; animation: ping 1.6s var(--ease-out-soft) infinite; }
+  /* One skeleton for every loading shape: fill + sweeping band (transform only). */
+  .skeleton { position: relative; overflow: hidden; background: var(--color-fill-1); border-radius: var(--radius-chip); isolation: isolate; }
+  .skeleton::after {
+    content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / .045), transparent);
+    animation: skeleton-sweep 1.6s var(--ease-in-out-draw) infinite;
+  }
+  .spinner {
+    display: inline-block; width: var(--size, 16px); height: var(--size, 16px); border-radius: 99px;
+    border: 1.5px solid rgb(255 255 255 / .12); border-top-color: var(--color-bright);
+    animation: spin .7s linear infinite;
+  }
+
+  /* ── Voice orb ──────────────────────────────────────────────────────── */
+  /* Layered gradients; only transforms animate. The blur-like softness is a static
+     layer, never the moving one (a filter would pull the loop off the compositor). */
+  .voice-orb {
+    position: relative; display: block; flex-shrink: 0; overflow: hidden; border-radius: 9999px; isolation: isolate;
+    background: radial-gradient(circle at 50% 62%, var(--orb-1) 0%, var(--orb-2) 42%, var(--orb-3) 100%);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .16),
+      inset 0 -6px 14px -6px color-mix(in oklab, var(--orb-swirl-b) 55%, transparent),
+      0 4px 16px -8px color-mix(in oklab, var(--orb-1) 70%, transparent);
+    transition: box-shadow .4s var(--ease-out-soft), transform .45s var(--ease-out-soft);
+  }
+  .voice-orb > i, .voice-orb > i > i { position: absolute; border-radius: 9999px; pointer-events: none; }
+  .voice-orb > i > i { inset: 0; }
+  .voice-orb-swirl { inset: -25%; animation: orb-spin var(--orb-speed, 7s) linear infinite; }
+  .voice-orb-swirl > i {
+    background: conic-gradient(from 20deg, transparent 0 12%, var(--orb-swirl-a) 26%, transparent 42% 55%, var(--orb-swirl-b) 70%, transparent 86%);
+    opacity: .9;
+  }
+  .voice-orb.is-busy .voice-orb-swirl { animation-duration: 1.6s; }
+  .voice-orb-blob { inset: 22% 18% 10% 22%; animation: orb-drift 5.5s ease-in-out infinite; }
+  .voice-orb-blob > i { background: radial-gradient(circle, var(--orb-blob), transparent 68%); }
+  .voice-orb-shine { inset: 0; background: radial-gradient(60% 40% at 38% 18%, rgb(255 255 255 / .38), transparent 70%); }
+  /* Inside glass (composer): rests in its first pose, swirls only while pointed at. */
+  .voice-orb.at-rest > i { animation-play-state: paused; }
+  .orb-trigger:is(:hover, :focus-visible) .voice-orb.at-rest > i { animation-play-state: running; }
+  .orb-trigger:hover .voice-orb { transform: scale(1.1); }
+  .orb-trigger:active .voice-orb { transform: scale(.9); }
+
+  /* ── Light border ("Now") ───────────────────────────────────────────── */
+  /* A light runs around the edge, a glow breathes behind it. The content is opaque,
+     so the light only shows at the seam. Markup: <LightBorder>. */
+  .light-border { position: relative; isolation: isolate; border-radius: var(--lb-radius, 18px); }
+  .light-border-glow {
+    position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none;
+    box-shadow: 0 0 26px -8px color-mix(in oklab, var(--ring-a) 40%, transparent), 0 0 0 var(--hair) color-mix(in oklab, var(--ring-a) 16%, transparent);
+    animation: lb-breathe 3.4s ease-in-out infinite alternate;
+    opacity: var(--lb-glow, 1);
+  }
+  .light-border-ring { position: absolute; inset: 0; z-index: -1; overflow: hidden; border-radius: inherit; pointer-events: none; }
+  .light-border-ring > i {
+    position: absolute; inset: -80%;
+    background: conic-gradient(from 0deg, transparent 0 58%, color-mix(in oklab, var(--ring-a) 15%, transparent) 64%, var(--ring-a) 78%, color-mix(in oklab, var(--ring-b) 80%, transparent) 86%, transparent 94%);
+    animation: lb-spin var(--lb-speed, 6s) linear infinite;
+  }
+  .light-border.is-paused, .light-border.is-paused * { animation-play-state: paused !important; }
+  .light-border-content {
+    position: relative; margin: var(--lb-width, 1px); overflow: hidden;
+    border-radius: calc(var(--lb-radius, 18px) - var(--lb-width, 1px));
+    background: radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--ring-a) 10%, transparent), transparent 62%), #0f1211;
+  }
+
+  /* ── Spotlight ──────────────────────────────────────────────────────── */
+  /* Pointer-following light on a card and its border; --mx/--my set by <Spotlight>. */
+  .spotlight { position: relative; isolation: isolate; }
+  .spotlight::before, .spotlight::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    opacity: 0; transition: opacity .4s var(--ease-out-soft);
+  }
+  .spotlight::before {
+    z-index: -1;
+    background: radial-gradient(var(--spot-size, 320px) circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--color-accent) 8%, transparent), transparent 70%);
+  }
+  .spotlight::after {
+    padding: var(--hair);
+    background: radial-gradient(calc(var(--spot-size, 320px) * .6) circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--color-accent) 70%, transparent), transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .spotlight:hover::before, .spotlight:hover::after, .spotlight.is-lit::before, .spotlight.is-lit::after { opacity: 1; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer-band { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes shimmer-text { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+@keyframes word-in { from { color: transparent; } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes caret { 50% { opacity: 0; } }
+@keyframes ping { 0% { transform: scale(1); opacity: .7; } 80%, 100% { transform: scale(2.8); opacity: 0; } }
+@keyframes skeleton-sweep { to { transform: translateX(100%); } }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+@keyframes orb-drift { 0%, 100% { transform: translate(-10%, 8%) scale(1); } 50% { transform: translate(12%, -10%) scale(1.2); } }
+@keyframes lb-spin { to { transform: rotate(360deg); } }
+@keyframes lb-breathe { from { opacity: .35; } to { opacity: .9; } }
+@keyframes pulse-soft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@keyframes eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .light-border-ring > i, .light-border-glow, .voice-orb > i, .ping::after, .skeleton::after { animation: none; }
+}
+
+/* Hairline borders (1px, 0.5px on retina). Use instead of `border` / `divide-y`. */
+@utility border-hair { border-style: solid; border-width: var(--hair); }
+@utility border-t-hair { border-top-style: solid; border-top-width: var(--hair); }
+@utility border-b-hair { border-bottom-style: solid; border-bottom-width: var(--hair); }
+@utility divide-hair { & > :not(:last-child) { border-bottom: var(--hair) solid var(--color-line); } }
+
+/* Ambient light motion (whole SVG, compositor only). */
+@keyframes ambient-breathe { from { transform: scale(1); } to { transform: scale(1.06) translateY(-1.5%); } }
+@keyframes ambient-drift { 0%, 100% { transform: translateX(0) scale(1.08); } 50% { transform: translateX(-4%) scale(1.08); } }
+.ambient-breathe { transform-origin: 50% 0; animation: ambient-breathe 9s ease-in-out infinite alternate; }
+.ambient-drift { animation: ambient-drift 22s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ambient-breathe, .ambient-drift { animation: none; } }
+
+@layer components {
+  /* Grouped list rows: separators start where the text starts (iOS). A row with an icon
+     marks itself data-lead — also when it sits inside a wrapper (a menu trigger, a swipe row). */
+  .list-rows > * { position: relative; }
+  .list-rows > * + *::before {
+    content: ''; position: absolute; top: 0; right: 0; left: 14px; pointer-events: none; z-index: 1;
+    border-top: var(--hair) solid var(--color-line);
+  }
+  .list-rows > * + *:is([data-lead], :has(> [data-lead], > * > [data-lead]))::before { left: 52px; }
+}
+
+/* LogoLoader: a light runs along the mark, the dot breathes. */
+@keyframes logo-run { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes logo-dot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.72); opacity: .55; } }
+.logo-run { animation: logo-run var(--ll-speed, 1.6s) linear infinite; }
+.logo-dot { transform-box: fill-box; transform-origin: center; animation: logo-dot var(--ll-speed, 1.6s) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .logo-run, .logo-dot { animation: none; } }

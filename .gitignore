@@ -1,0 +1,35 @@
+# Research material (third-party analysis) never goes into the repo
+research-local/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+*.keystore
+google-services.json
+firebase-service-account*.json
+*.key
+
+# Build output
+target/
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+coverage/
+apps/android/android/app/build/
+apps/android/android/.gradle/
+apps/android/android/build/
+.gradle/
+local.properties
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
