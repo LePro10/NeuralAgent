@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::time::Duration;
 
 /// Variables that must not leak from the daemon's own parent into agents (e.g. the daemon was

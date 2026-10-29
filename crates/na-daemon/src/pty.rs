@@ -124,14 +124,25 @@ impl Pty {
                         Ok(0) | Err(_) => break,
                         Ok(n) => n,
                     };
-                    let (title, bell) = {
+                    let (title, bell, cursor) = {
                         let mut t = term.lock();
                         t.parser.process(&buf[..n]);
                         t.seq += n as u64;
                         let _ = tx.send(Chunk { seq: t.seq, data: Arc::from(&buf[..n]) });
+                        // Nobody is watching to answer a cursor position request (ConPTY sends one
+                        // at startup and waits for it), so answer from our own screen.
+                        let ask = tx.receiver_count() == 0 && buf[..n].windows(4).any(|w| w == b"\x1b[6n");
+                        let cursor = ask.then(|| t.parser.screen().cursor_position());
                         let cb = t.parser.callbacks_mut();
-                        (cb.title.take(), std::mem::take(&mut cb.bell))
+                        (cb.title.take(), std::mem::take(&mut cb.bell), cursor)
                     };
+                    if let Some((row, col)) = cursor
+                        && let Some(p) = weak.upgrade()
+                    {
+                        let mut w = p.writer.lock();
+                        let _ = write!(w, "\x1b[{};{}R", row + 1, col + 1);
+                        let _ = w.flush();
+                    }
                     notify(PtyNote::Output { bytes: n });
                     if let Some(title) = title {
                         notify(PtyNote::Title(title));
