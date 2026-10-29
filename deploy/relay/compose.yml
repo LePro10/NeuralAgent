@@ -1,0 +1,14 @@
+# Relay on the server (/opt/neuralagent/compose.yml). Secrets: /etc/neuralagent/relay.env.
+services:
+  relay:
+    image: ghcr.io/lepro10/neuralagent-relay:latest
+    container_name: neuralagent-relay
+    restart: unless-stopped
+    env_file: /etc/neuralagent/relay.env
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/lib/neuralagent:/data
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,8 @@
+[Unit]
+Description=NeuralAgent relay pull deployment
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/neuralagent/update.sh
