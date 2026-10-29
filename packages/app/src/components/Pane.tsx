@@ -1,10 +1,10 @@
 import type { PaneContent, Session } from "@neuralagent/protocol";
 import { StatusDot } from "@neuralagent/ui";
-import { Columns2, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
+import { Columns2, GitBranch, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@neuralagent/ui";
 import { STATUS } from "../lib/status";
-import { useClient, useDaemon } from "../lib/store";
+import { useChanges, useClient, useDaemon } from "../lib/store";
 import { AgentGlyph } from "./AgentGlyph";
 import { EmptyPane } from "./EmptyPane";
 import { TerminalView } from "./TerminalView";
@@ -49,6 +49,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
   const session: Session | undefined = useDaemon((c) => (sid ? c.state?.sessions[sid] : undefined));
   const profile = useDaemon((c) => (session ? c.state?.profiles.find((p) => p.id === session.profile_id) : undefined));
   const client = useClient();
+  const showChanges = useChanges((c) => c.show);
   const [dropTarget, setDropTarget] = useState(false);
   // Closing a pane stops its process; a running one needs a second click within 3 s.
   const [armed, setArmed] = useState(false);
@@ -102,6 +103,18 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
         {st ? <StatusDot tone={st.tone} pulse={st.pulse} label={st.label} /> : <span className="size-1.5" />}
         {profile && <AgentGlyph engine={profile.engine} size={12} className={focused ? "text-ink" : "text-faint"} />}
         <span className={cn("truncate text-detail", focused ? "text-bright" : "text-dim")}>{title}</span>
+        {session?.worktree && (
+          <button
+            type="button"
+            title={`Own worktree on ${session.worktree.branch}: review, merge or discard`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => showChanges(workspaceId, session.id)}
+            className="hoverable flex h-5 shrink-0 items-center gap-1 rounded-xs bg-fill-1 px-1.5 text-meta text-dim hover:text-ink"
+          >
+            <GitBranch size={11} strokeWidth={1.6} aria-hidden />
+            Worktree
+          </button>
+        )}
         {session?.last_line && <span className="min-w-0 flex-1 truncate text-meta text-faint">{session.last_line}</span>}
         {!session?.last_line && <span className="flex-1" />}
         <div className={cn("flex items-center gap-0.5 transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>

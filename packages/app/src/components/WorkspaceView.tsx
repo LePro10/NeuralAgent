@@ -1,11 +1,12 @@
 import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent/protocol";
 import { ConfirmSheet, Menu, StatusDot, cn, toast, type MenuEntry } from "@neuralagent/ui";
-import { Download, LayoutGrid, Plus, X } from "lucide-react";
+import { Download, GitBranch, GitCompare, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeTab, gridOf, newTab, order, panes, removePane, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
 import { STATUS, mostUrgent } from "../lib/status";
 import { launchable } from "../lib/profiles";
-import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
+import { useCatalogSheet, useChanges, useClient, useDaemon, useUi } from "../lib/store";
+import { useWorktreeStart } from "../lib/worktree";
 import { AgentGlyph } from "./AgentGlyph";
 import type { PaneActions } from "./Pane";
 import { PaneTree, type TreeCtx } from "./PaneTree";
@@ -26,6 +27,10 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const profiles = useDaemon((c) => c.state?.profiles);
   const catalog = useDaemon((c) => c.state?.catalog);
   const openCatalog = useCatalogSheet((c) => c.setOpen);
+  const git = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId)?.git);
+  const showChanges = useChanges((c) => c.show);
+  const { worktrees, setWorktrees } = useUi();
+  const worktree = useWorktreeStart(workspaceId);
   const tab = layout ? activeTab(layout) : undefined;
   const [closing, setClosing] = useState<{ tab: Tab; live: number } | null>(null);
 
@@ -126,8 +131,8 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
     const first = panes(root)[0]!.id;
     editTab((t) => ({ ...t, root, focused: first, zoomed: undefined }));
   };
-  const start = (profileId: string) =>
-    client.req({ m: "session_start", p: { workspace_id: workspaceId, profile_id: profileId } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+  const start = (profileId: string, engine: string) =>
+    client.req({ m: "session_start", p: { workspace_id: workspaceId, profile_id: profileId, ...worktree(engine) } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
 
   const count = panes(tab.root).length;
   const presetItems: MenuEntry[] = PRESETS.map((n) => ({
@@ -141,9 +146,10 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
       id: p.id,
       label: p.name,
       glyph: <AgentGlyph engine={p.engine} className="text-dim" />,
-      onSelect: () => start(p.id),
+      onSelect: () => start(p.id, p.engine),
     })),
-    { label: "Install agents…", Icon: Download, divider: true, onSelect: () => openCatalog(true) },
+    ...(git ? [{ label: "Own worktree per agent", Icon: GitBranch, checked: worktrees, divider: true, onSelect: () => setWorktrees(!worktrees) }] : []),
+    { label: "Install agents…", Icon: Download, divider: !git, onSelect: () => openCatalog(true) },
   ];
 
   return (
@@ -181,6 +187,18 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
           </button>
         </div>
         <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
+        {git && (
+          <button
+            type="button"
+            title={`${git.branch}: ${git.changed === 1 ? "1 changed file" : `${git.changed} changed files`}`}
+            onClick={() => showChanges(workspaceId)}
+            className="hoverable flex h-7 max-w-56 items-center gap-1.5 rounded-item px-2.5 text-chip text-dim hover:text-ink"
+          >
+            <GitCompare size={14} strokeWidth={1.6} aria-hidden />
+            <span className="truncate">{git.branch}</span>
+            {git.changed > 0 && <span className="text-warning tabular-nums">{git.changed}</span>}
+          </button>
+        )}
         <Menu
           title="Layout"
           items={presetItems}

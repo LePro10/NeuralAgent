@@ -139,6 +139,14 @@ Open items first. Everything else keeps going locally until these are done.
   count of agents waiting for you is shown next to the icon. Closing the window now keeps the
   app in the menu bar (checked: Cmd+W → window hidden, reopened from the menu), so dictation and
   the wake word keep working.
+- Git + worktrees (on a clone of this repository): the workspace bar shows branch and number
+  of changed files and opens a Changes sheet (file list, diff per file). With "Own worktree
+  per agent" a new Claude Code started in its own branch and folder (checked: its trust prompt
+  named the worktree path; `git status` of the main checkout stayed clean). After files were
+  changed in the worktree (by hand, to save your Claude quota), the sheet showed both files and
+  the diff; "Merge into main" committed, merged, removed worktree and branch and closed the
+  agent ("Merged 1 commit into main"). Discard and closing an unchanged agent remove the
+  worktree too; a conflicting merge changes nothing (unit test).
 - Fixed on the way: a session busy from its first second stayed "Starting" forever; a closed
   session's process was left as a zombie (the daemon now always reaps it, checked).
 

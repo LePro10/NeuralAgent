@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
+import { ChangesSheet } from "./components/ChangesSheet";
 import { HistoryPage } from "./components/HistoryPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { WorkspaceView } from "./components/WorkspaceView";
@@ -138,6 +139,7 @@ export function App() {
       )}
       {body}
       {state && <AgentCatalog />}
+      {state && <ChangesSheet />}
       <Toaster />
     </AppShell>
   );

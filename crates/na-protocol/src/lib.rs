@@ -193,6 +193,50 @@ pub struct GitSummary {
     pub behind: u32,
 }
 
+/// Files changed in a workspace (against HEAD) or in an agent's worktree (against where it began).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GitChanges {
+    pub branch: String,
+    pub ahead: u32,
+    pub behind: u32,
+    pub files: Vec<GitFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GitFile {
+    pub path: String,
+    /// Old path of a renamed file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub from: Option<String>,
+    pub status: GitFileStatus,
+    pub additions: u32,
+    pub deletions: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum GitFileStatus {
+    Modified,
+    Added,
+    Deleted,
+    Renamed,
+    Untracked,
+    Conflicted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GitDiff {
+    /// Unified diff text.
+    pub text: String,
+    /// Cut because it was too long.
+    pub truncated: bool,
+}
+
 /// Tabs of a workspace, each a split tree of panes.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -545,6 +589,32 @@ pub enum Request {
     // filesystem (read-only browsing, for picking folders)
     FsList {
         path: String,
+    },
+    // git: a workspace, or with `session_id` that agent's worktree
+    GitChanges {
+        workspace_id: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        session_id: Option<Id>,
+    },
+    GitDiff {
+        workspace_id: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        session_id: Option<Id>,
+        /// One file, or everything.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        path: Option<String>,
+    },
+    /// Commit what the agent changed in its worktree, merge its branch into the workspace's
+    /// branch, remove the worktree and close the session. Returns a short message.
+    WorktreeMerge {
+        session_id: Id,
+    },
+    /// Stop the agent and throw its worktree and branch away.
+    WorktreeDiscard {
+        session_id: Id,
     },
     // past agent conversations (Claude Code, Codex) on this computer, newest first
     HistorySearch {

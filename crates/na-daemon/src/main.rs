@@ -10,6 +10,7 @@ mod core;
 mod discord;
 mod env;
 mod fsbrowse;
+mod git;
 mod history;
 mod hooks;
 mod layout;
@@ -101,6 +102,10 @@ fn serve() -> Result<()> {
                             .read(|s| (s.settings.keep_awake, s.sessions.values().any(|x| x.status == na_protocol::AgentStatus::Working)));
                         awake.update(setting, working);
                         discord.update(core.read(discord::presence));
+                    }
+                    if n.is_multiple_of(15) {
+                        let core = core.clone();
+                        tokio::task::spawn_blocking(move || core.refresh_git());
                     }
                     if n.is_multiple_of(3)
                         && let Err(e) = core.save_if_dirty()

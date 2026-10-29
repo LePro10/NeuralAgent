@@ -272,6 +272,11 @@ impl Core {
                 self.emit(Event::LayoutSet { workspace_id, layout });
                 Ok(Value::Null)
             }
+            Request::SessionStart(start) if start.worktree == Some(true) => {
+                // `git worktree add` checks out files; keep that off the async threads.
+                let me = self.clone();
+                blocking(move || me.session_start(start)).await.map(|s| json!(s))
+            }
             Request::SessionStart(start) => self.session_start(start).map(|s| json!(s)),
             Request::SessionStop { id } => {
                 self.pty(&id)?.kill();
@@ -352,6 +357,36 @@ impl Core {
                 Ok(Value::Null)
             }
             Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path),
+            Request::GitChanges { workspace_id, session_id } => {
+                let (dir, base) = self.git_target(&workspace_id, session_id.as_ref())?;
+                blocking(move || crate::git::changes(Path::new(&dir), base.as_deref()).map_err(git_err)).await.map(|c| json!(c))
+            }
+            Request::GitDiff { workspace_id, session_id, path } => {
+                let (dir, base) = self.git_target(&workspace_id, session_id.as_ref())?;
+                blocking(move || crate::git::diff(Path::new(&dir), base.as_deref(), path.as_deref()).map_err(git_err))
+                    .await
+                    .map(|d| json!(d))
+            }
+            Request::WorktreeMerge { session_id } => {
+                let (s, wt, repo) = self.worktree_of(&session_id)?;
+                if let Ok(p) = self.pty(&session_id) {
+                    p.kill();
+                }
+                let message = format!("{} (NeuralAgent)", s.title);
+                let msg = blocking(move || crate::git::worktree_merge(Path::new(&repo), &wt, &message).map_err(git_err)).await?;
+                self.session_close(&session_id);
+                self.refresh_git();
+                Ok(json!(msg))
+            }
+            Request::WorktreeDiscard { session_id } => {
+                let (_, wt, repo) = self.worktree_of(&session_id)?;
+                if let Ok(p) = self.pty(&session_id) {
+                    p.kill();
+                }
+                blocking(move || crate::git::worktree_remove(Path::new(&repo), &wt).map_err(git_err)).await?;
+                self.session_close(&session_id);
+                Ok(Value::Null)
+            }
             Request::HistorySearch { query, limit } => {
                 // Phones and the orchestrator only see conversations from approved workspaces.
                 let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop)
@@ -366,6 +401,55 @@ impl Core {
                     .map_err(|e| err(ErrorCode::Internal, e.to_string()))
             }
         }
+    }
+
+    /// Folder and base commit to compare: the workspace against HEAD, or an agent's worktree
+    /// against the commit it started from.
+    fn git_target(&self, ws: &Id, session: Option<&Id>) -> std::result::Result<(String, Option<String>), ApiError> {
+        match session {
+            Some(sid) => {
+                let s = self.session(sid)?;
+                if &s.workspace_id != ws {
+                    return Err(err(ErrorCode::BadRequest, "that agent is in another workspace"));
+                }
+                match s.worktree {
+                    Some(wt) => Ok((wt.path, Some(wt.base))),
+                    None => self.git_target(&s.workspace_id, None),
+                }
+            }
+            None => self
+                .read(|s| s.workspaces.iter().find(|w| &w.id == ws).map(|w| (w.path.clone(), None)))
+                .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace")),
+        }
+    }
+
+    fn worktree_of(&self, sid: &Id) -> std::result::Result<(Session, WorktreeInfo, String), ApiError> {
+        let s = self.session(sid)?;
+        let wt = s.worktree.clone().ok_or_else(|| err(ErrorCode::BadRequest, "this agent does not have its own worktree"))?;
+        let repo = self
+            .read(|st| st.workspaces.iter().find(|w| w.id == s.workspace_id).map(|w| w.path.clone()))
+            .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
+        Ok((s, wt, repo))
+    }
+
+    /// Updates the branch / changed-files summary of every workspace (runs every few seconds).
+    pub fn refresh_git(&self) {
+        static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if BUSY.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        for w in self.read(|s| s.workspaces.clone()) {
+            let git = crate::git::summary(Path::new(&w.path));
+            let same = match (&git, &w.git) {
+                (Some(a), Some(b)) => a.branch == b.branch && a.changed == b.changed && a.ahead == b.ahead && a.behind == b.behind,
+                (None, None) => true,
+                _ => false,
+            };
+            if !same {
+                self.emit(Event::WorkspaceUpsert { workspace: Workspace { git, ..w } });
+            }
+        }
+        BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn workspace_add(&self, path: String, name: Option<String>) -> ApiResult {
@@ -387,7 +471,7 @@ impl Core {
             pinned: false,
             order,
             created_at: now_ms(),
-            git: None,
+            git: crate::git::summary(&path),
         };
         self.emit(Event::WorkspaceUpsert { workspace: ws.clone() });
         self.emit(Event::LayoutSet { workspace_id: ws.id.clone(), layout: layout::default_layout() });
@@ -399,14 +483,32 @@ impl Core {
             .read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned())
             .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
         let profile = self.profile(&start.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
-        let cwd = match &start.cwd {
+        let mut cwd = match &start.cwd {
             Some(c) if Path::new(c).starts_with(&ws.path) && Path::new(c).is_dir() => c.clone(),
             Some(_) => return Err(err(ErrorCode::BadRequest, "that folder is not inside the workspace")),
             None => ws.path.clone(),
         };
+        let id = layout::new_id();
+        // Its own branch and folder, so parallel agents do not edit the same files.
+        let worktree = match start.worktree {
+            Some(true) => {
+                let name = format!("{}-{}", slug(&profile.name), &id[..id.len().min(6)]);
+                let wt = crate::git::worktree_create(Path::new(&ws.path), &name).map_err(git_err)?;
+                // Same subfolder inside the worktree, if one was asked for.
+                let sub = Path::new(&cwd)
+                    .strip_prefix(&ws.path)
+                    .ok()
+                    .filter(|r| !r.as_os_str().is_empty())
+                    .map(|r| Path::new(&wt.path).join(r))
+                    .filter(|p| p.is_dir());
+                cwd = sub.map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| wt.path.clone());
+                Some(wt)
+            }
+            _ => None,
+        };
         let now = now_ms();
         let session = Session {
-            id: layout::new_id(),
+            id,
             workspace_id: ws.id.clone(),
             profile_id: profile.id.clone(),
             title: profile.name.clone(),
@@ -423,7 +525,7 @@ impl Core {
             last_line: None,
             last_message: None,
             prompt: start.prompt.as_ref().map(|p| p.chars().take(300).collect()),
-            worktree: None,
+            worktree,
             status_source: StatusSource::Output,
         };
         let s = self.spawn_into(session, start.prompt)?;
@@ -551,6 +653,20 @@ impl Core {
                 let core = self.clone();
                 std::thread::spawn(move || core.refresh_catalog());
             }
+        }
+        // A worktree the agent never changed is just clutter; one with changes is kept until it
+        // is merged or discarded.
+        if let Some((wt, repo)) = self.read(|s| {
+            let x = s.sessions.get(id)?;
+            Some((x.worktree.clone()?, s.workspaces.iter().find(|w| w.id == x.workspace_id)?.path.clone()))
+        }) {
+            std::thread::spawn(move || {
+                if !crate::git::worktree_dirty(&wt)
+                    && let Err(e) = crate::git::worktree_remove(Path::new(&repo), &wt)
+                {
+                    tracing::warn!("removing unused worktree {}: {e:#}", wt.path);
+                }
+            });
         }
         let ws = self.read(|s| s.sessions.get(id).map(|x| x.workspace_id.clone()));
         if let Some(ws) = ws
@@ -838,4 +954,22 @@ fn host_id(paths: &Paths) -> Id {
     let id = uuid::Uuid::new_v4().to_string();
     let _ = write_private(&p, id.as_bytes());
     id
+}
+
+fn git_err(e: anyhow::Error) -> ApiError {
+    err(ErrorCode::BadRequest, format!("{e:#}"))
+}
+
+/// Runs blocking work (git, file scans) off the async threads.
+async fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> std::result::Result<T, ApiError> + Send + 'static,
+) -> std::result::Result<T, ApiError> {
+    tokio::task::spawn_blocking(f).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))?
+}
+
+/// `Claude (Haiku)` → `claude-haiku`, for worktree folder and branch names.
+fn slug(name: &str) -> String {
+    let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+    let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
+    if s.is_empty() { "agent".into() } else { s.chars().take(24).collect() }
 }

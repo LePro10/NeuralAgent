@@ -4,6 +4,7 @@ import { useState } from "react";
 import { launchable } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
 import { Download } from "lucide-react";
+import { useWorktreeStart } from "../lib/worktree";
 import { AgentGlyph } from "./AgentGlyph";
 
 /** An empty pane is a launcher: pick what runs here. */
@@ -14,12 +15,13 @@ export function EmptyPane({ workspaceId, paneId, onFocus }: { workspaceId: strin
   const openCatalog = useCatalogSheet((c) => c.setOpen);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const worktree = useWorktreeStart(workspaceId);
 
   const start = async (p: Profile) => {
     setBusy(p.id);
     setError(null);
     try {
-      await client.req({ m: "session_start", p: { workspace_id: workspaceId, profile_id: p.id, pane_id: paneId } });
+      await client.req({ m: "session_start", p: { workspace_id: workspaceId, profile_id: p.id, pane_id: paneId, ...worktree(p.engine) } });
     } catch (e) {
       setError((e as Error).message);
     } finally {

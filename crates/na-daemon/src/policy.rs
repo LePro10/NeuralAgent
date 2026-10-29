@@ -31,6 +31,14 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Some(_) => needs("typing into an agent outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
+        Request::GitChanges { workspace_id, .. } | Request::GitDiff { workspace_id, .. } if !approved(workspace_id) => {
+            needs("looking at changes outside an approved workspace")
+        }
+        Request::WorktreeMerge { session_id } | Request::WorktreeDiscard { session_id } => match ws_of_session(session_id) {
+            Some((ws, _)) if approved(&ws) => Ok(()),
+            Some(_) => needs("merging or discarding outside an approved workspace"),
+            None => Err(err(ErrorCode::NotFound, "no such session")),
+        },
         Request::WorkspaceUpdate { approved: Some(_), .. }
         | Request::SettingsSet { .. }
         | Request::ProfileSave { .. }

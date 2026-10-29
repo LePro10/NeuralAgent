@@ -171,3 +171,17 @@ sums. Dev builds accept `NEURALAGENT_TEST_MIC=a.wav:b.wav` as a fake microphone 
 tests; release builds ignore it. While listening, a separate small window (`hud.html`:
 transparent, always on top, not focusable, ignores the mouse) shows a pill at the bottom of
 the screen; it needs Tauri's `macos-private-api` for transparency (fine outside the App Store).
+
+## D23 — Git through the `git` CLI; agent worktrees inside the repository
+
+The daemon runs the user's `git` (no libgit2): same config, hooks, credentials and behaviour as
+in their terminal. A workspace's branch and change count are refreshed every 5 s; the Changes
+sheet lists files against HEAD (untracked files included) and shows one file's diff at a time
+(cut at 512 KB). "Own worktree per agent" (per device, in the New agent menu) gives each new
+agent a branch `neuralagent/<profile>-<id>` checked out in `<repo>/.neuralagent/worktrees/…`,
+hidden with `.git/info/exclude` (the user's `.gitignore` is not touched). Inside the repo, so
+the worktree stays within the workspace and its approval. Merge back: commit what the agent
+left uncommitted, `git merge` into the branch checked out in the workspace, remove the worktree
+and branch, close the agent. On a conflict the merge is aborted and nothing changes; the agent
+is told to merge the main branch first. Closing an agent whose worktree has no changes removes
+it; one with changes stays until merged or discarded.

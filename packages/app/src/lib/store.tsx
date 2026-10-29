@@ -37,8 +37,11 @@ export function useDaemon<T>(sel: (c: DaemonClient) => T): T {
 interface UiState {
   workspace: string | null;
   sidebarPinned: boolean;
+  /** New agents in git workspaces get their own worktree. */
+  worktrees: boolean;
   setWorkspace: (id: string | null) => void;
   setSidebarPinned: (v: boolean) => void;
+  setWorktrees: (v: boolean) => void;
 }
 
 export const useUi = create<UiState>()(
@@ -46,8 +49,10 @@ export const useUi = create<UiState>()(
     (set) => ({
       workspace: null,
       sidebarPinned: false,
+      worktrees: false,
       setWorkspace: (workspace) => set({ workspace }),
       setSidebarPinned: (sidebarPinned) => set({ sidebarPinned }),
+      setWorktrees: (worktrees) => set({ worktrees }),
     }),
     { name: "neuralagent.ui" },
   ),
@@ -57,4 +62,15 @@ export const useUi = create<UiState>()(
 export const useCatalogSheet = create<{ open: boolean; setOpen: (open: boolean) => void }>()((set) => ({
   open: false,
   setOpen: (open) => set({ open }),
+}));
+
+/** The changes sheet: a workspace, or one agent's worktree. */
+export const useChanges = create<{
+  target: { workspaceId: string; sessionId?: string } | null;
+  show: (workspaceId: string, sessionId?: string) => void;
+  close: () => void;
+}>()((set) => ({
+  target: null,
+  show: (workspaceId, sessionId) => set({ target: { workspaceId, sessionId } }),
+  close: () => set({ target: null }),
 }));
