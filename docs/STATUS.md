@@ -47,6 +47,11 @@ Open items first. Everything else keeps going locally until these are done.
 - [ ] **Logo uploads** (after the logo is chosen; files in `docs/brand/export/`): Discord
       Developer Portal (app `1563621751861153933` → App Icon), GitHub OAuth App (logo),
       Firebase project settings. **Not** at Google (would trigger a verification review).
+      For Discord also: Rich Presence → Art Assets → upload the logo with the name `logo`.
+- [ ] **Discord presence check** (1 min, Discord was not running while I built it): open
+      Discord, start any agent in NeuralAgent → your Discord profile shows "NeuralAgent ·
+      Working with AI agents" within ~20 s. Or run
+      `cargo test -p na-daemon shows_in_discord -- --ignored --nocapture` with Discord open.
 
 ## Done on your side (verified)
 
@@ -114,6 +119,9 @@ Open items first. Everything else keeps going locally until these are done.
 - Keep awake: a busy shell session makes the daemon hold a macOS "prevent idle sleep" assertion
   (`pmset -g assertions` shows "Agents are working"); it is released a few seconds after the
   work stops, and never taken with the setting Off. "On power" asks the OS once a minute.
+- Discord presence: unit test for what is shown (General: only "Working with AI agents";
+  Detailed: workspace + agent count; plain shells do not count; nothing while no agent runs).
+  Live check with Discord is on your checklist (Discord was closed).
 - Fixed on the way: a session busy from its first second stayed "Starting" forever.
 
 ## Known gaps
