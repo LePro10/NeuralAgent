@@ -33,6 +33,14 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Some(_) => needs("controlling an agent outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
+        Request::SwarmStart { workspace_id, .. } if !approved(workspace_id) => needs("starting a swarm outside an approved workspace"),
+        Request::SwarmSend { swarm_id, .. } | Request::SwarmStop { swarm_id } | Request::SwarmRemove { swarm_id } => {
+            match core.read(|s| s.swarms.iter().find(|w| &w.id == swarm_id).map(|w| w.workspace_id.clone())) {
+                Some(ws) if approved(&ws) => Ok(()),
+                Some(_) => needs("controlling a swarm outside an approved workspace"),
+                None => Err(err(ErrorCode::NotFound, "no such swarm")),
+            }
+        }
         Request::TermWrite { sid, .. } => match ws_of_session(sid) {
             Some((_, profile)) if profile == "shell" && client.kind == ClientKind::Orchestrator => needs("typing into a raw shell"),
             Some((ws, _)) if approved(&ws) => Ok(()),

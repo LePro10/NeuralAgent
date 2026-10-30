@@ -4,6 +4,7 @@ import type { McpServer } from "./McpServer";
 import type { Profile } from "./Profile";
 import type { Settings } from "./Settings";
 import type { StartSession } from "./StartSession";
+import type { SwarmRole } from "./SwarmRole";
 import type { WorkspaceLayout } from "./WorkspaceLayout";
 
 export type Request = { "m": "workspace_add", "p": { path: string, name?: string, } } | { "m": "workspace_update", "p": { id: string, name?: string, approved?: boolean, pinned?: boolean, order?: number, } } | { "m": "workspace_remove", "p": { id: string, } } | { "m": "layout_set", "p": { workspace_id: string, layout: WorkspaceLayout, } } | { "m": "session_start", "p": StartSession } | { "m": "session_stop", "p": { id: string, } } | { "m": "session_close", "p": { id: string, } } | { "m": "session_restart", "p": { id: string, } } | { "m": "session_rename", "p": { id: string, title: string, } } | { "m": "session_prompt", "p": { id: string, text: string, } } | { "m": "term_attach", "p": { sid: string, } } | { "m": "term_detach", "p": { sid: string, } } | { "m": "term_write", "p": { sid: string, data: string, } } | { "m": "term_resize", "p": { sid: string, cols: number, rows: number, } } | { "m": "profile_save", "p": { profile: Profile, } } | { "m": "profile_delete", "p": { id: string, } } | { "m": "catalog_refresh" } | { "m": "settings_set", "p": { settings: Settings, } } | { "m": "fs_list", "p": { path: string, } } | { "m": "git_changes", "p": { workspace_id: string, session_id?: string, } } | { "m": "git_diff", "p": { workspace_id: string, session_id?: string, 
@@ -14,4 +15,4 @@ path?: string, } } | { "m": "worktree_merge", "p": { session_id: string, } } | {
 /**
  * `de` or `en`.
  */
-lang: string, } } | { "m": "audit_list", "p": { limit?: number, } } | { "m": "history_search", "p": { query: string, limit?: number, } };
+lang: string, } } | { "m": "swarm_start", "p": { workspace_id: string, goal: string, members?: Array<SwarmRole>, } } | { "m": "swarm_send", "p": { swarm_id: string, to: string, text: string, } } | { "m": "swarm_stop", "p": { swarm_id: string, } } | { "m": "swarm_remove", "p": { swarm_id: string, } } | { "m": "audit_list", "p": { limit?: number, } } | { "m": "history_search", "p": { query: string, limit?: number, } };

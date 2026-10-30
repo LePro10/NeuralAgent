@@ -128,6 +128,9 @@ jobs:
           for i in $(seq 1 50); do [ -f "$NEURALAGENT_HOME/daemon.json" ] && break; sleep 0.2; done
           node scripts/daemon-smoke.mjs
           kill %1
+      - name: Swarm end-to-end test (daemon, four stand-in agents)
+        if: runner.os != 'Windows'
+        run: node --experimental-strip-types scripts/e2e-swarm.ts
       - name: Remote end-to-end test (relay, daemon, simulated phone)
         if: runner.os != 'Windows'
         run: |

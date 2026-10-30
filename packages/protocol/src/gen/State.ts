@@ -6,6 +6,8 @@ import type { Profile } from "./Profile";
 import type { RemoteState } from "./RemoteState";
 import type { Session } from "./Session";
 import type { Settings } from "./Settings";
+import type { Swarm } from "./Swarm";
+import type { SwarmMessage } from "./SwarmMessage";
 import type { UsageLimit } from "./UsageLimit";
 import type { Workspace } from "./Workspace";
 import type { WorkspaceLayout } from "./WorkspaceLayout";
@@ -29,4 +31,12 @@ remote: RemoteState,
 /**
  * Neural, the orchestrator: conversation and whether it can answer.
  */
-orchestrator: OrchState, };
+orchestrator: OrchState, 
+/**
+ * Teams of agents handing work to each other.
+ */
+swarms: Array<Swarm>, 
+/**
+ * Their messages, oldest first (the most recent ones of each swarm only).
+ */
+swarm_messages: Array<SwarmMessage>, };

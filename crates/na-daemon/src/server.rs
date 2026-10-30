@@ -48,6 +48,7 @@ pub fn router(app: App) -> Router {
         )
         .route("/ws", get(ws_upgrade))
         .route("/hook", post(crate::hooks::receive))
+        .route("/swarm", post(crate::swarm::receive))
         .route("/auth/callback", get(crate::remote::callback))
         .with_state(app)
 }

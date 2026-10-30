@@ -27,6 +27,7 @@ mod pty;
 mod remote;
 mod secrets;
 mod server;
+mod swarm;
 mod usage;
 
 use std::time::Duration;
@@ -45,6 +46,10 @@ fn main() -> Result<()> {
         }
         Some("hook") => {
             hooks::client_main(args.get(1).map(String::as_str).unwrap_or(""), args.get(2).map(String::as_str));
+            Ok(())
+        }
+        Some("swarm-mcp") => {
+            swarm::bridge_main();
             Ok(())
         }
         Some("info") => {
@@ -112,6 +117,7 @@ fn serve() -> Result<()> {
                 loop {
                     tick.tick().await;
                     core.tick();
+                    core.swarm_tick();
                     n += 1;
                     if n.is_multiple_of(3) {
                         let (setting, working) = core

@@ -231,6 +231,59 @@ pub struct State {
     /// Neural, the orchestrator: conversation and whether it can answer.
     #[serde(default)]
     pub orchestrator: OrchState,
+    /// Teams of agents handing work to each other.
+    #[serde(default)]
+    pub swarms: Vec<Swarm>,
+    /// Their messages, oldest first (the most recent ones of each swarm only).
+    #[serde(default)]
+    pub swarm_messages: Vec<SwarmMessage>,
+}
+
+/// A team of agents working on one goal. They talk through the `send_message` tool the daemon
+/// gives them (MCP); a message reaches an agent as a prompt once it is idle.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Swarm {
+    pub id: Id,
+    pub workspace_id: Id,
+    pub goal: String,
+    pub members: Vec<SwarmMember>,
+    #[ts(type = "number")]
+    pub started_at: Millis,
+    /// Stopped by the user, or every member has exited.
+    pub ended: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SwarmMember {
+    /// "Coordinator", "Scout", "Builder", "Reviewer" or the user's own; unique in the team.
+    pub role: String,
+    pub session_id: Id,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SwarmMessage {
+    pub id: Id,
+    pub swarm_id: Id,
+    /// A role, or "You" for the user.
+    pub from: String,
+    /// A role, or "all".
+    pub to: String,
+    pub text: String,
+    #[ts(type = "number")]
+    pub at: Millis,
+    /// Typed into the recipients' terminals (they were busy until then).
+    pub delivered: bool,
+}
+
+/// One member of a swarm to start.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SwarmRole {
+    pub role: String,
+    pub profile_id: Id,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -865,6 +918,16 @@ pub enum Event {
         busy: bool,
     },
     OrchCleared,
+    SwarmUpsert {
+        swarm: Swarm,
+    },
+    SwarmRemoved {
+        id: Id,
+    },
+    /// A new message, or one that was delivered (same id).
+    SwarmMessage {
+        message: SwarmMessage,
+    },
     /// Something the user should notice (agent done / needs input / error).
     Attention {
         session_id: Id,
@@ -1060,6 +1123,30 @@ pub enum Request {
         speed: f32,
         /// `de` or `en`.
         lang: String,
+    },
+    // swarms
+    /// Start a team on `goal` in the workspace. `members` defaults to Coordinator, Scout,
+    /// Builder and Reviewer with the default agent. Returns `Swarm`.
+    SwarmStart {
+        workspace_id: Id,
+        goal: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        members: Option<Vec<SwarmRole>>,
+    },
+    /// A message from the user to one member (role) or "all".
+    SwarmSend {
+        swarm_id: Id,
+        to: String,
+        text: String,
+    },
+    /// Stop every member; the conversation stays.
+    SwarmStop {
+        swarm_id: Id,
+    },
+    /// Forget the swarm and its messages (the agents' panes stay).
+    SwarmRemove {
+        swarm_id: Id,
     },
     /// What phones, browsers and the orchestrator did here, newest first.
     AuditList {

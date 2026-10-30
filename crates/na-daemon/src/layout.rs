@@ -20,6 +20,32 @@ pub fn new_tab(title: &str) -> Tab {
     }
 }
 
+/// A tab with `n` empty panes in a grid (rows of up to ⌈√n⌉), and their ids in reading order.
+pub fn grid_tab(title: &str, n: usize) -> (Tab, Vec<Id>) {
+    let n = n.clamp(1, MAX_PANES);
+    let cols = (1..=n).find(|c| c * c >= n).unwrap_or(1);
+    let mut ids = vec![];
+    let mut rows = vec![];
+    for r in 0..n.div_ceil(cols) {
+        let k = cols.min(n - r * cols);
+        let panes: Vec<LayoutNode> = (0..k)
+            .map(|_| {
+                let id = new_id();
+                ids.push(id.clone());
+                LayoutNode::Pane { id, content: PaneContent::Empty }
+            })
+            .collect();
+        rows.push(if k == 1 { panes.into_iter().next().unwrap() } else { split(SplitDir::Row, panes) });
+    }
+    let root = if rows.len() == 1 { rows.pop().unwrap() } else { split(SplitDir::Column, rows) };
+    (Tab { id: new_id(), title: title.into(), root, focused: ids[0].clone(), zoomed: None }, ids)
+}
+
+fn split(dir: SplitDir, children: Vec<LayoutNode>) -> LayoutNode {
+    let n = children.len();
+    LayoutNode::Split { id: new_id(), dir, sizes: vec![1.0 / n as f32; n], children }
+}
+
 pub fn default_layout() -> WorkspaceLayout {
     let tab = new_tab("Main");
     WorkspaceLayout { active_tab: tab.id.clone(), tabs: vec![tab] }
@@ -212,6 +238,16 @@ mod tests {
         assert_eq!(l.tabs.len(), 2);
         assert_eq!(l.active_tab, l.tabs[1].id);
         assert_eq!(sessions_in(&l).len(), 17);
+    }
+
+    #[test]
+    fn grids() {
+        for (n, want) in [(1, "p"), (2, "R(p,p)"), (3, "C(R(p,p),p)"), (4, "C(R(p,p),R(p,p))")] {
+            let (tab, ids) = grid_tab("t", n);
+            assert_eq!(shape(&tab.root), want);
+            assert_eq!(ids.len(), n);
+        }
+        assert_eq!(count_panes(&grid_tab("t", 7).0.root), 7);
     }
 
     #[test]

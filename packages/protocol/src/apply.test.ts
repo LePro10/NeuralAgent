@@ -5,7 +5,7 @@ import type { State, Workspace } from "./gen/index.ts";
 
 const empty: State = { workspaces: [], layouts: {}, sessions: {}, profiles: [], catalog: [], mcp: [],
     limits: [], remote: { status: "signed_out", relay: "", paused: false, devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude",
-    llm: { provider: "neuralhub", base_url: "", model: "m", call_model: "" }, call: { voice: 0, speed: 1 } }, orchestrator: { ready: false, keys: [], busy: false, messages: [] } };
+    llm: { provider: "neuralhub", base_url: "", model: "m", call_model: "" }, call: { voice: 0, speed: 1 } }, orchestrator: { ready: false, keys: [], busy: false, messages: [] }, swarms: [], swarm_messages: [] };
 const ws: Workspace = { id: "w1", name: "a", path: "/a", approved: true, pinned: false, order: 1, created_at: 0 };
 
 test("upsert, then remove cascades", () => {
@@ -29,4 +29,19 @@ test("orchestrator messages upsert by id", () => {
   assert.equal(s.orchestrator.messages[0]!.text, "Hello");
   s = apply(s, { e: "orch_cleared" });
   assert.equal(s.orchestrator.messages.length, 0);
+});
+
+test("swarm messages are updated in place and removed with their swarm", () => {
+  const swarm = { id: "sw", workspace_id: "w1", goal: "g", members: [{ role: "Scout", session_id: "s1" }], started_at: 0, ended: false };
+  const msg = { id: "m1", swarm_id: "sw", from: "You", to: "Scout", text: "hi", at: 1, delivered: false };
+  let s = apply(empty, { e: "swarm_upsert", swarm });
+  s = apply(s, { e: "swarm_message", message: msg });
+  s = apply(s, { e: "swarm_message", message: { ...msg, delivered: true } });
+  assert.equal(s.swarm_messages.length, 1);
+  assert.equal(s.swarm_messages[0]!.delivered, true);
+  s = apply(s, { e: "swarm_upsert", swarm: { ...swarm, ended: true } });
+  assert.equal(s.swarms.length, 1);
+  assert.equal(s.swarms[0]!.ended, true);
+  s = apply(s, { e: "swarm_removed", id: "sw" });
+  assert.equal(s.swarms.length + s.swarm_messages.length, 0);
 });
