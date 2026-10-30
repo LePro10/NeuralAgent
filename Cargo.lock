@@ -3212,7 +3212,7 @@ dependencies = [
 
 [[package]]
 name = "na-crypto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -3226,7 +3226,7 @@ dependencies = [
 
 [[package]]
 name = "na-daemon"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -3263,7 +3263,7 @@ dependencies = [
 
 [[package]]
 name = "na-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3272,7 +3272,7 @@ dependencies = [
 
 [[package]]
 name = "na-relay"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3304,7 +3304,7 @@ dependencies = [
 
 [[package]]
 name = "na-voice"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -3343,7 +3343,7 @@ dependencies = [
 
 [[package]]
 name = "neuralagent-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bzip2 0.6.1",
