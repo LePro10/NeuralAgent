@@ -240,6 +240,14 @@ await until(
   "shell output on the phone",
 );
 ok(true, "typed on the phone, output streamed back through the relay");
+await phone.req("term_write", { sid: s.id, data: "true\r" });
+const audit: any[] = await desk.req("audit_list", {});
+const acts = audit.map((a) => `${a.client}:${a.action}:${a.ok}`);
+ok(acts.includes("android:session_start:true") && acts.includes("android:session_start:false"), "audit log has the phone's starts, refused ones too");
+ok(acts.filter((a) => a === "android:term_write:true").length === 1, "typing is logged once a minute, not per keystroke");
+const started = audit.find((a) => a.action === "session_start" && a.ok);
+ok(started?.target === "approved" && audit[0].at >= audit.at(-1).at, `audit names the workspace, newest first (${started?.target})`);
+ok(audit.find((a) => a.action === "term_write")?.target?.startsWith("approved — "), "audit names the agent typed into");
 
 // ───────────── the web remote library (@neuralagent/remote) ─────────────
 

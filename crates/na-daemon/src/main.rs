@@ -4,6 +4,7 @@
 //! `neuralagentd hook <ev>`  forward an agent hook event (used inside agent processes)
 //! `neuralagentd info`       print where the daemon listens (no secrets)
 
+mod audit;
 mod awake;
 mod catalog;
 mod core;

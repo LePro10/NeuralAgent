@@ -3,6 +3,7 @@ export type * from "./AgentStatus";
 export type * from "./ApiError";
 export type * from "./AttachResult";
 export type * from "./AttentionKind";
+export type * from "./AuditEntry";
 export type * from "./CatalogEntry";
 export type * from "./ClientInfo";
 export type * from "./ClientKind";

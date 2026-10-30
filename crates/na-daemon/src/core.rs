@@ -86,6 +86,7 @@ pub struct Core {
     mcp_lock: Mutex<()>,
     usage: crate::usage::Usage,
     pub remote: crate::remote::Remote,
+    pub audit: crate::audit::Audit,
 }
 
 pub struct Subscription {
@@ -129,6 +130,7 @@ impl Core {
             home: env.home.to_string_lossy().into_owned(),
         };
         let (events, _) = broadcast::channel(4096);
+        let audit = crate::audit::Audit::new(paths.root.join("audit.jsonl"));
         Arc::new(Core {
             inner: Mutex::new(Inner { state, seq: 0, ring: VecDeque::new(), dirty: false, busy_days: persisted.busy_days }),
             events,
@@ -143,6 +145,7 @@ impl Core {
             mcp_lock: Mutex::new(()),
             usage: Default::default(),
             remote: Default::default(),
+            audit,
         })
     }
 
@@ -256,8 +259,19 @@ impl Core {
     // ───────────── requests ─────────────
 
     pub async fn handle(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
+        if client.kind == ClientKind::Desktop {
+            return self.handle_checked(client, req).await;
+        }
+        let logged = req.clone();
+        let r = self.handle_checked(client, req).await;
+        self.audit.record(self, client, &logged, r.as_ref().map(|_| ()));
+        r
+    }
+
+    async fn handle_checked(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
         crate::policy::check(self, client, &req)?;
         match req {
+            Request::AuditList { limit } => Ok(json!(self.audit.list(limit.unwrap_or(200).min(2000) as usize))),
             r @ (Request::RemoteSignIn { .. }
             | Request::RemoteSignOut
             | Request::RemoteSignOutEverywhere

@@ -1,8 +1,9 @@
-import type { RemoteDevice, RemotePairCode, RemoteState } from "@neuralagent/protocol";
+import type { AuditEntry, RemoteDevice, RemotePairCode, RemoteState } from "@neuralagent/protocol";
 import { Avatar, Button, Callout, ConfirmButton, Field, List, Page, Pill, Row, Spinner, Switch, TextArea, toast } from "@neuralagent/ui";
-import { Globe, KeyRound, LogOut, Monitor, QrCode, ShieldCheck, Smartphone } from "lucide-react";
+import { Bot, Globe, KeyRound, LogOut, Monitor, QrCode, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
+import { ago } from "../lib/time";
 
 /** Remote access: invite-only sign-in, then this computer's devices and "Add phone". */
 export function RemotePage() {
@@ -116,6 +117,7 @@ function Account({ remote }: { remote: RemoteState }) {
 
       {approved && <AddPhone disabled={remote.status !== "online"} />}
       {approved && remote.devices.length > 0 && <Devices devices={remote.devices} />}
+      {approved && <Activity />}
 
       <List label="Security" footer="Compare this code with the one shown when a phone connects for the first time.">
         {remote.fingerprint && <Row Icon={KeyRound} title="This computer's key" value={<span className="font-mono">{remote.fingerprint}</span>} />}
@@ -191,6 +193,58 @@ function Devices({ devices }: { devices: RemoteDevice[] }) {
           trailing={d.this ? undefined : <ConfirmButton label="Remove" size="sm" onConfirm={() => void act({ m: "remote_revoke", p: { device_id: d.id } })} />}
         />
       ))}
+    </List>
+  );
+}
+
+const ACTIONS: Record<string, string> = {
+  session_start: "Started an agent",
+  session_prompt: "Prompted",
+  session_stop: "Stopped",
+  session_restart: "Restarted",
+  session_close: "Closed",
+  session_rename: "Renamed",
+  term_write: "Typed into",
+  layout_set: "Changed the layout",
+  worktree_merge: "Merged",
+  worktree_discard: "Discarded",
+  workspace_add: "Added a workspace",
+  workspace_update: "Changed a workspace",
+  remote_enable: "Disconnected remote",
+};
+
+/** The audit log: what phones, browsers and the orchestrator did here. */
+function Activity() {
+  const client = useClient();
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const load = () => void client.req({ m: "audit_list", p: { limit: 100 } }).then((r) => live && setEntries(r as AuditEntry[]), () => {});
+    load();
+    const t = setInterval(load, 10_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [client]);
+  if (!entries) return null;
+  const shown = all ? entries : entries.slice(0, 8);
+  return (
+    <List
+      label="Activity"
+      footer={entries.length ? "What phones, browsers and Neural did on this computer. Refused actions are listed too." : "Nothing yet. Actions from phones, browsers and Neural show up here."}
+    >
+      {shown.map((a, i) => (
+        <Row
+          key={`${a.at}-${i}`}
+          Icon={a.client === "orchestrator" ? Bot : a.client === "web" ? Globe : Smartphone}
+          title={`${ACTIONS[a.action] ?? a.action.replaceAll("_", " ")}${a.target ? ` · ${a.target}` : ""}`}
+          detail={`${a.client === "orchestrator" ? "Neural" : a.device} · ${ago(a.at)}${a.ok ? "" : ` · refused: ${a.error ?? "error"}`}`}
+          trailing={a.ok ? undefined : <Pill tone="danger">Refused</Pill>}
+        />
+      ))}
+      {entries.length > 8 && !all && <Row title={`Show all ${entries.length}`} onClick={() => setAll(true)} />}
     </List>
   );
 }

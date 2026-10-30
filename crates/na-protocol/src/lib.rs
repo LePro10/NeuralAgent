@@ -863,6 +863,12 @@ pub enum Request {
     RemoteRevoke {
         device_id: Id,
     },
+    /// What phones, browsers and the orchestrator did here, newest first.
+    AuditList {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        limit: Option<u32>,
+    },
     // past agent conversations (Claude Code, Codex) on this computer, newest first
     HistorySearch {
         query: String,
@@ -932,6 +938,27 @@ pub struct HistoryEntry {
     pub prompts: u32,
     #[ts(type = "number")]
     pub updated_at: Millis,
+}
+
+/// One action of a phone, browser or the orchestrator on this computer.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AuditEntry {
+    #[ts(type = "number")]
+    pub at: Millis,
+    pub client: ClientKind,
+    /// Device name ("Pixel 9", "NeuralAgent for Android").
+    pub device: String,
+    /// Request method, e.g. `session_start`.
+    pub action: String,
+    /// Agent ("Japan Map — Claude"), workspace or path it was about.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target: Option<String>,
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
