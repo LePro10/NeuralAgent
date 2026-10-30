@@ -36,6 +36,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm lint:tokens
+      - name: Docs point at things that exist
+        run: pnpm check:docs
       - name: Clean-room name check
         # The pattern is spelled indirectly so that it does not occur in the repo itself.
         run: |

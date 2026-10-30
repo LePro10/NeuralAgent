@@ -4,7 +4,7 @@ import { Button, ConfirmSheet, Empty, IconButton, List, Menu, Page, SwipeRow, cn
 import { Bot, ChevronRight, Download, Ellipsis, ExternalLink, RotateCw, Square, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { frontTabFor } from "../lib/layout";
-import { plainText, shortAgo, useNow } from "../lib/agentui";
+import { agentSays, shortAgo, useNow } from "../lib/agentui";
 import { STATUS, activityOf } from "../lib/status";
 import { useCatalogSheet, useClient, useDaemon, useUi } from "../lib/store";
 import { EngineTile } from "./EngineTile";
@@ -149,7 +149,8 @@ function Summary({ counts }: { counts: { waiting: number; working: number; done:
 
 function AgentRow({ s, engine, now, onOpen, menu }: { s: Session; engine: string; now: number; onOpen: () => void; menu?: MenuEntry[] }) {
   const st = STATUS[s.status];
-  const said = plainText(s.last_message ?? s.last_line ?? s.prompt ?? "");
+  const notices = useDaemon((c) => c.state?.orchestrator?.messages);
+  const said = agentSays(s, notices);
   const usage = s.usage
     ? [s.usage.cost_usd != null ? money(s.usage.cost_usd) : null, `${compact(totalTokens(s.usage.tokens))} tokens`].filter(Boolean).join(" · ")
     : "";

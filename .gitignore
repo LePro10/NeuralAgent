@@ -33,7 +33,9 @@ local.properties
 .vscode/*
 !.vscode/extensions.json
 *.log
-.claude/
+# Local Claude Code state stays out; project skills are shared.
+.claude/*
+!.claude/skills/
 
 # Release sidecar, staged by scripts/stage-daemon.mjs
 apps/desktop/src-tauri/binaries/

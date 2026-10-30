@@ -75,15 +75,20 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
   // Stay at the bottom while new things arrive, unless the reader scrolled up.
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (stick.current) el.scrollTop = el.scrollHeight;
+    setAway(farFromEnd(el));
   }, [conv.messages, conv.prompt, conv.meta.activity, working]);
 
   // The keyboard or a growing composer shrinks the scroller: keep the newest line in view.
   useEffect(() => {
     const el = scroller.current;
     if (!el || typeof ResizeObserver === "undefined") return;
+    // No scroll event fires when the content stops overflowing (the permission card closed):
+    // measure again, or "Scroll to latest" stays up at the bottom.
     const ro = new ResizeObserver(() => {
       if (stick.current) el.scrollTop = el.scrollHeight;
+      setAway(farFromEnd(el));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -92,7 +97,7 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const near = !farFromEnd(el);
     stick.current = near;
     setAway(!near);
     if (el.scrollTop < 200 && conv.more) void loadOlder();
@@ -240,3 +245,6 @@ function Activity({ text }: { text?: string | null }) {
     </div>
   );
 }
+
+/** More than a few lines below the visible part. */
+const farFromEnd = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight >= 80;

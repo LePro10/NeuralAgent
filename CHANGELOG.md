@@ -58,6 +58,17 @@ The phone round: the Android app and the phone layout should feel made for phone
 - Photos uploaded from a phone to the Claude view no longer fail.
 - The effort level can be chosen in the Claude view.
 - Sheets on phones are no longer cut off at the top when the keyboard opens.
+- The Agents tab says why an agent waits ("Wants to use Bash") instead of showing the raw
+  terminal menu.
+- The Claude view shows the effort the CLI really uses from the start, not a guessed "High".
+- "Scroll to latest" no longer stays up after the permission card closes.
+- The Neural feed only marks an event as waiting while the agent still waits.
+- Switching terminals often in Safari no longer leaves terminals blank.
+- The desktop sidebar no longer moves its icons when it widens on hover, so a click lands
+  where you aimed; long workspace names end in "…".
+- The update dialog shows what changes right under its heading.
+- Smaller layout fixes: the Neural agent chips line up with the feed, list headers align with
+  their buttons, and the shell tile in the new-agent sheet reads "Shell".
 
 ## [0.2.1] - 2026-10-30
 

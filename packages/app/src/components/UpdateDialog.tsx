@@ -83,6 +83,8 @@ export function UpdateDialog() {
                 : "Release notes for the version you are running."}
         </p>
 
+        {/* What changes comes right under its heading line; the reassurance follows. */}
+        {!(sameVersion && notes?.length === 0) && <ReleaseNotes entries={notes} heading={!!offer || (notes?.length ?? 0) > 1} />}
         {offer && !web && (
           <Callout title="Your agents keep running">
             Installing restarts only the app window (a few seconds). The background service keeps every agent and terminal running and
@@ -94,7 +96,6 @@ export function UpdateDialog() {
             Reloading loads the new version of this page. Your agents run on your computer and keep running.
           </Callout>
         )}
-        {!(sameVersion && notes?.length === 0) && <ReleaseNotes entries={notes} heading={!!offer || (notes?.length ?? 0) > 1} />}
 
         {!offer && serviceBehind && svc && (
           <Callout

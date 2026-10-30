@@ -56,7 +56,7 @@ export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspa
               <EngineTile engine={p.engine} size="lg" />
               <span className="flex w-full min-w-0 flex-col">
                 <span className="truncate text-headline text-bright">{busy === p.id ? "Starting…" : p.name}</span>
-                <span className="truncate text-footnote text-dim">{p.engine === "shell" ? "Terminal" : p.command}</span>
+                <span className="truncate text-footnote text-dim">{p.engine === "shell" ? "Shell" : p.command}</span>
               </span>
             </button>
           ))}

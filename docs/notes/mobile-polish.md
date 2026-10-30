@@ -56,6 +56,6 @@ User screenshots (Android, Capacitor shell that loads the hosted web remote):
 - Neural page call button: the phone icon is off-centre inside its round button (older screenshot
   09:21) — pages agent must fix and check icon centring in all round icon buttons.
 - Final step before shipping (owner asked): a docs/workflow agent — move the useful test drivers
-  from /tmp/na-drive and other /tmp kits into the repo (scripts/ui/ …), tidy STATUS/HANDOFF/PLAN,
+  from the /tmp kits into the repo (done 2026-10-30: `scripts/dev/`), tidy STATUS/HANDOFF/PLAN,
   generate docs/CODEMAP.md, write the per-change workflow (CHANGELOG Unreleased, HANDOFF,
   DECISIONS, screenshot verification) into AGENTS.md, check all doc pointers.

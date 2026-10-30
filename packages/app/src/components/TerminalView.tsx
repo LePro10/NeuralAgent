@@ -164,6 +164,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     };
 
     let detach = () => {};
+    let glCanvas: HTMLCanvasElement | undefined;
     void loadFont().then(() => {
       if (disposed) return;
       t.open(el);
@@ -177,7 +178,9 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
         try {
           const gl = new WebglAddon();
           gl.onContextLoss(() => gl.dispose());
+          const before = new Set(el.querySelectorAll("canvas"));
           t.loadAddon(gl);
+          glCanvas = [...el.querySelectorAll("canvas")].find((c) => !before.has(c));
         } catch (e) {
           console.warn("WebGL renderer unavailable, using DOM renderer", e);
         }
@@ -329,6 +332,9 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       offShow();
       window.removeEventListener(THEME_EVENT, retheme);
       detach();
+      // The WebGL addon never releases its context; browsers cap them (WebKit at a handful), so
+      // navigating between workspaces would make the newest terminal lose its renderer.
+      (glCanvas?.getContext("webgl2") as WebGL2RenderingContext | null | undefined)?.getExtension("WEBGL_lose_context")?.loseContext();
       t.dispose();
       term.current = null;
     };

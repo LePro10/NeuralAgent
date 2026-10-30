@@ -24,12 +24,12 @@ SharedPreferences), used by `CallService` and `NativePlugin.callActive/callRoute
 
 ## Verified
 cargo test (daemon, protocol), pnpm typecheck/test/lint:tokens, e2e-remote, Chromium drive
-(`/tmp/na-drive/host-remote.mjs`, `ws-remote.mjs`): update toast, host sections, install progress to
+(`host-remote.mjs`, `ws-remote.mjs` in a former /tmp kit, not kept; today use `scripts/dev/web-remote.mjs`): update toast, host sections, install progress to
 "up to date", model rows, "app closed" notice, folder sheet. WebKit playwright hung in this
 environment (page load stalls, also for the old web-remote.mjs), so Chromium was used.
 
 ## Not verified / needs the user
-- Real update install end to end through `/tmp/na-upd` and the auto-reload after the host restarts
+- Real update install end to end (update test: `scripts/dev/README.md`) and the auto-reload after the host restarts
   (reload code path is simple: hello with a different daemon version -> `location.reload()`).
 - Android earpiece/proximity on a real phone; Bluetooth headset; iPhone PWA (cannot choose output).
 

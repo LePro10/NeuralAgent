@@ -114,8 +114,9 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
   const fade = 'whitespace-nowrap transition-opacity duration-200';
   const show = { opacity: open ? 1 : 0, transitionDelay: open ? '60ms' : '0ms' };
   return (
-    // Collapsed, the island hugs its icons and floats at the middle of the edge; opened it grows
-    // up and down to the full height (both ways at once, from the centre).
+    // The island always spans the full height, collapsed or open, so that peeking only widens it:
+    // an icon never moves away from under the pointer (a centred rail that grew up and down made
+    // a click after the peek delay land on a different item).
     <div ref={frame} className={cn('pointer-events-none absolute inset-y-0 left-0 z-[var(--z-sidebar)] flex items-center', className)} style={{ padding: INSET }}>
       <motion.nav
         aria-label="Main"
@@ -130,7 +131,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
         className={cn('glass rim pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
           !open && '!border-[rgb(var(--fg-rgb)/.05)] !bg-[color-mix(in_srgb,var(--color-chrome)_24%,transparent)]')}
         initial={false}
-        animate={{ width: open ? OPEN : RAIL, height: open && full ? full : 'auto' }}
+        animate={{ width: open ? OPEN : RAIL, height: full || 'auto' }}
         // A peeking island floats over the page; a pinned one sits in its place.
         style={{ boxShadow: peek && !pinned ? 'var(--shadow-dialog), inset 0 1px 0 var(--glass-hi)' : open ? undefined : 'inset 0 1px 0 rgb(255 255 255 / .04)' }}
         transition={SPRING.sheet}
@@ -182,7 +183,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
                     <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />
                     {it.activity ? <ActivityMark activity={it.activity} edge="ring-chrome" size={7} /> : it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-sys-red ring-[1.5px] ring-chrome" />}
                   </span>
-                  <span className={cn('relative', fade)} style={show}>{it.label}</span>
+                  <span className={cn('relative min-w-0 truncate', fade)} style={show}>{it.label}</span>
                   {shortcuts && i < 9 && <kbd className={cn('relative ml-auto font-mono text-tiny text-faint opacity-0 transition-opacity', open && 'group-hover:opacity-100')}>{MOD_KEY}{i + 1}</kbd>}
                 </button>
               </li>

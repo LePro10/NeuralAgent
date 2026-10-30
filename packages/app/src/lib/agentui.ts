@@ -44,6 +44,30 @@ export function plainText(s: string | null | undefined): string {
     .trim();
 }
 
+/** Neural's notices about agents: "<label> finished: <text>" (see the daemon's orch::watch). */
+export const NOTICE = /^([\s\S]*?) (finished|needs input|stopped with an error)(?:: ([\s\S]*))?$/;
+
+/** A terminal menu line ("❯ 1. Yes", "› 2. No") says nothing on its own. */
+const MENU_LINE = /^\s*[❯›>]?\s*\d+[.)]\s/;
+
+/**
+ * What a row says about an agent: why it waits (from Neural's notice), else its last words,
+ * its last screen line (not a menu entry) or its prompt.
+ */
+export function agentSays(s: { id: string; status: string; last_message?: string; last_line?: string; prompt?: string }, notices: { text: string; session_id?: string; role: string }[] = []): string {
+  if (s.status === "waiting") {
+    for (let i = notices.length - 1; i >= 0; i--) {
+      const m = notices[i]!;
+      if (m.session_id !== s.id || m.role !== "notice") continue;
+      const [, , what, said] = NOTICE.exec(m.text) ?? [];
+      if (what === "needs input" && said) return plainText(said);
+      break;
+    }
+  }
+  const line = s.last_line && !MENU_LINE.test(s.last_line) ? s.last_line : undefined;
+  return plainText(s.last_message ?? line ?? s.prompt ?? "");
+}
+
 /** Short relative time for rows: "now", "4m", "2h", "Yesterday", "Mon", "12 Oct". */
 export function shortAgo(ms: number, now = Date.now()): string {
   const s = Math.max(0, (now - ms) / 1000);

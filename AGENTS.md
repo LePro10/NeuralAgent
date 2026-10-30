@@ -1,14 +1,15 @@
 # AGENTS.md: start here
 
-The single entry point for anyone (human or agent) working in this repo. Read this first, then
-`docs/HANDOFF.md` for the current state. `CLAUDE.md` only points here.
+The single entry point for anyone (human or agent) working in this repo. Read this, then
+[`docs/HANDOFF.md`](docs/HANDOFF.md) (current state), then look files up in
+[`docs/CODEMAP.md`](docs/CODEMAP.md) instead of scanning the tree. `CLAUDE.md` only points here.
 
 ## The project
 NeuralAgent is a desktop app for running many AI coding agents side by side (Claude Code, Codex,
 Gemini and more in a grid of persistent terminals). It has a dashboard, local voice control, an
-orchestrator called **Neural**, a Claude view over the real CLI, and a phone remote (web +
-Android) that reaches your computer end-to-end encrypted through a relay at
-`agent.neuralhub.dev`. Closed source, © Leandro Probst. Product site: `apps/web`.
+orchestrator called **Neural**, a Claude view over the real CLI, swarms, and a phone remote (web +
+Android) that reaches the computer end-to-end encrypted through a relay at
+`agent.neuralhub.dev`. Closed source, © Leandro Probst. The owner works only through AI agents.
 
 ## Repo map
 | Path | What |
@@ -17,24 +18,43 @@ Android) that reaches your computer end-to-end encrypted through a relay at
 | `crates/na-protocol` | Shared message types (generates `packages/protocol/src/gen/*.ts` on `cargo test`). |
 | `crates/na-relay` | Relay on agent.neuralhub.dev: accounts, sealed tunnel, push, releases/updates, serves `apps/web/dist`. |
 | `crates/na-crypto`, `crates/na-voice` | E2E crypto; speech (STT/TTS/wake word). |
-| `apps/desktop` | Tauri 2 app (`src-tauri/`: updater, daemon start/upgrade; `src/main.tsx`: platform glue). |
+| `apps/desktop` | Tauri 2 app (`src-tauri/`: updater, daemon start/upgrade; `src/main.tsx`: platform glue; `src/dev-browser.tsx`: the UI in a normal browser). |
 | `apps/web` | Website (landing, `/download`, `/changelog`, legal), `/admin/`, `/app/` web remote (`src/remote/`). |
 | `apps/android` | Capacitor shell that loads `/app/` from the relay, plus native code (push, widget, calls). |
 | `packages/app` | The shared React app (desktop, web remote, Android). Platform abstraction in `src/lib/platform.ts`. |
 | `packages/ui` | Design system `@neuralagent/ui`: components and tokens. |
 | `packages/protocol`, `packages/remote`, `packages/crypto` | TS client for the daemon; remote account/relay link/transport; crypto. |
-| `scripts/` | Release (`set-version`, `changelog`, `stage-daemon`, `release-collect`, `release-publish`), token lint, E2E and smoke tests. |
+| `scripts/` | Release (`set-version`, `changelog`, `stage-daemon`, `release-*`), token lint, docs guard, codemap, CI E2E/smoke tests. |
+| `scripts/dev/` | Interactive test tools: test daemon + UI in a browser, screenshots, web remote, Neural/call/swarm kits. [README](scripts/dev/README.md). |
 | `deploy/relay` | Relay Dockerfile and compose. |
-| `research-local/` | Git-ignored scratch: briefs, screenshots, reports, tools. Never commit it. |
+| `.claude/skills/` | Project skills: `release`, `deploy-web`, `ui-check`. |
+| `research-local/` | Git-ignored scratch: briefs, screenshots, reports. Never commit it. |
 
 ## Where state and docs live
 Index: [`docs/README.md`](docs/README.md). Do not move these files.
-- `docs/HANDOFF.md`: current state, next steps, how to run things, test kits. Keep it current.
-- `docs/STATUS.md`: detailed progress per milestone. `docs/PLAN.md`: milestones (M0–M10).
-- `docs/DECISIONS.md`: numbered decisions (D1…); add one for every lasting design choice.
-- `docs/notes/*.md`: design notes per feature round. `docs/brand/`: logo and icon sources.
+- `docs/HANDOFF.md`: current state, next steps, open issues. Short; rewrite it at session end.
+- `docs/STATUS.md`: milestone table, the owner's checklist, budget. `docs/PLAN.md`: milestones (current: M10).
+- `docs/DECISIONS.md`: numbered decisions (D1…). `docs/notes/*.md`: design notes per feature round.
+- `docs/CODEMAP.md`: generated file map (`pnpm codemap`). `docs/archive/`: old state, history only.
+- `docs/RELEASING.md` + `CHANGELOG.md`: release runbook and user-facing notes.
 - `docs/ADMIN-HANDBUCH.md`: operator handbook (German).
-- `docs/RELEASING.md`: the release runbook. `CHANGELOG.md`: user-facing release notes.
+
+## Per-change routine
+1. **Find**: grep `docs/CODEMAP.md` for the area, read only the files you need (offset/limit for big ones).
+2. **Work**: new logic in new files; edits to shared files (`packages/app/src/App.tsx`,
+   `apps/web/src/remote/Remote.tsx`, sidebar/tab bar) stay small.
+3. **Test**: `pnpm typecheck && pnpm test && pnpm lint:tokens`, `cargo test --workspace` when Rust
+   or protocol changed. Add a test for new logic. Filter long output (`| tail -40`).
+4. **Look at it** (UI changes): `node scripts/dev/env.mjs up --seed`, then
+   `node scripts/dev/shot.mjs pages --montage` (phone + desk, light + dark), review against
+   [`docs/notes/design-system.md`](docs/notes/design-system.md) → "Checklist for a page",
+   `env.mjs down`. Skill `ui-check` does this.
+5. **CHANGELOG**: one line in user words under `## [Unreleased]` in `CHANGELOG.md` (New /
+   Improved / Fixed) for every user-visible change.
+6. **DECISIONS**: an entry `## Dnn — …` for every lasting design choice (why, alternatives).
+7. **Notes**: a feature round gets or extends a `docs/notes/<topic>.md` (link it in `docs/README.md`).
+8. **Session end**: rewrite `docs/HANDOFF.md` (done / next / open issues); tick STATUS items;
+   `pnpm codemap` if files were added or renamed; `pnpm check:docs` must pass.
 
 ## Run and test
 Requirements: Rust stable, Node 22+, pnpm 12.
@@ -42,59 +62,63 @@ Requirements: Rust stable, Node 22+, pnpm 12.
 pnpm install
 pnpm dev                      # desktop app (Tauri); set NEURALAGENT_HOME=/tmp/na-dev for test state
 pnpm dev:web                  # website + web remote (http://localhost:5173/app)
-pnpm typecheck && pnpm test && pnpm lint:tokens
+pnpm typecheck && pnpm test && pnpm lint:tokens && pnpm check:docs
 cargo test --workspace        # also regenerates the protocol TS types
 pnpm --filter @neuralagent/web build
 ```
-- Browser UI against a test daemon: `apps/desktop/src/dev-browser.tsx` (`dev.html#port=…&token=…`
-  from `$NEURALAGENT_HOME/daemon.json`; its header lists fake-update params). Screenshots with
-  playwright-core from a scratch folder (`/tmp/na-drive`), not a repo dependency.
-- More recipes (remote E2E, Android emulator, voice, swarm, Neural): `docs/HANDOFF.md` → "How to run".
+Everything interactive (test daemon, screenshots, web remote, push, Neural, calls, swarm,
+Android WebView, update test): [`scripts/dev/README.md`](scripts/dev/README.md). Android emulator
+recipe: `docs/HANDOFF.md` → "How to run".
 
 ## Conventions
-- UI: use `@neuralagent/ui` components and tokens. Before building or changing a screen, read
-  [`docs/notes/design-system.md`](docs/notes/design-system.md): tokens, phone navigation, which
-  overlay to use, activity marks, and the screenshot checklist. `pnpm lint:tokens` rejects raw hex
-  colours and arbitrary Tailwind values.
-- New logic goes in new files. Edits to shared files (`packages/app/src/App.tsx`,
-  `apps/web/src/remote/Remote.tsx`, sidebar/tab bar) stay small. Re-read a file right before
-  editing it, because other agents may be working in parallel. Never revert someone else's change.
-- Code comments and docs are in English (except `ADMIN-HANDBUCH.md`). User-facing text is plain,
-  short English.
-- Protocol changes: edit `crates/na-protocol`, then run `cargo test` to regenerate the TS types.
-- Every user-visible change gets a line under `## [Unreleased]` in `CHANGELOG.md`.
+- **Language**: code, comments, commits and docs in English (except `docs/ADMIN-HANDBUCH.md`).
+  User-facing text is plain, short English. **Answers to the owner: short, simple German.**
+- UI: `@neuralagent/ui` components and tokens only; read
+  [`docs/notes/design-system.md`](docs/notes/design-system.md) before building a screen.
+  `pnpm lint:tokens` rejects raw hex colours and arbitrary Tailwind values.
+- Protocol changes: edit `crates/na-protocol`, then `cargo test` regenerates the TS types.
 - `cargo fmt` for Rust (`rustfmt.toml`).
-- Do not commit unless asked. The user commits.
+- Do not commit unless asked. The owner decides when to commit.
+
+## Several agents at once
+- **Ownership**: the brief says which paths you own. Edit only those; anything else, report it.
+  Typical split: app code (`packages/*`, `apps/*`, `crates/*`) vs docs/workflow (`AGENTS.md`,
+  `docs/**`, `.claude/**`, `scripts/`). `docs/notes/*` belongs to the feature agent that wrote it.
+- **Re-read right before every edit**: another agent may have changed the file since you read it.
+  Edit with exact, small replacements, never by rewriting a whole shared file.
+- **Never revert, reformat or "fix" someone else's change**, even if it looks wrong: report it.
+- **Shared resources**: pick your own `NEURALAGENT_HOME`, Vite port and relay port (others may
+  run `/tmp/na-ui` on :1451 or a relay on :8093–:8098). Stop only PIDs you started.
+- **At most 2–3 parallel subagents**, never two on the same files.
+- **Briefing a subagent**: goal, the exact files/paths it owns, what is already known or ruled
+  out, how to verify, and "answer in ≤ 40 lines; details into `research-local/<file>`". It knows
+  nothing else. Cheap model (Haiku) for search/summaries, Sonnet for mechanical work.
 
 ## Safety
-- **Never restart, kill or upgrade the user's installed NeuralAgent app or daemon.** Agent
-  sessions often run inside it. Use your own daemon with `NEURALAGENT_HOME=/tmp/<something>` and
-  stop only processes you started.
-- Do not deploy the relay or publish a release unless the user asks.
-- Do not send push notifications, emails or social posts to real accounts. Write drafts instead.
+- **Never restart, kill or upgrade the owner's installed NeuralAgent app or daemon.** Agent
+  sessions usually run inside it, so you would kill yourself mid-task. Use your own daemon with
+  `NEURALAGENT_HOME=/tmp/<something>` (the `scripts/dev` tools refuse the real data dir).
+- If the owner asks you to install a build on their Mac: `scripts/dev/install-local.sh`, started
+  detached (`nohup … &`) as the **last** action of the turn, after the final answer.
+- Careful with `ps`: full command lines and environments can contain tokens. Use
+  `ps -o pid,comm` or filter, and never paste daemon tokens, URLs with `token=` or env dumps.
+- Do not deploy the relay or publish a release unless asked. Deploy steps: skill `deploy-web`
+  ([`docs/RELEASING.md`](docs/RELEASING.md) → "Deploying the relay and website").
+- No push notifications, emails or social posts to real accounts. Write drafts instead.
 
 ## Secrets
 - Never write passwords, API keys or tokens into commands, files, logs or answers. Never print
-  `/etc/neuralagent/relay.env` or a daemon token.
+  `/etc/neuralagent/relay.env`, `daemon.json` or `remote-credentials.json`.
 - Where they live: macOS keychain (`neuralagent-llm`, `neuralagent-android-keystore`, …),
-  `~/.neuralagent-secrets/` (Android keystore), GitHub Actions secrets (signing keys, upload
-  token), `/etc/neuralagent/` on the relay host. Read them with
-  `"$(security find-generic-password -s <name> -w)"` inside the command, never echo them.
+  `~/.neuralagent-secrets/`, GitHub Actions secrets (signing keys, upload token),
+  `/etc/neuralagent/` on the relay host. Use them inline:
+  `"$(security find-generic-password -s <name> -w)"`, never echo them.
 - `.gitignore` excludes `.env*`, keys, keystores, `google-services.json` and `research-local/`.
 - If someone pastes a secret in chat, tell them to rotate it.
 
-## Release checklist
-Full runbook: [`docs/RELEASING.md`](docs/RELEASING.md). Agents can use the `release` skill
-(`.claude/skills/release/SKILL.md`).
-1. **Changelog**: write the changes since the last tag (`git log vX.Y.Z..HEAD`) under
-   `## [Unreleased]` in `CHANGELOG.md`, in user words, grouped New / Improved / Fixed.
-2. **Version**: `node scripts/set-version.mjs X.Y.Z`. This turns Unreleased into
-   `## [X.Y.Z] - <today>` and refuses to run without notes. Check with
-   `node scripts/changelog.mjs check X.Y.Z`.
-3. **Verify**: typecheck, test, lint:tokens, `cargo test --workspace`, web build.
-4. **Tag**: commit "Release X.Y.Z", `git tag vX.Y.Z`, `git push && git push origin vX.Y.Z`.
-5. **CI**: `.github/workflows/release.yml` builds macOS/Windows/Linux/Android, then publishes on
-   agent.neuralhub.dev with the changelog section as the notes.
-6. **Relay/website**: deploy by hand (rsync + docker build on the host; see RELEASING.md). This
-   ships the new `/changelog` and `/app/`; open web remotes then offer "Reload to update".
-7. Check `https://agent.neuralhub.dev/api/releases/latest` and an update from the previous version.
+## Releases
+Runbook: [`docs/RELEASING.md`](docs/RELEASING.md); skill `release`
+([`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md)). In short: notes under
+`[Unreleased]` → `node scripts/set-version.mjs X.Y.Z` → verify → commit, tag `vX.Y.Z`, push → CI
+publishes → deploy relay/website (skill `deploy-web`) → check `/api/releases/latest`.
+`set-version` leaves a new empty `## [Unreleased]` on top; keep it (`pnpm check:docs` fails without it).

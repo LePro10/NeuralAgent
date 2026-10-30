@@ -29,7 +29,7 @@ export function List({ children, label, action, footer, className }: { children:
   return (
     <div className={className}>
       {(label || action) && (
-        <div className="mb-1.5 flex min-h-6 items-end justify-between px-4">
+        <div className="mb-1.5 flex min-h-6 items-center justify-between gap-3 px-4">
           {label && <h3 className="text-footnote text-dim uppercase tracking-[.04em]">{label}</h3>}
           {action}
         </div>

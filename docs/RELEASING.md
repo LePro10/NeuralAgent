@@ -67,8 +67,8 @@ the version's section exists but is empty.
 
 ## Deploying the relay and website (by hand)
 CI pushes the relay image to GHCR, but the relay host cannot pull it yet (no read token). So deploy
-by hand from the repo root, after `pnpm --filter @neuralagent/web build` (the image includes
-`apps/web/dist`):
+by hand from the repo root. The Dockerfile builds `apps/web` inside the image; build it locally
+first anyway as a check. Agents: skill `deploy-web` (checks, rollback tag, verification).
 ```
 git ls-files -z | rsync -a --from0 --files-from=- ./ root@192.168.30.96:/opt/neuralagent/src/
 ssh root@192.168.30.96 'cd /opt/neuralagent/src && docker build -f deploy/relay/Dockerfile -t ghcr.io/lepro10/neuralagent-relay:latest . && cd /opt/neuralagent && docker compose up -d'
@@ -88,10 +88,11 @@ nothing beyond 0.2.0). The user's Mac runs a locally built 0.2.1.
   ```
   pnpm --filter @neuralagent/desktop tauri build --target aarch64-apple-darwin --bundles app --config <no-updater conf>
   ```
-  Then install with a script like `/tmp/na-install.sh` (log `/tmp/na-install.log`). It quits the
-  app, stops the daemon, replaces `/Applications/NeuralAgent.app`, unregisters the build copies
-  from Launch Services and starts the app again. **Only the user starts this.** An agent session
-  running inside NeuralAgent would kill itself.
+  Then install with `scripts/dev/install-local.sh <path to NeuralAgent.app>` (log
+  `/tmp/na-install.log`). It quits the app, stops the daemon, replaces
+  `/Applications/NeuralAgent.app`, unregisters the build copies from Launch Services and starts the
+  app again. **Only when the user asks.** An agent session running inside NeuralAgent dies with
+  it: start it detached (`nohup … >/dev/null 2>&1 &`) as the very last action of the turn.
 - **Do not** upload a hand-built release to the relay. Updater signatures and the APK keystore
   belong to CI.
 - **When billing works again**: re-run the Release workflow for the existing tag (GitHub →
@@ -104,7 +105,8 @@ nothing beyond 0.2.0). The user's Mac runs a locally built 0.2.1.
 - UI without a release: `apps/desktop/src/dev-browser.tsx` fakes updates through hash params,
   for example `#port=…&token=…&update=0.3.0&service=0.2.0&serviceError=1`, or `&web=1` for the web
   remote. Its header lists all params.
-- Real N-1 → N update: the kit in `/tmp/na-upd` (`ctl.mjs start|status|stop`, `test.conf.json`
-  allows http). `NEURALAGENT_UPDATE_URL` points the app at a local relay. Run the apps from
+- Real N-1 → N update: `scripts/dev/README.md` → "Update test" (`scripts/dev/update/test.conf.json`
+  allows http, `daemon.mjs tick` proves sessions survive). `NEURALAGENT_UPDATE_URL` points the
+  app at a local relay. Run the apps from
   `/private/tmp/…`, because the updater refuses the `/tmp` symlink. Always use a test
   `NEURALAGENT_HOME`.

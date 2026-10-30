@@ -177,7 +177,7 @@ Hinweis zu Begriffen, die mehrfach vorkommen: **Workspace** = ein Projektordner 
 
 ### 2.17 Ende-zu-Ende-Verschlüsselung (E2E)
 **Was:** Zwischen Rechner und Handy/Browser sind Inhalte verschlüsselt, der Relay sieht nur Chiffre (X25519 Schlüsselaustausch, AES-256-GCM). Der QR-Code enthält den Fingerabdruck des Rechner-Schlüssels, so erkennt das Handy einen vom Relay untergeschobenen Schlüssel (D28).
-**Ehrliche Grenze:** Schützt vor passivem Mitlesen, nicht vor einem übernommenen Server, der die Web-App ausliefert. Ein Handy, das nur per Login (ohne QR) verbunden wurde, vertraut dem Schlüsselverzeichnis des Relays beim ersten Mal; der Fingerabdruck wird auf beiden Seiten angezeigt zum Vergleichen. Browser-Schlüssel liegen in IndexedDB (nicht auslesbar), nur als Notlösung als Bytes in localStorage (D32). Ein eigenes Dokument `docs/SPEC.md`, wie im Auftrag verlangt, existiert **nicht**.
+**Ehrliche Grenze:** Schützt vor passivem Mitlesen, nicht vor einem übernommenen Server, der die Web-App ausliefert. Ein Handy, das nur per Login (ohne QR) verbunden wurde, vertraut dem Schlüsselverzeichnis des Relays beim ersten Mal; der Fingerabdruck wird auf beiden Seiten angezeigt zum Vergleichen. Browser-Schlüssel liegen in IndexedDB (nicht auslesbar), nur als Notlösung als Bytes in localStorage (D32). Ein eigenes Dokument docs/SPEC.md, wie im Auftrag verlangt, existiert **nicht**.
 **Beispiele:**
 - Auch wenn jemand die Server-Datenbank kopiert, findet er keine Terminal-Inhalte.
 - Du vergleichst bei einem neuen Browser kurz den Fingerabdruck.
@@ -381,7 +381,7 @@ Dies ist der wichtigste Abschnitt. Er vergleicht den Auftrag mit dem, was gebaut
 | Voice-to-Text am Handy (zwei Wege einstellbar) | In den Dokumenten nicht ausdrücklich belegt | Der Anruf mit Neural ist belegt |
 | Pinch-Zoom der Terminal-Schrift, Pull-to-Refresh, Swipe zwischen Agents | In den Dokumenten nicht belegt (Chips zum Wechseln der Panes sind belegt) | Nicht behaupten |
 | Wortfehlerraten-Benchmark mit Moonshine u. a. | Parakeet, Nemotron und Whisper gemessen; Moonshine nicht gemessen | D9, D19 |
-| `docs/SPEC.md` mit ehrlicher E2E-Grenze | Existiert nicht; die Grenze steht in DECISIONS (D28) und in diesem Handbuch | Nachholen, falls gewünscht |
+| docs/SPEC.md mit ehrlicher E2E-Grenze | Existiert nicht; die Grenze steht in DECISIONS (D28) und in diesem Handbuch | Nachholen, falls gewünscht |
 | LAN-Direktverbindung ohne Relay | In den Dokumenten nicht erwähnt | Nicht umgesetzt |
 | Installations-/README-Pflege, Abschlussbericht | M10 offen | HANDOFF |
 | Datenschutz, Impressum, Nutzungsbedingungen | Entwürfe unter `/privacy`, `/imprint`, `/terms` (Quelle `apps/web/src/legal.tsx`); deine Angaben fehlen noch und eine rechtliche Prüfung | Checkliste |

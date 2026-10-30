@@ -4,6 +4,9 @@ Architecture, interfaces, milestones and done-criteria. Product behaviour: the b
 `research-local/PROMPT.md` (not in git; there is no `SPEC.md`); decisions and benchmarks live in [`DECISIONS.md`](DECISIONS.md); progress in
 [`STATUS.md`](STATUS.md).
 
+**Current milestone: M10** (own ideas, polish, final report). M0–M9 are done; state and next
+steps in [`HANDOFF.md`](HANDOFF.md).
+
 ## 1. Components
 
 ```
@@ -61,7 +64,9 @@ packages/
   app/                     shared React application (screens, stores, layouts)
   protocol/                generated TS types + client (local ws / relay+E2E transports)
   crypto/                  WebCrypto implementation of na-crypto (same test vectors)
-docs/                      SPEC, PLAN, DECISIONS, STATUS, HANDOFF, brand/
+docs/                      PLAN, DECISIONS, STATUS, HANDOFF, CODEMAP (generated), notes/, archive/, brand/
+scripts/                   build/release/CI scripts; dev/ = interactive test tools (README there)
+.claude/skills/            project skills for agents (release, deploy-web, ui-check)
 .github/workflows/         CI: test, build desktop (mac/win/linux), APK, relay image, secret scan
 deploy/                    docker-compose + pull-deploy units for the relay host
 ```
@@ -148,7 +153,7 @@ feature matrix → polish → update STATUS → commit + push.
 | M7 | Orchestrator: chat + live call (local STT/TTS, barge-in, AEC), lock-screen call on Android | end-to-end test by text and by voice passes, < 1 s latency logged |
 | M8 | Swarm | team of 4 hands off tasks, messages visible on desktop + phone |
 | M9 | Themes, auto-update, CI release builds, releases on agent.neuralhub.dev | update from N-1 to N keeps agents running |
-| M10 | Own ideas, polish, final report | everything in "Fertig, wenn" ticked |
+| M10 (current) | Own ideas, polish, final report | everything in "Fertig, wenn" ticked |
 
 ## 5. Global done-criteria (from the brief)
 
@@ -161,4 +166,4 @@ feature matrix → polish → update STATUS → commit + push.
   appears on desktop and in the APK, output + done status + push come back.
 * Account flow fully tested with a second user; isolation proven by tests.
 * STT (system-wide + wake word) and TTS run locally.
-* README, SPEC, PLAN, DECISIONS, STATUS current; everything pushed.
+* README, PLAN, DECISIONS, STATUS current (the brief replaces a SPEC); everything pushed.

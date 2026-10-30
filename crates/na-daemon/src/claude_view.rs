@@ -924,9 +924,11 @@ impl Core {
 
     /// Claude Code hands its statusline command the live effort (`effort.level`): the surest
     /// source, since the "◐ medium · /effort" hint on the screen is only shown now and then.
+    /// Kept even before anyone opened the Claude view (the statusline runs right at start, and
+    /// the settings default can differ from what the CLI really uses).
     pub fn cv_status_effort(&self, sid: &Id, level: &str) {
         let Some(level) = EFFORTS.iter().find(|e| **e == level).copied() else { return };
-        let Some(tail) = self.cv.tails.lock().get(sid).cloned() else { return };
+        let tail = self.cv_tail(sid);
         let mut st = tail.st.lock();
         if st.see_effort(Some(level)) {
             let _ = tail.tx.send(CvEvent::Meta { meta: st.meta.clone() });
@@ -1377,6 +1379,20 @@ mod tests {
         assert!(store_upload(&root, "s1", "x.png", "!!!").is_err());
         assert!(store_upload(&root, "s1", "x.png", "").is_err());
         assert!(store_upload(&root, "s1", "x.png", &b64.encode(vec![0u8; MAX_UPLOAD + 1])).is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn statusline_effort_is_kept_before_the_view_opens() {
+        let root = std::env::temp_dir().join(format!("na-cv-test-{}-{}", std::process::id(), rand::random::<u32>()));
+        std::fs::create_dir_all(&root).unwrap();
+        let env = crate::env::LoginEnv { vars: Default::default(), shell: "/bin/sh".into(), home: root.clone() };
+        let core = Core::load(crate::paths::Paths { root: root.clone() }, env);
+        let sid: Id = "s1".into();
+        core.cv_status_effort(&sid, "medium");
+        assert_eq!(core.cv_tail(&sid).st.lock().meta.effort.as_deref(), Some("medium"));
+        core.cv_status_effort(&sid, "bogus");
+        assert_eq!(core.cv_tail(&sid).st.lock().meta.effort.as_deref(), Some("medium"));
         let _ = std::fs::remove_dir_all(root);
     }
 }

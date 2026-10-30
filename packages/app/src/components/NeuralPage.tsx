@@ -27,7 +27,7 @@ import { Activity as ActivityIcon, Bell, Check, ChevronRight, Ellipsis, Eraser, 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { startCall } from "../lib/call";
 import { frontTabFor } from "../lib/layout";
-import { byDay, clock, plainText, shortAgo, useNow } from "../lib/agentui";
+import { NOTICE, byDay, clock, plainText, shortAgo, useNow } from "../lib/agentui";
 import { activityOf } from "../lib/status";
 import { useClient, useDaemon, useUi } from "../lib/store";
 import { CallScreen } from "./CallScreen";
@@ -42,8 +42,6 @@ const SUGGESTIONS: Suggestion[] = [
   { title: "Start an agent", detail: "in one of your workspaces", Icon: Play, prompt: "Start an agent in " },
 ];
 
-/** Neural's notices about agents: "<label> finished: <text>" (see the daemon's orch::watch). */
-const NOTICE = /^([\s\S]*?) (finished|needs input|stopped with an error)(?:: ([\s\S]*))?$/;
 const KIND: Record<string, { activity: Activity; word: string; tone: string }> = {
   finished: { activity: "done", word: "Finished", tone: "text-ember" },
   "needs input": { activity: "waiting", word: "Needs input", tone: "text-accent" },
@@ -255,6 +253,9 @@ function NoticeRow({ m, now }: { m: OrchMessage; now: number }) {
   const engine = useDaemon((c) => c.state?.profiles.find((p) => p.id === session?.profile_id)?.engine);
   const [, label = "", what = "finished", said = ""] = NOTICE.exec(m.text) ?? [];
   const k = KIND[what]!;
+  // The feed is history: only an event that is still true keeps its mark ("needs input" after
+  // the agent finished would send you to an agent that no longer waits).
+  const still = session?.alive && activityOf([session.status]) === k.activity;
   const [lws, ltitle] = label.includes(" — ") ? label.split(" — ", 2) : ["", label];
   const title = session?.title ?? ltitle ?? label;
   const where = ws ?? lws;
@@ -268,7 +269,7 @@ function NoticeRow({ m, now }: { m: OrchMessage; now: number }) {
       onClick={() => m.session_id && open(m.session_id)}
       className={cn("flex w-full items-start gap-3 px-4 py-3 text-left", can && "press-row hover:bg-fill-1")}
     >
-      {engine ? <EngineTile engine={engine} activity={k.activity} className="mt-0.5" /> : <IconTile Icon={Bell} color="gray" activity={k.activity} className="mt-0.5" />}
+      {engine ? <EngineTile engine={engine} activity={still ? k.activity : undefined} className="mt-0.5" /> : <IconTile Icon={Bell} color="gray" className="mt-0.5" />}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-headline text-bright">{title}</span>
@@ -377,8 +378,9 @@ function LiveAgents() {
   const fade = useEdgeFade(ref, chips.length);
   if (chips.length === 0) return null;
   return (
-    <div ref={ref} data-no-swipe className="scroll-x relative shrink-0 overflow-x-auto pt-1" style={fade} aria-label="Live agents">
-      <div className="mx-auto flex w-max min-w-full max-w-2xl gap-2 px-4">
+    <div ref={ref} data-no-swipe className="scroll-x relative mx-auto w-full max-w-2xl shrink-0 overflow-x-auto pt-1" style={fade} aria-label="Live agents">
+      {/* Same column as the feed and the composer; on desktop the chips line up with their edges. */}
+      <div className="flex w-max min-w-full gap-2 px-4 [[data-mode=desktop]_&]:px-0">
         {chips.map((c) => (
           <button
             key={c.key}
