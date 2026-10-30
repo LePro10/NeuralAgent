@@ -53,7 +53,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 
 ## apps/web/src/
 - **brand.tsx** (41) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
-- **changelog.tsx** (108) — /changelog: every release from CHANGELOG.md (bundled at build time via `virtual:changelog`,
+- **changelog.tsx** (248) — /changelog: every release from CHANGELOG.md (bundled at build time via `virtual:changelog`,
 - **download.tsx** (100)
 - **landing.tsx** (89)
 - **legal.tsx** (133)
@@ -201,7 +201,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **SettingsPage.tsx** (207) — Settings. Phones: an iOS Settings list with coloured tiles; each row pushes its page (swipe · `SettingsPage()`
 - **SwarmPage.tsx** (523) — `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
-- **TerminalView.tsx** (392) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
+- **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
 - **UpdateBadge.tsx** (61) — The running version, small, above the account row (desktop sidebar foot; phones: next to the · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
