@@ -11,6 +11,8 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-30
+
 ### Improved
 - The **Update** button is filled with your theme's accent colour, shows a download arrow, and unrolls smoothly into a pill when the sidebar opens.
 - **Workspaces in the sidebar**: right-click one to rename it right in place (its folder stays the same), pin it to the top, copy its folder path or remove it; drag workspaces to change their order.
