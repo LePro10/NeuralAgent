@@ -72,6 +72,7 @@ fn main() -> Result<()> {
 fn serve() -> Result<()> {
     let paths = Paths::resolve()?;
     init_logging(&paths);
+    tls_init();
 
     // One daemon per data dir. The lock is held for the lifetime of the process.
     let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(paths.lock())?;
@@ -191,4 +192,16 @@ fn init_logging(paths: &Paths) {
         Ok(file) => tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(std::sync::Mutex::new(file)).init(),
         Err(_) => tracing_subscriber::fmt().with_env_filter(filter).init(),
     }
+    // The daemon's stderr goes nowhere; a panic in a task must still leave a trace.
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info}");
+        default(info);
+    }));
+}
+
+/// reqwest and ureq compile in different rustls backends; with two, rustls cannot pick one and
+/// every `wss://` connect panicked (0.2.0: remote access died right after start).
+pub fn tls_init() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }

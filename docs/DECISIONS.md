@@ -229,8 +229,8 @@ The desktop opens the system browser at the relay; the relay sends it back to
 `http://127.0.0.1:<daemon port>/auth/callback` (RFC 8252 loopback redirect, PKCE). No custom
 URL scheme is needed on the desktop (`neuralagent://auth` stays allowed for the Android app).
 The daemon, not the window, holds the account: it keeps working while the window is closed.
-Credentials (refresh token, device key) live in the OS keychain in release builds on macOS and
-Windows, otherwise (dev builds, Linux) in `remote-credentials.json` readable only by the user.
+Credentials (refresh token, device key) live in the Windows Credential Manager in Windows
+release builds, otherwise in `remote-credentials.json` readable only by the user (macOS: D43).
 They never enter the shared state.
 
 ## D28 — End-to-end encryption between phone and computer
@@ -459,3 +459,18 @@ a setting under "This device". Android sets `MODE_IN_COMMUNICATION` and picks th
 device (API 31+) or `setSpeakerphoneOn`; a headset always wins; the proximity sensor blanks the
 screen at the ear. The choice is stored natively, so the quick tile and the notification start
 calls the same way. Browsers only get it where `setSinkId` lists an earpiece output.
+
+## D43 — Remote credentials on macOS in a user-only file; the relay loop supervises itself (2026-10-30)
+
+0.2.0 lost remote access right after every start. Two causes: reqwest and ureq compile in
+different rustls backends, so rustls could not pick one and the `wss://` connect panicked inside
+the relay task (silently: the daemon's stderr goes nowhere, the status stayed "online"). And the
+keychain ties an item to the exact binary; every update is a new unsigned binary, so the first
+start of 0.2.0 waited 25 minutes on a keychain prompt before it even listened.
+
+Now the daemon installs the aws-lc-rs provider at start (test `tls_backend_is_chosen`), logs
+panics to `daemon.log`, and restarts the relay loop when it crashes (status "offline" meanwhile).
+On macOS the credentials move from the keychain to `remote-credentials.json` (0600) once, off the
+startup path. LLM keys stay in the keychain: they are read only when used. In the relay loop
+nothing waits on a session any more (`try_send`; a session that cannot keep up is closed) and
+every send to the relay has a timeout.

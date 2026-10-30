@@ -37,8 +37,9 @@ decisions: `DECISIONS.md`.
     env NOISE/ECHO/HOLD/OUT; `voices.mjs`), `/tmp/na-drive/call-ui.mjs` (Chromium, fake mic).
     Start the test daemon with the key from the keychain:
     `NEURALAGENT_HOME=/tmp/na-orch/home NEURALAGENT_LLM_KEY="$(security find-generic-password -s neuralagent-llm -w)" ./target/release/neuralagentd`.
-    Release daemons on macOS keep remote sign-in in the keychain: use the debug daemon for
-    the Android env (`/tmp/na-android/env2.sh`).
+    Remote sign-in lives in `remote-credentials.json` in the data dir (0.2.1+, D43); a second
+    daemon with a copy would rotate the refresh token away from the first: use the debug daemon
+    for the Android env (`/tmp/na-android/env2.sh`).
   - Relay `crates/na-relay` live on .96 (container `neuralagent-relay`, `/opt/neuralagent`,
     env `/etc/neuralagent/relay.env` — never print it). CI pushes the image to GHCR; .96 can't
     pull it until the read token exists, so deploy by hand:

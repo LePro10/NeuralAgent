@@ -3,8 +3,8 @@
 //! (`na-crypto`). The relay only sees opaque envelopes.
 //!
 //! Sign-in runs in the system browser and comes back to this daemon's loopback port
-//! (`/auth/callback`, RFC 8252). Tokens and this computer's device key are kept in the OS
-//! keychain (release builds on macOS/Windows) or a file readable only by the user.
+//! (`/auth/callback`, RFC 8252). Tokens and this computer's device key are kept in the Windows
+//! Credential Manager (release builds) or a file readable only by the user (D43).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ fn off_flag(core: &Core) -> std::path::PathBuf {
 
 // ───────────── credential storage ─────────────
 
-#[cfg(all(not(debug_assertions), any(target_os = "macos", target_os = "windows")))]
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 mod store {
     pub fn get(_: &std::path::Path) -> Option<String> {
         keyring::Entry::new(super::KEYCHAIN_SERVICE, "device").ok()?.get_password().ok()
@@ -98,16 +98,31 @@ mod store {
     }
 }
 
-#[cfg(not(all(not(debug_assertions), any(target_os = "macos", target_os = "windows"))))]
+#[cfg(not(all(not(debug_assertions), target_os = "windows")))]
 mod store {
-    //! Development builds and Linux: a file only the user can read (keychain prompts would
-    //! appear after every rebuild of an unsigned binary).
+    //! A file only the user can read. Not the macOS keychain: it ties an item to the exact
+    //! binary, every update is a new unsigned one, and each update stopped the daemon at a
+    //! keychain prompt (D43).
     fn path(root: &std::path::Path) -> std::path::PathBuf {
         root.join("remote-credentials.json")
     }
     pub fn get(root: &std::path::Path) -> Option<String> {
+        std::fs::read_to_string(path(root)).ok().or_else(|| legacy(root))
+    }
+    /// 0.2.0 and older kept the credentials in the keychain: move them to the file once.
+    #[cfg(all(not(debug_assertions), target_os = "macos"))]
+    fn legacy(root: &std::path::Path) -> Option<String> {
+        let e = keyring::Entry::new(super::KEYCHAIN_SERVICE, "device").ok()?;
+        let v = e.get_password().ok()?;
+        if crate::paths::write_private(&path(root), v.as_bytes()).is_ok() {
+            let _ = e.delete_credential();
+        }
+        Some(v)
+    }
+    #[cfg(not(all(not(debug_assertions), target_os = "macos")))]
+    fn legacy(_: &std::path::Path) -> Option<String> {
         let _ = super::KEYCHAIN_SERVICE;
-        std::fs::read_to_string(path(root)).ok()
+        None
     }
     pub fn set(root: &std::path::Path, v: Option<&str>) -> anyhow::Result<()> {
         match v {
@@ -134,16 +149,50 @@ fn save(core: &Core, creds: Option<Creds>) {
 
 /// Loads saved credentials and starts the connection loop.
 pub fn start(core: &Arc<Core>) {
-    let creds: Option<Creds> = store::get(&core.paths.root).and_then(|s| serde_json::from_str(&s).ok());
-    let fp = creds.as_ref().and_then(|c| device_key(c).ok()).map(|k| fingerprint(&k.public()));
-    *core.remote.creds.lock() = creds.clone();
     update(core, |r| {
-        r.relay = creds.as_ref().map(|c| c.relay.clone()).unwrap_or_else(relay_default);
-        r.fingerprint = fp;
+        r.relay = relay_default();
         r.paused = off_flag(core).exists();
-        r.status = if creds.is_some() { RemoteStatus::Connecting } else { RemoteStatus::SignedOut };
+        r.status = RemoteStatus::Connecting;
+        r.devices.clear();
     });
-    tokio::spawn(run(core.clone()));
+    let core = core.clone();
+    tokio::spawn(async move {
+        // Off the startup path: moving an old keychain item can wait on a macOS prompt.
+        let root = core.paths.root.clone();
+        let creds: Option<Creds> =
+            tokio::task::spawn_blocking(move || store::get(&root)).await.ok().flatten().and_then(|s| serde_json::from_str(&s).ok());
+        let fp = creds.as_ref().and_then(|c| device_key(c).ok()).map(|k| fingerprint(&k.public()));
+        {
+            // A sign-in that finished meanwhile wins.
+            let mut g = core.remote.creds.lock();
+            if g.is_none() {
+                *g = creds.clone();
+            }
+        }
+        if let Some(c) = &creds {
+            update(&core, |r| {
+                r.relay = c.relay.clone();
+                r.fingerprint = fp;
+            });
+        } else if core.remote.creds.lock().is_none() {
+            update(&core, |r| r.status = RemoteStatus::SignedOut);
+        }
+        // A crash in the loop must not leave remote access dead behind a stale "online".
+        loop {
+            match tokio::spawn(run(core.clone())).await {
+                Err(e) if e.is_panic() => {
+                    tracing::error!("relay connection loop crashed; restarting");
+                    update(&core, |r| {
+                        r.status = RemoteStatus::Offline;
+                        r.error = Some("The connection to the relay crashed; retrying.".into());
+                        r.devices.iter_mut().for_each(|d| d.online = false);
+                    });
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+                _ => return,
+            }
+        }
+    });
 }
 
 fn device_key(c: &Creds) -> anyhow::Result<StaticKey> {
@@ -548,8 +597,8 @@ async fn connect(core: &Arc<Core>, c: &Creds, mut wake: std::pin::Pin<&mut tokio
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break End::Park,
                 _ => {}
             },
-            _ = ping.tick() => if sink.send(Message::Ping(Default::default())).await.is_err() { break End::Retry("connection lost".into()) },
-            Some(text) = out_rx.recv() => if sink.send(Message::Text(text.into())).await.is_err() { break End::Retry("connection lost".into()) },
+            _ = ping.tick() => if !sent(sink.send(Message::Ping(Default::default()))).await { break End::Retry("connection lost".into()) },
+            Some(text) = out_rx.recv() => if !sent(sink.send(Message::Text(text.into()))).await { break End::Retry("connection lost".into()) },
             m = tokio::time::timeout(Duration::from_secs(90), stream.next()) => {
                 let text = match m {
                     Ok(Some(Ok(Message::Text(t)))) => t,
@@ -570,7 +619,7 @@ async fn connect(core: &Arc<Core>, c: &Creds, mut wake: std::pin::Pin<&mut tokio
                     Some("presence") => presence(core, c, &v["devices"], &mut sessions),
                     Some("route") => {
                         let (Some(from), Some(env)) = (v["from"].as_str(), v["env"].as_str()) else { continue };
-                        envelope(core, &key, from, env, &mut sessions, &out_tx).await;
+                        envelope(core, &key, from, env, &mut sessions, &out_tx);
                     }
                     Some("revoked") => {
                         let reason = v["reason"].as_str().unwrap_or_default().to_string();
@@ -595,8 +644,13 @@ async fn connect(core: &Arc<Core>, c: &Creds, mut wake: std::pin::Pin<&mut tokio
             }
         }
     };
-    let _ = sink.send(Message::Close(None)).await;
+    let _ = tokio::time::timeout(Duration::from_secs(2), sink.send(Message::Close(None))).await;
     end
+}
+
+/// A send to the relay that cannot hang the loop on a stalled connection.
+async fn sent<E>(f: impl std::future::Future<Output = Result<(), E>>) -> bool {
+    matches!(tokio::time::timeout(Duration::from_secs(20), f).await, Ok(Ok(())))
 }
 
 fn presence(core: &Core, c: &Creds, devices: &Value, sessions: &mut HashMap<String, Sess>) {
@@ -631,14 +685,7 @@ fn route(to: &str, env: Value) -> String {
     json!({ "t": "route", "to": to, "env": env.to_string() }).to_string()
 }
 
-async fn envelope(
-    core: &Arc<Core>,
-    key: &StaticKey,
-    from: &str,
-    env: &str,
-    sessions: &mut HashMap<String, Sess>,
-    out: &mpsc::Sender<String>,
-) {
+fn envelope(core: &Arc<Core>, key: &StaticKey, from: &str, env: &str, sessions: &mut HashMap<String, Sess>, out: &mpsc::Sender<String>) {
     let Ok(e) = serde_json::from_str::<Value>(env) else { return };
     let Some(sid) = e["sid"].as_str().filter(|s| !s.is_empty() && s.len() <= 64) else { return };
     let skey = format!("{from}:{sid}");
@@ -665,12 +712,12 @@ async fn envelope(
             let (tx, rx) = mpsc::channel::<ClientMsg>(256);
             let task = tokio::spawn(serve_session(core.clone(), client, rx, e2e.clone(), from.to_string(), sid.to_string(), out.clone()));
             sessions.insert(skey, Sess { e2e, tx, task });
-            let _ = out.send(route(from, json!({ "k": "hs2", "sid": sid, "f": b64(&f) }))).await;
+            let _ = out.try_send(route(from, json!({ "k": "hs2", "sid": sid, "f": b64(&f) })));
             tracing::info!(device = from, "remote client connected (end-to-end)");
         }
         Some("d") => {
             let Some(s) = sessions.get(&skey) else {
-                let _ = out.send(route(from, json!({ "k": "bye", "sid": sid }))).await;
+                let _ = out.try_send(route(from, json!({ "k": "bye", "sid": sid })));
                 return;
             };
             let opened = e["ct"].as_str().and_then(|c| unb64(c).ok()).map(|frame| s.e2e.lock().open(&frame));
@@ -679,15 +726,22 @@ async fn envelope(
                 _ => None,
             };
             match msg {
-                Some(m) => {
-                    if s.tx.send(m).await.is_err() {
+                // Never wait here: the session may itself wait on this loop to send its output.
+                Some(m) => match s.tx.try_send(m) {
+                    Ok(()) => {}
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        tracing::warn!(device = from, "remote client sends faster than it is served: session closed");
+                        sessions.remove(&skey);
+                        let _ = out.try_send(route(from, json!({ "k": "bye", "sid": sid })));
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
                         sessions.remove(&skey);
                     }
-                }
+                },
                 None => {
                     tracing::warn!(device = from, "undecryptable or invalid frame: session closed");
                     sessions.remove(&skey);
-                    let _ = out.send(route(from, json!({ "k": "bye", "sid": sid }))).await;
+                    let _ = out.try_send(route(from, json!({ "k": "bye", "sid": sid })));
                 }
             }
         }
@@ -737,6 +791,13 @@ async fn serve_session(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tls_backend_is_chosen() {
+        // Panicked in 0.2.0 ("Could not automatically determine the process-level CryptoProvider").
+        crate::tls_init();
+        let _ = rustls::ClientConfig::builder();
+    }
 
     #[test]
     fn pairing_qr_is_svg() {
