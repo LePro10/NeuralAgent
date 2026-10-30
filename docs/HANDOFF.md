@@ -20,6 +20,15 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   avatar opens Settings, Remote + MCP inside Settings (D47), quiet agent tiles and one global
   Chat/Terminal switch (D46), accent/theme "ground" gradients behind every page, terminal
   repaint after resize, collapsible website changelog.
+- **0.3.2** and **0.3.3** released, published and deployed 2026-10-30 (public-for-the-run
+  workaround, repo private again). 0.3.2: images in the Claude view (D50), one launch motion on
+  all platforms (D49, new APK), Swarm redesign (D48), Settings like the other pages, quicker
+  sidebar peek, desktop interface size, calls fixed (mic worklet was inlined as data: URL and
+  blocked by the CSP), "Hey Neural" sends to Neural. 0.3.3: dictation pastes on macOS (synthetic
+  typing dropped characters in terminals), voice pill follows the mic level.
+- macOS app is ad-hoc signed: every update loses the Accessibility permission (owner must remove
+  and re-add NeuralAgent). Fix offered to the owner: a stable self-signed signing identity in CI
+  (free) or an Apple Developer ID. Not decided yet.
 - Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
