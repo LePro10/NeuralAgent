@@ -61,6 +61,10 @@ Open items first. Everything else keeps going locally until these are done.
       Working with AI agents" within ~20 s. Or run
       `cargo test -p na-daemon shows_in_discord -- --ignored --nocapture` with Discord open.
 
+- [ ] **Try a swarm** (5 min, optional): sidebar → *Swarm* → *New swarm*, pick a project and a
+  small goal, keep the default team (Claude). Watch the messages; Stop when done. Uses your
+  Claude quota (pick a Haiku profile to keep it cheap).
+
 ## Done on your side (verified)
 
 - NPM proxy host `agent.neuralhub.dev` → .96:8080: HTTPS and WebSockets work (checked
@@ -77,6 +81,7 @@ Open items first. Everything else keeps going locally until these are done.
 | 2026-10-29 | $0.00 | model list only |
 | 2026-10-29 | < $0.05 | 2 Codex test calls (Claude Haiku via NeuralHub, failed) |
 | 2026-10-30 | < $3 (estimate) | M7: ~120 Neural turns (Sonnet 5.5 chat, Haiku 5.5 calls), latency probes |
+| 2026-10-30 | < $3.5 (estimate) | M8: a few Neural turns for start_swarm (swarm members run on Claude Code, not this key) |
 
 ## Progress
 
@@ -92,6 +97,22 @@ Open items first. Everything else keeps going locally until these are done.
 | M5 relay, accounts, pairing, E2E, remote in the daemon | done: relay, admin `/admin/`, landing, desktop side; real OAuth + mail on your list |
 | M6 web remote, phone layout, Android | done (2026-10-30) — web remote at `/app` with Web Push; Android app (FCM, widget, tile) verified in the emulator; real iPhone on your list |
 | M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — see below; your own voice on a real phone on your list |
+| M8 swarm: agent teams with visible hand-offs | done (2026-10-30) — see below |
+
+### M8 verified (2026-10-30)
+- `scripts/e2e-swarm.ts` (CI on Linux/macOS): daemon + four stand-in agents
+  (`scripts/fake-agent.mjs`) talking through the real MCP bridge. Own tab with four panes,
+  hand-off Coordinator→Scout→Coordinator→Builder→Reviewer→Coordinator→You, the builder's file
+  change, every message delivered, exactly one notification (the report), user message to all,
+  unknown recipient refused with the team's roles, stop → exited, ended swarm refuses messages,
+  remove.
+- Real Claude Code (Haiku) team of four on a tiny task (`--name` for a Python script): tasks
+  handed on, Builder implemented, Reviewer ran it and passed, Coordinator reported to you after
+  24 s; 7 messages, no acks, no false errors, one notification.
+- Neural (live NeuralHub): "start a swarm …" → `start_swarm`, team ran, Neural announced the
+  report.
+- UI screenshots (WebKit): desktop list + conversation, new-swarm sheet, phone list + chat.
+  Phones/web remote get the same state and events, so the swarm page is the same there.
 
 ### M7 verified (2026-10-30)
 - Text, live NeuralHub: "Starte den testbot in Japan Map" → Neural found the workspace, started

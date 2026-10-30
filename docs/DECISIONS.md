@@ -340,3 +340,38 @@ fix if it shows up is a higher barge-in threshold while playing.
 **Android.** A "Call Neural" quick tile and a microphone foreground service (ongoing
 notification with *Hang up*); during a call the activity shows over the lock screen and keeps
 the screen on. Hanging up while the phone is locked sends the app back behind the lock.
+
+## D37 — Swarm: teams talk through an MCP bridge in the daemon (2026-10-30)
+A swarm is a goal plus 1–8 members (role + agent profile) in one workspace. Default team:
+Coordinator (lead), Scout, Builder, Reviewer. The swarm gets its own grid tab with one pane per
+member.
+
+**Talking.** Every member gets one extra stdio MCP server, `neuralagent-swarm`
+(`neuralagentd swarm-mcp`), with `send_message {to, text}`, `team` and `messages`. The bridge
+forwards to `POST /swarm` on the daemon, authenticated with the member's session id and hook
+token (passed as MCP env "secrets", so Claude, Codex and OpenCode forward them the same way).
+Recipients: a role, `all`, or `you` (the user). Works for every engine that speaks MCP; no
+engine-specific message format.
+
+**Delivery.** Messages queue per recipient and are typed into its terminal (bracketed paste +
+Enter) only when it is ready: status Done/Idle, and for engines with hooks only once the hooks
+have reported a status, so nothing is typed into a trust or login dialog. Several queued
+messages arrive as one prompt.
+
+**Briefs.** Only the lead starts; the others wait silently for their first task. All are told
+not to send acknowledgements, thanks or status pings — in real runs Haiku otherwise kept
+acking each other after the goal was reached.
+
+**Notifications.** A member finishing a turn is not news; "Done" attentions are suppressed for
+swarm members. A message to `you` raises one Done attention with its first line. Errors and
+permission prompts still notify.
+
+**Lifecycle.** Stop kills all members (exited, not error); a swarm ends when every member has
+exited; ended swarms take no messages and survive restarts as history (last 300 messages per
+swarm). Remote clients (phone, Neural) may start and steer swarms only in approved workspaces.
+
+**Not in scope** (PROMPT.md): agent-to-agent messages outside a swarm, tickets/kanban.
+
+**StopFailure.** Claude also sends StopFailure for failed side requests (titles, suggestions)
+while the turn goes on. A session is only marked as error when the transcript's last answer is
+an API error (`isApiErrorMessage`).

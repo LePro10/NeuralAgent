@@ -4,7 +4,14 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
-- M0–M7 done (small leftovers and user checks in STATUS). Next: M8 swarm. Details:
+- M0–M8 done (small leftovers and user checks in STATUS). Next: M9 themes, auto-update,
+  releases; then M10. Details:
+  - Swarm (M8, D37): `crates/na-daemon/src/swarm.rs` (bridge `neuralagentd swarm-mcp`,
+    `POST /swarm`, outbox, briefs), `layout::grid_tab`, Neural tool `start_swarm` in `orch.rs`;
+    UI `packages/app/src/components/SwarmPage.tsx`. Tests: `scripts/e2e-swarm.ts` with
+    `scripts/fake-agent.mjs`. Real-agent kit outside the repo: `/tmp/na-orch/swarm-real.mjs`
+    (Claude Haiku team in `/tmp/na-orch/proj/swarm-real`; `TRUST=0` once the folder is
+    trusted, `git checkout greet.py` to reset), `/tmp/na-drive/swarm-ui.mjs` (screenshots).
   - Neural (M7, D36): `crates/na-daemon/src/{orch,llm,secrets,call}.rs`; UI
     `packages/app/src/components/NeuralPage.tsx`, `lib/call.ts` + `lib/mic-worklet.js`,
     Settings → Neural / Calls; Android `CallService`, `CallTile`, `MainActivity.calling`.
@@ -35,7 +42,7 @@ decisions: `DECISIONS.md`.
     PushService, AgentWidget, AgentTile, Status); web side `apps/web/src/remote/native.ts`.
     `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
     password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
-- Next: M8 swarm, then M9 themes/auto-update/releases, M10.
+- Next: M9 themes/auto-update/releases, then M10.
 - Open small things: "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 
