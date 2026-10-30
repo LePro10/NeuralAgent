@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
-import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone } from "lucide-react";
+import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
@@ -11,12 +11,14 @@ import { UsagePage } from "./components/UsagePage";
 import { McpPage } from "./components/McpPage";
 import { RemotePage } from "./components/RemotePage";
 import { SettingsPage } from "./components/SettingsPage";
+import { NeuralPage } from "./components/NeuralPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { frontTabFor } from "./lib/layout";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 
 const ADD = "__add";
+const NEURAL = "__neural";
 const AGENTS = "__agents";
 const HISTORY = "__history";
 const MCP = "__mcp";
@@ -32,13 +34,15 @@ export function App() {
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
+  // Neural is the home screen until something else is picked.
+  const neural = workspace === NEURAL || workspace === null;
   const dashboard = workspace === AGENTS;
   const settingsOpen = workspace === SETTINGS;
   const history = workspace === HISTORY;
   const mcp = workspace === MCP;
   const usage = workspace === USAGE;
   const remotePage = workspace === REMOTE;
-  const current = dashboard || settingsOpen || history || mcp || usage || remotePage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const current = neural || dashboard || settingsOpen || history || mcp || usage || remotePage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural, …": until the orchestrator exists, show what was heard.
   useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
@@ -106,6 +110,7 @@ export function App() {
   const allStatuses = Object.values(state?.sessions ?? {}).map((s) => s.status);
   const waiting = allStatuses.filter((s) => s === "waiting").length;
   const items: NavItem[] = [
+    { id: NEURAL, label: "Neural", Icon: Sparkles, badge: state?.orchestrator.busy ? "Working" : undefined },
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, badge: waiting > 0 ? `${waiting} waiting` : undefined },
     { id: HISTORY, label: "History", Icon: History },
     { id: MCP, label: "MCP", Icon: Plug },
@@ -129,10 +134,11 @@ export function App() {
     ...(platform.pickFolder ? [{ id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 }] : []),
   ];
 
-  const selected = dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : (current?.id ?? "");
+  const selected = neural ? NEURAL : dashboard ? AGENTS : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : (current?.id ?? "");
   // Phones: a tab bar with the agents and the workspaces first; the rest (and settings) under "More".
   const byId = new Map(items.map((i) => [i.id, i]));
   const phoneItems: NavItem[] = [
+    byId.get(NEURAL)!,
     byId.get(AGENTS)!,
     ...items.filter((i) => i.group === "Workspaces").map((i) => ({ ...i, group: undefined })),
     ...[HISTORY, USAGE, MCP, REMOTE].flatMap((id) => (byId.has(id) ? [{ ...byId.get(id)!, group: undefined }] : [])),
@@ -144,6 +150,8 @@ export function App() {
     <div className="grid h-full place-items-center">
       {status === "offline" ? <Callout tone="danger" title="Daemon not reachable">Trying to reconnect…</Callout> : <Spinner label="Connecting" />}
     </div>
+  ) : neural ? (
+    <NeuralPage onSettings={platform.kind === "desktop" ? () => setWorkspace(SETTINGS) : undefined} />
   ) : settingsOpen ? (
     <SettingsPage />
   ) : dashboard ? (

@@ -580,7 +580,8 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          [log] lines yourself.\n\
          - Agents may only be started in approved workspaces; if a tool says something needs confirmation on the \
          computer, tell the user plainly.\n\
-         - Agent references in tools: the short id in brackets.\n\n\
+         - Agent references in tools: the short id in brackets. Never show ids to the user; name agents by \
+         workspace and title.\n\n\
          Now: {now}.\n\n{ctx}",
         host = s.remote.devices.iter().find(|d| d.this).map(|d| d.name.as_str()).unwrap_or("this computer"),
     )

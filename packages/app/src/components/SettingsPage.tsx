@@ -1,5 +1,5 @@
-import type { DiscordPresence, KeepAwake, Settings } from "@neuralagent/protocol";
-import { Button, Callout, List, Meter, Page, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
+import type { DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
+import { Button, Callout, Field, Input, List, Meter, Page, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
 import { AudioLines, Download, Ear, Keyboard, Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
@@ -10,6 +10,7 @@ export function SettingsPage() {
   return (
     <Page title="Settings" eyebrow="NeuralAgent">
       <div className="flex flex-col gap-6 pb-8">
+        {platform.kind === "desktop" && <NeuralSettings />}
         {platform.voice && <VoiceSettings voice={platform.voice} mac={!!platform.trafficLights} />}
         <GeneralSettings />
       </div>
@@ -181,5 +182,103 @@ function GeneralSettings() {
         />
       </List>
     </>
+  );
+}
+
+const PROVIDERS: { value: LlmProvider; label: string; url: string; models: [string, string] }[] = [
+  { value: "neuralhub", label: "NeuralHub", url: "https://api.neuralhub.dev/v1", models: ["claude/claude-sonnet-5-5", "claude/claude-haiku-5-5"] },
+  { value: "anthropic", label: "Anthropic", url: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5"] },
+  { value: "openai", label: "OpenAI", url: "https://api.openai.com/v1", models: ["", ""] },
+  { value: "ollama", label: "Ollama", url: "http://127.0.0.1:11434/v1", models: ["", ""] },
+];
+
+/** Bring your own key: which model Neural uses. Keys go to the daemon and never come back. */
+function NeuralSettings() {
+  const client = useClient();
+  const settings = useDaemon((c) => c.state?.settings);
+  const keys = useDaemon((c) => c.state?.orchestrator.keys);
+  const [key, setKey] = useState("");
+  const [testing, setTesting] = useState(false);
+  if (!settings || !keys) return null;
+  const llm = settings.llm;
+  const provider = PROVIDERS.find((p) => p.value === llm.provider) ?? PROVIDERS[0]!;
+  const hasKey = keys.includes(llm.provider);
+  const fail = (e: unknown) => toast((e as Error).message, { tone: "danger" });
+  const set = (patch: Partial<LlmSettings>) => client.req({ m: "settings_set", p: { settings: { ...settings, llm: { ...llm, ...patch } } } }).catch(fail);
+  const switchTo = (p: LlmProvider) => {
+    const next = PROVIDERS.find((x) => x.value === p)!;
+    // Model names differ per provider; keep custom ones only when staying.
+    set({ provider: p, base_url: "", model: next.models[0], call_model: next.models[1] });
+    setKey("");
+  };
+  const saveKey = (value: string | null) =>
+    client
+      .req({ m: "llm_key_set", p: value ? { provider: llm.provider, key: value } : { provider: llm.provider } })
+      .then(() => {
+        setKey("");
+        toast(value ? "Key saved" : "Key removed");
+      }, fail);
+  const test = async () => {
+    setTesting(true);
+    try {
+      const r = (await client.req({ m: "llm_test" })) as LlmCheck;
+      if (r.ok) toast(`${r.model} answered in ${r.ms} ms`);
+      else toast(r.error ?? "No answer", { tone: "danger" });
+    } catch (e) {
+      fail(e);
+    } finally {
+      setTesting(false);
+    }
+  };
+  const text = (k: "base_url" | "model" | "call_model", label: string, placeholder: string, hint?: string) => (
+    <Field label={label} hint={hint}>
+      <Input
+        key={`${llm.provider}-${k}`}
+        defaultValue={llm[k]}
+        placeholder={placeholder}
+        spellCheck={false}
+        autoCapitalize="off"
+        onBlur={(e) => e.currentTarget.value.trim() !== llm[k] && set({ [k]: e.currentTarget.value.trim() })}
+      />
+    </Field>
+  );
+  return (
+    <List label="Neural" footer="Neural, the orchestrator, runs on your own model. Keys stay on this computer (in the system keychain).">
+      <Row
+        title="Provider"
+        trailing={<Segmented<LlmProvider> size="sm" scroll label="Model provider" value={llm.provider} options={PROVIDERS} onChange={switchTo} />}
+      />
+      {llm.provider !== "ollama" && (
+        <div className="flex flex-col gap-2 p-3">
+          <Field label="API key" hint={hasKey ? <Pill size="sm" tone="success">Saved</Pill> : undefined}>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                value={key}
+                onChange={(e) => setKey(e.currentTarget.value)}
+                placeholder={hasKey ? "Replace the saved key" : `${provider.label} API key`}
+                autoComplete="off"
+                spellCheck={false}
+                className="flex-1"
+              />
+              <Button size="sm" disabled={!key.trim()} onClick={() => saveKey(key.trim())}>
+                Save
+              </Button>
+              {hasKey && (
+                <Button size="sm" variant="tint" onClick={() => saveKey(null)}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          </Field>
+        </div>
+      )}
+      <div className="flex flex-col gap-3 p-3">
+        {text("model", "Chat model", provider.models[0] || "Model name")}
+        {text("call_model", "Call model", "Same as chat", "Used in calls, where a fast answer matters most.")}
+        {text("base_url", "Address", provider.url)}
+      </div>
+      <Row title="Check the connection" trailing={<Button size="sm" variant="tint" busy={testing} onClick={test}>Test</Button>} />
+    </List>
   );
 }
