@@ -24,6 +24,8 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 - "New swarm" opens as a centred window on the desktop, with Cancel and Start, and each member shows the icon of its agent.
 
 ### Fixed
+- Calling Neural from the desktop app works again (it failed with "Not allowed by CSP").
+- Saying "Hey Neural, …" now sends what you said to Neural instead of only showing it.
 - Swarm: the goal and the team no longer scroll out of view in a long conversation, the "New swarm" button sits next to the title instead of floating above it, and an ended swarm without messages no longer says the team is getting ready.
 
 ## [0.3.1] - 2026-10-30
