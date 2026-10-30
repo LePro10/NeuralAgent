@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Improved
+- The **Update** button is filled with your theme's accent colour, shows a download arrow, and unrolls smoothly into a pill when the sidebar opens.
+
 ## [0.3.3] - 2026-10-30
 
 ### Improved

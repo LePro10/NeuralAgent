@@ -14,7 +14,7 @@ import {
   type Activity,
 } from "@neuralagent/ui";
 import type { LucideIcon } from "lucide-react";
-import { ArrowUpCircle, Bot, Folder, Gamepad2, Info, Mic, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
+import { ArrowDownToLine, Bot, Folder, Gamepad2, Info, Mic, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCatalogSheet, useDaemon, usePlatform } from "../lib/store";
 import { takeSettingsSection, useSettingsRoute } from "../lib/settingsRoute";
@@ -90,7 +90,7 @@ function useSections(): SectionGroup[] {
   const updates: SectionDef = {
     id: "updates",
     title: "Updates",
-    Icon: ArrowUpCircle,
+    Icon: ArrowDownToLine,
     value: u.offer ? <span className="text-accent">{u.kind === "web" ? "New version" : `${u.offer.version} available`}</span> : u.current || undefined,
     render: () => (
       <div className="flex flex-col gap-7">

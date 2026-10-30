@@ -1,13 +1,14 @@
 // The running version and the Update button. Desktop: above the account block at the sidebar's
 // foot. Phones: under the account on the More page. State: lib/updates.ts.
 //
-// When an update is out, the collapsed rail shows a square accent button with the update icon;
-// when the rail opens, that same button grows into a pill, icon + "Update", on the sidebar's own
-// spring (the icon stays where it is, the pill unrolls to the right). Without an update the
-// version is a quiet label that only shows while the sidebar is open.
-import { SPRING, cn } from "@neuralagent/ui";
-import { AlertTriangle, ArrowUpCircle } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+// When an update is out, the collapsed rail shows a square button filled with the accent; when the
+// rail opens, it unrolls to the right into a pill, icon + "Update". The button always has its
+// full width and only a clip-path animates (no layout per frame, so it stays smooth while the
+// sidebar itself springs open). Without an update the version is a quiet label that only shows
+// while the sidebar is open.
+import { cn } from "@neuralagent/ui";
+import { AlertTriangle, ArrowDownToLine } from "lucide-react";
+import { useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { openUpdateDialog, useUpdates } from "../lib/updates";
 
@@ -34,6 +35,7 @@ export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; ph
   // narrow rail and jump at the end, so the morph animates between two real numbers instead.
   const labelRef = useRef<HTMLSpanElement>(null);
   const [labelWidth, setLabelWidth] = useState(0);
+  const measurable = !!labelRef.current;
   useLayoutEffect(() => {
     const el = labelRef.current;
     if (!el) return;
@@ -41,7 +43,7 @@ export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; ph
     ro.observe(el);
     setLabelWidth(el.offsetWidth);
     return () => ro.disconnect();
-  });
+  }, [measurable]);
   if (!u.kind || !u.current) return null;
   const web = u.kind === "web";
 
@@ -49,47 +51,52 @@ export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; ph
     const label = u.installing ? `Updating ${Math.round((u.progress ?? 0) * 100)} %` : "Update";
     const title = web ? "A new version is ready: reload to update" : `NeuralAgent ${u.offer.version} is available`;
     const version = !web && !u.installing ? u.offer.version : null;
-    const tint = "absolute inset-0 -z-10 bg-accent/15 shadow-lip ring-1 ring-inset ring-accent/35 transition-colors group-hover:bg-accent/25";
+    const fill = "absolute inset-0 -z-10 bg-accent-deep shadow-lip transition group-hover:brightness-110";
     if (phone) {
       return (
         <button
           type="button"
           onClick={() => (onOpen?.(), openUpdateDialog("offer"))}
           aria-label={title}
-          className="pressable group relative isolate inline-flex h-tap shrink-0 items-center gap-2 self-start rounded-full pr-4 pl-3 text-subhead text-accent"
+          className="pressable group relative isolate inline-flex h-tap shrink-0 items-center gap-2 self-start rounded-full pr-4 pl-3 text-subhead text-on-color"
         >
-          <span aria-hidden className={tint} style={{ borderRadius: "inherit" }} />
-          <ArrowUpCircle className="size-icon-sm shrink-0" strokeWidth={1.9} />
+          <span aria-hidden className={fill} style={{ borderRadius: "inherit" }} />
+          <ArrowDownToLine className="size-icon-sm shrink-0" strokeWidth={2} />
           <span className="whitespace-nowrap">{label}</span>
-          {version && <span className="whitespace-nowrap text-footnote text-accent/70">{version}</span>}
+          {version && <span className="whitespace-nowrap text-footnote text-on-color/75">{version}</span>}
         </button>
       );
     }
     return (
       // Collapsed, the square's centre sits on the rail's centre line, like the icons above it.
       <div className="mt-2 flex" style={{ marginLeft: RAIL_INSET }}>
-        <motion.button
+        <button
           type="button"
           onClick={() => (onOpen?.(), openUpdateDialog("offer"))}
           aria-label={title}
           title={title}
-          initial={false}
-          animate={{ width: open && labelWidth ? labelWidth + PILL_CHROME : SIZE, borderRadius: open ? SIZE / 2 : SQUARE_RADIUS }}
-          transition={reduce ? { duration: 0 } : SPRING.sheet}
-          style={{ height: SIZE }}
-          className="pressable group relative isolate flex shrink-0 items-center gap-1.5 overflow-hidden pr-3 pl-2 text-chip text-accent"
+          tabIndex={open ? 0 : -1}
+          style={{
+            height: SIZE,
+            width: labelWidth ? labelWidth + PILL_CHROME : SIZE,
+            // Collapsed: only the left square shows; open: the whole pill. Same curve and length
+            // as the sidebar's spring, so the pill unrolls with the island.
+            clipPath: open ? `inset(0 0 0 0 round ${SIZE / 2}px)` : `inset(0 calc(100% - ${SIZE}px) 0 0 round ${SQUARE_RADIUS}px)`,
+            transition: reduce ? "none" : "clip-path 420ms cubic-bezier(0.32, 0.72, 0, 1)",
+          }}
+          className="pressable group relative isolate flex shrink-0 items-center gap-1.5 rounded-full pr-3 pl-2 text-chip text-on-color"
         >
-          <span aria-hidden className={tint} style={{ borderRadius: "inherit" }} />
-          <ArrowUpCircle size={16} strokeWidth={1.9} className="shrink-0" />
+          <span aria-hidden className={fill} />
+          <ArrowDownToLine size={16} strokeWidth={2} className="shrink-0" />
           <span
             ref={labelRef}
             className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap transition-opacity duration-200"
-            style={{ opacity: open ? 1 : 0, transitionDelay: open ? "60ms" : "0ms" }}
+            style={{ opacity: open ? 1 : 0, transitionDelay: open ? "80ms" : "0ms" }}
           >
             {label}
-            {version && <span className="text-meta text-accent/70">{version}</span>}
+            {version && <span className="text-meta text-on-color/75">{version}</span>}
           </span>
-        </motion.button>
+        </button>
       </div>
     );
   }

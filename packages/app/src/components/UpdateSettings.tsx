@@ -2,7 +2,7 @@
 // update, check / install, what's new. Web remote and Android: this page's version, reload when a
 // newer build is deployed. State and checks: lib/updates.ts (the same as the sidebar's Update button).
 import { Button, List, Meter, Pill, Row } from "@neuralagent/ui";
-import { ArrowUpCircle, ExternalLink, RefreshCw, ScrollText } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, RefreshCw, ScrollText } from "lucide-react";
 import { usePlatform } from "../lib/store";
 import { applyUpdate, checkNow, openUpdateDialog, useUpdates } from "../lib/updates";
 import { CHANGELOG_URL } from "./ReleaseNotes";
@@ -15,7 +15,7 @@ function CheckRow() {
   if (u.offer) {
     return (
       <Row
-        Icon={ArrowUpCircle}
+        Icon={ArrowDownToLine}
         title={web ? "A newer version of this page is ready" : `Version ${u.offer.version} is available`}
         detail={web ? "Reloading loads it; agents keep running." : "Agents keep running while the app updates."}
         trailing={

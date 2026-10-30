@@ -1,7 +1,7 @@
 // "NeuralAgent X is available": what changed since this version and Install now / Later (desktop),
 // Reload (web remote, Android shell). Also "What's new" for the running version. State: lib/updates.ts.
 import { Button, Callout, Meter, Sheet } from "@neuralagent/ui";
-import { ArrowUpCircle, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ChangelogEntry } from "../lib/platform";
 import { usePlatform } from "../lib/store";
@@ -52,7 +52,7 @@ export function UpdateDialog() {
       {u.installing ? (
         <Meter value={u.progress ?? 0} size="sm" className="flex-1" label={(u.progress ?? 0) >= 1 ? "Restarting…" : `Downloading ${Math.round((u.progress ?? 0) * 100)} %`} />
       ) : (
-        <Button Icon={web ? RefreshCw : ArrowUpCircle} onClick={() => void applyUpdate()} className="flex-1">
+        <Button Icon={web ? RefreshCw : ArrowDownToLine} onClick={() => void applyUpdate()} className="flex-1">
           {web ? "Reload now" : "Install now"}
         </Button>
       )}

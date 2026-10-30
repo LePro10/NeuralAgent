@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, CommandPalette, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
-import { ArrowUpCircle, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
+import { ArrowDownToLine, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
 import { LaunchScreen } from "./components/LaunchScreen";
@@ -48,7 +48,7 @@ const SETTINGS_SHORTCUTS = [
   { id: "set-remote", section: "remote", label: "Remote access", Icon: Smartphone, keywords: "phone devices pair pairing account sign in" },
   { id: "set-mcp", section: "mcp", label: "MCP servers", Icon: Plug, keywords: "tools servers mcp" },
   { id: "set-appearance", section: "appearance", label: "Appearance", Icon: Palette, keywords: "theme dark light colour color" },
-  { id: "set-updates", section: "updates", label: "Updates", Icon: ArrowUpCircle, keywords: "version update changelog" },
+  { id: "set-updates", section: "updates", label: "Updates", Icon: ArrowDownToLine, keywords: "version update changelog" },
 ];
 
 /** Height of the strip along the window's top edge that drags the window (macOS: the title bar's place). */
