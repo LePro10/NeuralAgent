@@ -135,8 +135,9 @@ ok(remote.status === "signed_out", "daemon starts signed out");
 
 const { url } = await desk.req("remote_sign_in", { provider: "test", message: "e2e" });
 ok(url.startsWith(`${RELAY}/auth/test/start?`) && url.includes("code_challenge="), "sign-in URL with PKCE");
-const page = await fetch(`${url}&email=owner@e2e.test&name=Owner`).then((r) => r.text());
-ok(page.includes("You're signed in"), "browser comes back to the daemon");
+const signin = await fetch(`${url}&email=owner@e2e.test&name=Owner`);
+const page = await signin.text();
+ok(page.includes("You're signed in"), `browser comes back to the daemon (${signin.status} ${signin.url.replace(/\?.*/, "")}: ${page.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)})`);
 await until(() => remoteNow().status === "online", "daemon online");
 ok(remoteNow().account?.email === "owner@e2e.test" && remoteNow().fingerprint, "account and fingerprint in state");
 ok(!JSON.stringify(desk.seen).includes("refresh"), "no tokens in the shared state");
