@@ -53,6 +53,11 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         | Request::ProfileDelete { .. } => needs("this change"),
         Request::WorkspaceRemove { .. } => needs("removing a workspace"),
         Request::McpSave { .. } | Request::McpDelete { .. } | Request::McpImport => needs("changing MCP servers"),
+        Request::LlmKeySet { .. } => needs("changing model keys"),
+        // Neural does not talk to itself.
+        Request::OrchSend { .. } | Request::OrchClear | Request::LlmTest if client.kind == ClientKind::Orchestrator => {
+            Err(err(ErrorCode::BadRequest, "not available to the orchestrator"))
+        }
         Request::CatalogRefresh => Ok(()),
         _ => Ok(()),
     }

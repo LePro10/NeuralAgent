@@ -4,7 +4,8 @@ import { apply } from "./apply.ts";
 import type { State, Workspace } from "./gen/index.ts";
 
 const empty: State = { workspaces: [], layouts: {}, sessions: {}, profiles: [], catalog: [], mcp: [],
-    limits: [], remote: { status: "signed_out", relay: "", paused: false, devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude" } };
+    limits: [], remote: { status: "signed_out", relay: "", paused: false, devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude",
+    llm: { provider: "neuralhub", base_url: "", model: "m", call_model: "" } }, orchestrator: { ready: false, keys: [], busy: false, messages: [] } };
 const ws: Workspace = { id: "w1", name: "a", path: "/a", approved: true, pinned: false, order: 1, created_at: 0 };
 
 test("upsert, then remove cascades", () => {
@@ -18,4 +19,14 @@ test("upsert, then remove cascades", () => {
   const s3 = apply(s2, { e: "workspace_removed", id: "w1" });
   assert.equal(s3.workspaces.length, 0);
   assert.equal(s3.layouts["w1"], undefined);
+});
+
+test("orchestrator messages upsert by id", () => {
+  const m = { id: "m1", role: "assistant" as const, text: "Hel", at: 1 };
+  let s = apply(empty, { e: "orch_message", message: m });
+  s = apply(s, { e: "orch_message", message: { ...m, text: "Hello" } });
+  assert.equal(s.orchestrator.messages.length, 1);
+  assert.equal(s.orchestrator.messages[0]!.text, "Hello");
+  s = apply(s, { e: "orch_cleared" });
+  assert.equal(s.orchestrator.messages.length, 0);
 });

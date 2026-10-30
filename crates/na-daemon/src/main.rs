@@ -15,13 +15,16 @@ mod git;
 mod history;
 mod hooks;
 mod layout;
+mod llm;
 mod mcp;
+mod orch;
 mod paths;
 mod policy;
 mod preview;
 mod profiles;
 mod pty;
 mod remote;
+mod secrets;
 mod server;
 mod usage;
 
@@ -81,6 +84,8 @@ fn serve() -> Result<()> {
         *core.port.lock() = port;
         core.resume_after_restart();
         remote::start(&core);
+        core.orch_status();
+        tokio::spawn(orch::watch(core.clone()));
         {
             let core = core.clone();
             std::thread::spawn(move || core.refresh_catalog());

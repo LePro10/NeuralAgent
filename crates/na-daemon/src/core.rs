@@ -49,6 +49,9 @@ struct Persisted {
     /// Agent working time per local day (`YYYY-MM-DD` → ms), for the usage page.
     #[serde(default)]
     busy_days: BTreeMap<String, i64>,
+    /// The conversation with Neural.
+    #[serde(default)]
+    orchestrator: Vec<OrchMessage>,
 }
 
 /// Runtime data of a live session that is not part of the shared state.
@@ -87,6 +90,7 @@ pub struct Core {
     usage: crate::usage::Usage,
     pub remote: crate::remote::Remote,
     pub audit: crate::audit::Audit,
+    pub orch: crate::orch::Orch,
 }
 
 pub struct Subscription {
@@ -111,6 +115,7 @@ impl Core {
             mcp: persisted.mcp,
             limits: persisted.limits,
             remote: Default::default(),
+            orchestrator: OrchState { messages: persisted.orchestrator, ..Default::default() },
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -146,6 +151,7 @@ impl Core {
             usage: Default::default(),
             remote: Default::default(),
             audit,
+            orch: Default::default(),
         })
     }
 
@@ -220,6 +226,7 @@ impl Core {
                 mcp: s.mcp.clone(),
                 limits: s.limits.clone(),
                 busy_days: g.busy_days.clone(),
+                orchestrator: s.orchestrator.messages.iter().filter(|m| !m.text.is_empty()).cloned().collect(),
             })?
         };
         write_private(&self.paths.state(), &data)
@@ -271,6 +278,17 @@ impl Core {
     async fn handle_checked(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
         crate::policy::check(self, client, &req)?;
         match req {
+            Request::OrchSend { text } => self.orch_send(text, None, false).map(|_| json!(null)),
+            Request::OrchStop => {
+                self.orch_stop();
+                Ok(json!(null))
+            }
+            Request::OrchClear => {
+                self.orch_clear();
+                Ok(json!(null))
+            }
+            Request::LlmKeySet { provider, key } => self.llm_key_set(provider, key).map(|_| json!(null)),
+            Request::LlmTest => Ok(json!(self.llm_test().await)),
             Request::AuditList { limit } => Ok(json!(self.audit.list(limit.unwrap_or(200).min(2000) as usize))),
             r @ (Request::RemoteSignIn { .. }
             | Request::RemoteSignOut
@@ -395,6 +413,7 @@ impl Core {
             }
             Request::SettingsSet { settings } => {
                 self.emit(Event::SettingsSet { settings });
+                self.orch_status();
                 Ok(Value::Null)
             }
             Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path),
@@ -1126,6 +1145,20 @@ pub fn apply(s: &mut State, ev: &Event) {
         Event::CatalogSet { catalog } => s.catalog = catalog.clone(),
         Event::SettingsSet { settings } => s.settings = settings.clone(),
         Event::Attention { .. } => {}
+        Event::OrchMessage { message } => {
+            let msgs = &mut s.orchestrator.messages;
+            match msgs.iter_mut().rev().find(|m| m.id == message.id) {
+                Some(m) => *m = message.clone(),
+                None => msgs.push(message.clone()),
+            }
+            crate::orch::trim(msgs);
+        }
+        Event::OrchStatus { ready, keys, busy } => {
+            s.orchestrator.ready = *ready;
+            s.orchestrator.keys = keys.clone();
+            s.orchestrator.busy = *busy;
+        }
+        Event::OrchCleared => s.orchestrator.messages.clear(),
     }
 }
 

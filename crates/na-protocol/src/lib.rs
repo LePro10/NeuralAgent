@@ -173,6 +173,52 @@ pub struct State {
     /// Remote access through the relay (account, connection, devices). Never holds secrets.
     #[serde(default)]
     pub remote: RemoteState,
+    /// Neural, the orchestrator: conversation and whether it can answer.
+    #[serde(default)]
+    pub orchestrator: OrchState,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OrchState {
+    /// A provider is set up (key stored, or a local model).
+    pub ready: bool,
+    /// Providers with a stored key.
+    pub keys: Vec<LlmProvider>,
+    /// Working on an answer.
+    pub busy: bool,
+    /// The conversation, oldest first (the most recent ones only).
+    pub messages: Vec<OrchMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OrchMessage {
+    pub id: Id,
+    pub role: OrchRole,
+    pub text: String,
+    #[ts(type = "number")]
+    pub at: Millis,
+    /// Action: failed (false) or done (true); answers: still streaming (None).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ok: Option<bool>,
+    /// Agent this is about (open it from the chat).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<Id>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum OrchRole {
+    User,
+    Assistant,
+    /// Something Neural did ("Started Claude in Japan Map").
+    Action,
+    /// Something that happened (an agent finished) — Neural knows it too.
+    Notice,
 }
 
 /// Connection to the relay, as the desktop sees it.
@@ -618,6 +664,48 @@ pub struct Settings {
     pub theme: String,
     pub discord_presence: DiscordPresence,
     pub default_profile: Id,
+    /// The model Neural (the orchestrator) uses. The key is kept separately (`LlmKeySet`).
+    #[serde(default)]
+    pub llm: LlmSettings,
+}
+
+/// Bring your own key: which provider and models Neural talks to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct LlmSettings {
+    pub provider: LlmProvider,
+    /// Empty: the provider's usual address.
+    #[serde(default)]
+    pub base_url: String,
+    /// Chat model.
+    pub model: String,
+    /// Model for calls, where speed matters most; empty means the chat model.
+    #[serde(default)]
+    pub call_model: String,
+}
+
+impl Default for LlmSettings {
+    fn default() -> Self {
+        Self {
+            provider: LlmProvider::Neuralhub,
+            base_url: String::new(),
+            model: "claude/claude-sonnet-5-5".into(),
+            call_model: "claude/claude-haiku-5-5".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum LlmProvider {
+    /// NeuralHub (OpenAI-compatible), the default.
+    Neuralhub,
+    Anthropic,
+    /// Any OpenAI-compatible API (base URL + key).
+    Openai,
+    /// Local models, no key.
+    Ollama,
 }
 
 impl Default for Settings {
@@ -628,6 +716,7 @@ impl Default for Settings {
             theme: "ice".into(),
             discord_presence: DiscordPresence::General,
             default_profile: "claude".into(),
+            llm: LlmSettings::default(),
         }
     }
 }
@@ -692,6 +781,16 @@ pub enum Event {
     SettingsSet {
         settings: Settings,
     },
+    /// A message was added to Neural's conversation, or one that is streaming grew.
+    OrchMessage {
+        message: OrchMessage,
+    },
+    OrchStatus {
+        ready: bool,
+        keys: Vec<LlmProvider>,
+        busy: bool,
+    },
+    OrchCleared,
     /// Something the user should notice (agent done / needs input / error).
     Attention {
         session_id: Id,
@@ -863,6 +962,24 @@ pub enum Request {
     RemoteRevoke {
         device_id: Id,
     },
+    // Neural, the orchestrator
+    /// Say something to Neural; the answer arrives as `orch_message` events.
+    OrchSend {
+        text: String,
+    },
+    /// Stop the answer in progress.
+    OrchStop,
+    /// Start a new conversation.
+    OrchClear,
+    /// Store (or with `None` remove) the key for a provider. Desktop only.
+    LlmKeySet {
+        provider: LlmProvider,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        key: Option<String>,
+    },
+    /// Check the current provider settings with a tiny request. Returns `LlmCheck`.
+    LlmTest,
     /// What phones, browsers and the orchestrator did here, newest first.
     AuditList {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -938,6 +1055,19 @@ pub struct HistoryEntry {
     pub prompts: u32,
     #[ts(type = "number")]
     pub updated_at: Millis,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct LlmCheck {
+    pub ok: bool,
+    pub model: String,
+    /// Time to the first token.
+    #[ts(type = "number")]
+    pub ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
 }
 
 /// One action of a phone, browser or the orchestrator on this computer.
