@@ -205,7 +205,7 @@ function Panel({ box, phone, onClose, groups, recent, placeholder, empty }: {
   }
   return (
     <div className="fixed inset-0 z-[var(--z-search)] flex justify-center px-6 pt-[12vh]">
-      <motion.div className="absolute inset-0 bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
+      <motion.div className="absolute inset-0 bg-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
       <motion.div ref={box} role="dialog" aria-modal="true" aria-label="Command palette"
         className="glass glass-thick rim relative flex max-h-[min(520px,72vh)] w-full max-w-[600px] flex-col overflow-hidden !rounded-dialog outline-none"
         initial={{ opacity: 0, scale: 0.92, y: -10, filter: 'blur(8px)' }} animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }} exit={{ opacity: 0, scale: 0.97, filter: 'blur(4px)', transition: { duration: 0.12 } }} transition={SPRING.goo}>

@@ -8,7 +8,7 @@
  * sheets or popovers, the tab bar or the sidebar shows. Without a provider,
  * the viewport decides (min-width 900px), as before.
  */
-import { createContext, useContext, useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 import { DESKTOP, useDesktop } from './hooks';
 
 export type LayoutMode = 'phone' | 'desktop';
@@ -43,6 +43,52 @@ export function usePortalTarget(): HTMLElement {
 /** Height of the portal target — what "100% of the screen" means for a sheet. */
 export function surfaceHeight(target: HTMLElement): number {
   return target === document.body ? window.innerHeight : target.clientHeight;
+}
+
+/** Live height of the portal target: follows window resizes, rotation and a keyboard that resizes the layout. */
+export function useSurfaceHeight(target: HTMLElement): number {
+  const [h, setH] = useState(() => surfaceHeight(target));
+  useLayoutEffect(() => {
+    const read = () => setH(surfaceHeight(target));
+    read();
+    if (target === document.body) {
+      window.addEventListener('resize', read);
+      return () => window.removeEventListener('resize', read);
+    }
+    const ro = new ResizeObserver(read);
+    ro.observe(target);
+    return () => ro.disconnect();
+  }, [target]);
+  return h;
+}
+
+/**
+ * The on-screen keyboard over a surface: how much of the target's bottom it
+ * covers and how tall the visible part is. Works for any portal target (the
+ * AppShell, a preview), not only document.body. null while no keyboard.
+ */
+export function useKeyboardInset(target: HTMLElement): { h: number; bottom: number } | null {
+  const [kb, setKb] = useState<{ h: number; bottom: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const check = () => {
+      const r = target === document.body ? { top: 0, bottom: window.innerHeight } : target.getBoundingClientRect();
+      const visBottom = vv.offsetTop + vv.height;
+      const bottom = Math.max(0, Math.round(r.bottom - visBottom));
+      const top = Math.max(r.top, vv.offsetTop);
+      setKb((old) => {
+        if (bottom < 80) return old ? null : old;
+        const next = { h: Math.round(visBottom - top), bottom };
+        return old && old.h === next.h && old.bottom === next.bottom ? old : next;
+      });
+    };
+    check();
+    vv.addEventListener('resize', check);
+    vv.addEventListener('scroll', check);
+    return () => { vv.removeEventListener('resize', check); vv.removeEventListener('scroll', check); };
+  }, [target]);
+  return kb;
 }
 
 /**

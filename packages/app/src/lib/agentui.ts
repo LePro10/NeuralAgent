@@ -1,0 +1,96 @@
+// Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History):
+// plain-text previews, short relative times, day groups, engine colours.
+import type { SysColor } from "@neuralagent/ui";
+import { useEffect, useState } from "react";
+
+/** Engine → iOS system colour for its tile. Unknown engines are purple. */
+const ENGINE_COLOR: Record<string, SysColor> = {
+  claude: "orange",
+  codex: "indigo",
+  gemini: "blue",
+  antigravity: "teal",
+  cursor: "gray",
+  copilot: "blue",
+  opencode: "teal",
+  grok: "gray",
+  amp: "pink",
+  droid: "green",
+  kimi: "indigo",
+  qwen: "purple",
+  aider: "green",
+  shell: "gray",
+  terminal: "gray",
+  install: "gray",
+};
+export const engineColor = (engine: string): SysColor => ENGINE_COLOR[engine] ?? "purple";
+
+/** Member colours for swarms (avatars), in team order. */
+export const MEMBER_COLORS: SysColor[] = ["blue", "green", "orange", "purple", "pink", "teal", "indigo", "yellow"];
+export const sysVar = (c: SysColor) => `var(--color-sys-${c})`;
+
+/** Markdown and terminal noise → one readable line ("**README.md** now…" → "README.md now…"). */
+export function plainText(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(^|[\s(])[*_]([^*_\n]+)[*_]/g, "$1$2")
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, "")
+    .replace(/^\s*[-–—]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Short relative time for rows: "now", "4m", "2h", "Yesterday", "Mon", "12 Oct". */
+export function shortAgo(ms: number, now = Date.now()): string {
+  const s = Math.max(0, (now - ms) / 1000);
+  if (s < 45) return "now";
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m`;
+  const day = dayKey(ms);
+  if (day === dayKey(now)) return `${Math.floor(s / 3600)}h`;
+  if (day === dayKey(now - 86400000)) return "Yesterday";
+  if (now - ms < 6 * 86400000) return new Date(ms).toLocaleDateString("en-US", { weekday: "short" });
+  return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** Clock time "14:05". */
+export const clock = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+const dayKey = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+/** Section label for a day: "Today", "Yesterday", "Monday", "12 October". */
+export function dayLabel(ms: number, now = Date.now()): string {
+  const k = dayKey(ms);
+  if (k === dayKey(now)) return "Today";
+  if (k === dayKey(now - 86400000)) return "Yesterday";
+  if (now - ms < 6 * 86400000) return new Date(ms).toLocaleDateString("en-US", { weekday: "long" });
+  return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: new Date(ms).getFullYear() === new Date(now).getFullYear() ? undefined : "numeric" });
+}
+
+/** Splits a time-sorted list into day sections, keeping the order. */
+export function byDay<T>(items: T[], at: (t: T) => number, now = Date.now()): { label: string; items: T[] }[] {
+  const out: { label: string; items: T[] }[] = [];
+  for (const it of items) {
+    const label = dayLabel(at(it), now);
+    const last = out.at(-1);
+    if (last?.label === label) last.items.push(it);
+    else out.push({ label, items: [it] });
+  }
+  return out;
+}
+
+/** A clock that ticks, for relative times. */
+export function useNow(every = 30000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), every);
+    return () => clearInterval(t);
+  }, [every]);
+  return now;
+}

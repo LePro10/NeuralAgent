@@ -212,11 +212,19 @@ fn file_url(relay: &Relay, version: &str, file: &str) -> String {
     format!("{}/download/{version}/{file}", relay.cfg.public_url)
 }
 
+/// Clients poll the update endpoints every few minutes (and on focus); a minute of shared caching
+/// lets a proxy or the client absorb bursts without delaying a release noticeably.
+fn cached(res: impl IntoResponse) -> Response {
+    let mut res = res.into_response();
+    res.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static("public, max-age=60"));
+    res
+}
+
 /// The newest release for the landing page and the phone app.
-async fn latest(State(relay): State<Arc<Relay>>) -> ApiResult<Json<serde_json::Value>> {
+async fn latest(State(relay): State<Arc<Relay>>) -> ApiResult<Response> {
     let m = newest_stable(dir(&relay)?)?;
     let downloads: BTreeMap<&String, String> = m.downloads.iter().map(|(k, f)| (k, file_url(&relay, &m.version, f))).collect();
-    Ok(Json(serde_json::json!({ "version": m.version, "notes": m.notes, "pub_date": m.pub_date, "downloads": downloads })))
+    Ok(cached(Json(serde_json::json!({ "version": m.version, "notes": m.notes, "pub_date": m.pub_date, "downloads": downloads }))))
 }
 
 /// Tauri's dynamic update endpoint: 204 when there is nothing newer for this platform.
@@ -230,17 +238,16 @@ async fn update(
         .filter(|m| current.contains('-') || !m.version.contains('-')) // only testers get pre-releases
         .find(|m| m.updates.contains_key(&platform));
     let Some(m) = newer.filter(|m| compare(&m.version, &current) == Ordering::Greater) else {
-        return Ok(StatusCode::NO_CONTENT.into_response());
+        return Ok(cached(StatusCode::NO_CONTENT));
     };
     let u = &m.updates[&platform];
-    Ok(Json(serde_json::json!({
+    Ok(cached(Json(serde_json::json!({
         "version": m.version,
         "notes": m.notes,
         "pub_date": m.pub_date,
         "url": file_url(&relay, &m.version, &u.file),
         "signature": u.signature,
-    }))
-    .into_response())
+    }))))
 }
 
 async fn download(State(relay): State<Arc<Relay>>, UrlPath((version, name)): UrlPath<(String, String)>) -> ApiResult<Response> {
@@ -327,7 +334,9 @@ mod tests {
         let u: serde_json::Value = http.get(format!("{base}/api/update/darwin/aarch64/0.1.0")).send().await.unwrap().json().await.unwrap();
         assert_eq!((u["version"].as_str(), u["signature"].as_str()), (Some("0.2.0"), Some("sig")));
         assert_eq!(u["url"], format!("{base}/download/0.2.0/app.tar.gz"));
-        assert_eq!(http.get(format!("{base}/api/update/darwin/aarch64/0.2.0")).send().await.unwrap().status(), 204);
+        let up_to_date = http.get(format!("{base}/api/update/darwin/aarch64/0.2.0")).send().await.unwrap();
+        assert_eq!(up_to_date.status(), 204);
+        assert_eq!(up_to_date.headers()["cache-control"], "public, max-age=60");
         assert_eq!(http.get(format!("{base}/api/update/windows/x86_64/0.1.0")).send().await.unwrap().status(), 204);
         let body = http.get(format!("{base}/download/0.2.0/app.tar.gz")).send().await.unwrap().text().await.unwrap();
         assert_eq!(body, "0.2.0:app.tar.gz");

@@ -22,6 +22,8 @@ jobs:
           a=$(node -p 'require("./apps/android/package.json").version')
           echo "tag ${GITHUB_REF_NAME}, cargo $v, android $a"
           [ "v$v" = "$GITHUB_REF_NAME" ] && [ "$a" = "$v" ]
+          # Every release needs its CHANGELOG.md section (scripts/changelog.mjs, docs/RELEASING.md).
+          node scripts/changelog.mjs check "$v"
 
   desktop:
     name: Desktop (${{ matrix.target }})
@@ -128,5 +130,6 @@ jobs:
       - name: Upload and publish
         env:
           RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
+          # Only a fallback: the notes come from this version's CHANGELOG.md section.
           RELEASE_NOTES: ${{ github.event.head_commit.message }}
         run: node scripts/release-publish.mjs dist

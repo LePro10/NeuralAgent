@@ -164,6 +164,7 @@ pub fn run() {
             daemon_upgrade,
             update::update_check,
             update::update_install,
+            update::update_server,
             dev_log,
             clipboard_image,
             tray_update,

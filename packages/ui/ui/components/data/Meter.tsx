@@ -30,18 +30,18 @@ export function Meter({ value, max = 1, warn = 0.8, variant = 'tab', size = 'md'
   const shown = share <= 0 ? 0 : Math.min(1, Math.max(0.015, share));
   const fill = share >= 1 ? 'var(--color-danger)'
     : share >= warn ? 'var(--color-ember)'
-    : variant === 'mono' ? 'rgb(255 255 255 / .6)'
+    : variant === 'mono' ? 'rgb(var(--fg-rgb) / .6)'
     : 'var(--color-tab)';
   return (
     <div className={className}>
       {(label || detail) && (
-        <div className="mb-1.5 flex items-baseline justify-between gap-3 text-meta">
+        <div className="mb-1.5 flex items-baseline justify-between gap-3 text-footnote">
           <span className="truncate text-ink">{label}</span>
           <span className="tabular shrink-0 text-dim">{detail}</span>
         </div>
       )}
       <div role="meter" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={typeof label === 'string' ? label : undefined}
-        className={cn('relative overflow-hidden rounded-full bg-fill-3', size === 'sm' ? 'h-[3px]' : 'h-1')}>
+        className={cn('relative overflow-hidden rounded-full bg-fill-3', size === 'sm' ? 'h-[3px]' : 'h-1.5')}>
         <motion.span className="absolute inset-y-0 left-0 rounded-full transition-[background-color] duration-300" style={{ background: fill }}
           initial={{ width: 0 }} animate={{ width: `${shown * 100}%` }} transition={{ duration: 0.8, ease: EASE.outSoft }} />
       </div>

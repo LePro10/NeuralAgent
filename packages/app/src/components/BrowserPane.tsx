@@ -1,4 +1,4 @@
-import { Callout } from "@neuralagent/ui";
+import { Callout, cn, useLayoutMode } from "@neuralagent/ui";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../lib/store";
@@ -32,19 +32,22 @@ export function BrowserPane({ url, onNavigate, onFocus }: { url: string; onNavig
     if (u === url) setReloads((n) => n + 1);
     else onNavigate(u);
   };
+  const phone = useLayoutMode() === "phone";
+  const btn = cn("hoverable grid shrink-0 place-items-center rounded-full text-dim hover:text-bright", phone ? "size-11" : "size-7");
+  const icon = phone ? 18 : 14;
   const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/)/.test(url);
 
   return (
     <div className="flex h-full min-h-0 flex-col" onMouseDown={onFocus}>
-      <div className="flex h-8 shrink-0 items-center gap-1 px-1.5">
+      <div className={cn("flex shrink-0 items-center gap-1", phone ? "h-14 px-1" : "h-9 px-1.5")}>
         <button
           type="button"
           aria-label="Reload"
           title="Reload"
           onClick={() => setReloads((n) => n + 1)}
-          className="hoverable grid size-6 place-items-center rounded-xs text-dim hover:text-ink"
+          className={btn}
         >
-          <RotateCw size={13} strokeWidth={1.6} />
+          <RotateCw size={icon} strokeWidth={1.7} />
         </button>
         <input
           value={draft}
@@ -56,21 +59,21 @@ export function BrowserPane({ url, onNavigate, onFocus }: { url: string; onNavig
           onFocus={(e) => e.currentTarget.select()}
           spellCheck={false}
           aria-label="Address"
-          className="h-6 min-w-0 flex-1 rounded-xs bg-fill-1 px-2 text-meta text-ink outline-none focus:bg-fill-2"
+          className={cn("min-w-0 flex-1 rounded-full bg-fill-2 text-ink outline-none focus:bg-fill-3", phone ? "h-10 px-4 text-center text-input" : "h-7 px-3 text-meta")}
         />
         <button
           type="button"
           aria-label="Open in browser"
           title="Open in browser"
           onClick={() => platform.openExternal(url)}
-          className="hoverable grid size-6 place-items-center rounded-xs text-dim hover:text-ink"
+          className={btn}
         >
-          <ExternalLink size={13} strokeWidth={1.6} />
+          <ExternalLink size={icon} strokeWidth={1.7} />
         </button>
       </div>
       {platform.kind !== "desktop" && local ? (
-        <div className="p-3">
-          <Callout tone="neutral">This preview runs on the computer. Open it there; showing it on this device comes with remote previews.</Callout>
+        <div className="p-4">
+          <Callout tone="neutral" title="Preview runs on the computer">This preview runs on the computer. Open it there; showing it on this device comes with remote previews.</Callout>
         </div>
       ) : (
         <iframe

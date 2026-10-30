@@ -1,12 +1,13 @@
 import type { HistoryEntry, Workspace } from "@neuralagent/protocol";
-import { Button, Empty, List, Page, Row, SearchField, Spinner, toast } from "@neuralagent/ui";
-import { History, Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Empty, List, Page, SearchField, SkeletonList, Spinner, cn, toast } from "@neuralagent/ui";
+import { History, Play, SearchX } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { byDay, plainText, shortAgo, useNow } from "../lib/agentui";
 import { useClient, useDaemon, useUi } from "../lib/store";
-import { GlyphTile } from "./AgentGlyph";
-import { ago } from "../lib/time";
+import { EngineTile } from "./EngineTile";
+import { Glow } from "./Glow";
 
-/** Past Claude Code and Codex conversations on this computer, searchable and resumable. */
+/** Past Claude Code and Codex conversations on this computer, searchable; tap one to resume it. */
 export function HistoryPage() {
   const client = useClient();
   const home = useDaemon((c) => c.host?.home);
@@ -15,6 +16,7 @@ export function HistoryPage() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<HistoryEntry[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const now = useNow();
 
   useEffect(() => {
     let live = true;
@@ -32,6 +34,7 @@ export function HistoryPage() {
   }, [client, query]);
 
   const resume = async (h: HistoryEntry) => {
+    if (busy) return;
     setBusy(h.id);
     try {
       // The workspace whose folder holds the conversation's folder, or a new one for it.
@@ -47,41 +50,66 @@ export function HistoryPage() {
   };
 
   const short = (p: string) => (home && p.startsWith(home) ? `~${p.slice(home.length)}` : p);
+  const days = useMemo(() => byDay(hits ?? [], (h) => h.updated_at, now), [hits, now]);
 
   return (
-    <Page title="History" eyebrow="Conversations">
-      <div className="flex flex-col gap-4 pb-8">
-        <SearchField value={query} onChange={setQuery} placeholder="Search what you asked, titles and folders" autoFocus />
-        {hits === null ? (
-          <div className="grid place-items-center py-16">
-            <Spinner label="Reading past conversations" />
-          </div>
-        ) : hits.length === 0 ? (
-          <Empty
-            Icon={History}
-            title={query ? "Nothing found" : "No conversations yet"}
-            detail={query ? "Try fewer or other words." : "Claude Code and Codex conversations on this computer show up here."}
-          />
-        ) : (
-          <List footer="From the CLIs' own history on this computer. Only what you typed is searched.">
-            {hits.map((h) => (
-              <Row
-                key={`${h.engine}:${h.id}`}
-                leading={<GlyphTile engine={h.engine} />}
-                title={h.title}
-                detail={h.snippet ?? short(h.cwd)}
-                value={`${ago(h.updated_at)} · ${h.prompts} ${h.prompts === 1 ? "prompt" : "prompts"}`}
-                trailing={
-                  <Button size="xs" variant="ghost" Icon={Play} busy={busy === h.id} onClick={() => void resume(h)}>
-                    Resume
-                  </Button>
-                }
-              />
-            ))}
-          </List>
-        )}
-      </div>
-    </Page>
+    <div className="relative h-full">
+      <Glow tint="history" />
+      <Page title="History" eyebrow="Conversations" header={<SearchField value={query} onChange={setQuery} placeholder="Search prompts, titles, folders" />}>
+        <div className="flex flex-col gap-7 pt-2 pb-8">
+          {hits === null ? (
+            <SkeletonList rows={6} label />
+          ) : hits.length === 0 ? (
+            <Empty
+              Icon={query ? SearchX : History}
+              title={query ? "Nothing found" : "No conversations yet"}
+              detail={query ? "Try fewer or other words." : "Claude Code and Codex conversations on this computer show up here."}
+            />
+          ) : (
+            <>
+              {days.map((d) => (
+                <List key={d.label} label={d.label}>
+                  {d.items.map((h) => (
+                    <HistoryRow key={`${h.engine}:${h.id}`} h={h} folder={short(h.cwd)} when={shortAgo(h.updated_at, now)} busy={busy === h.id} onResume={() => void resume(h)} />
+                  ))}
+                </List>
+              ))}
+              <p className="px-4 text-footnote text-dim">From the CLIs’ own history on this computer. Only what you typed is searched. Tap a conversation to continue it.</p>
+            </>
+          )}
+        </div>
+      </Page>
+    </div>
   );
 }
 
+function HistoryRow({ h, folder, when, busy, onResume }: { h: HistoryEntry; folder: string; when: string; busy: boolean; onResume: () => void }) {
+  const snippet = h.snippet ? plainText(h.snippet) : "";
+  return (
+    <button
+      type="button"
+      data-lead=""
+      onClick={onResume}
+      aria-label={`Resume “${h.title}”`}
+      className={cn("press-row flex w-full items-start gap-3 py-3 pr-3 pl-4 text-left hover:bg-fill-1", busy && "bg-fill-2")}
+    >
+      <EngineTile engine={h.engine} className="mt-0.5" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="line-clamp-2 min-w-0 flex-1 text-headline text-bright">{h.title}</span>
+          <span className="shrink-0 text-footnote text-dim tabular">{when}</span>
+        </span>
+        {snippet && <span className="mt-0.5 line-clamp-2 block text-subhead text-ink">{snippet}</span>}
+        <span className="mt-1 flex items-center gap-1.5 text-footnote text-faint">
+          <span className="min-w-0 truncate">{folder}</span>
+          <span className="shrink-0">
+            · {h.prompts} {h.prompts === 1 ? "prompt" : "prompts"}
+          </span>
+        </span>
+      </span>
+      <span className="mt-1 grid size-7 shrink-0 place-items-center rounded-full bg-fill-2 text-accent" aria-hidden="true">
+        {busy ? <Spinner size={14} /> : <Play className="size-3.5 translate-x-px fill-current" />}
+      </span>
+    </button>
+  );
+}

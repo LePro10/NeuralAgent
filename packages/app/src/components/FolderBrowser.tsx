@@ -1,6 +1,6 @@
 import type { FsEntry, FsRoots } from "@neuralagent/protocol";
-import { Button, Empty, Input, List, Row, Sheet, Spinner, toast } from "@neuralagent/ui";
-import { ArrowUp, Clock, Folder, FolderGit2, FolderPlus, Home } from "lucide-react";
+import { Button, Empty, Input, List, Row, SearchField, Sheet, Spinner, cn, toast } from "@neuralagent/ui";
+import { ArrowUp, ChevronRight, Clock, Folder, FolderGit2, FolderPlus, Home } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
@@ -84,62 +84,103 @@ export function FolderBrowserSheet() {
     }
   };
 
+  // Breadcrumbs from the home folder down ("Home › code › app"), or from the root outside it.
+  const crumbs = useMemo(() => {
+    if (!dir || !roots) return [];
+    const home = roots.home.replace(/\/$/, "");
+    const inHome = dir.path === home || dir.path.startsWith(`${home}/`);
+    const base = inHome ? home : "";
+    const rest = dir.path.slice(base.length).split("/").filter(Boolean);
+    const out = [{ name: inHome ? "Home" : "/", path: inHome ? home : "/" }];
+    let cur = base;
+    for (const part of rest) {
+      cur = `${cur}/${part}`;
+      out.push({ name: part, path: cur });
+    }
+    return out;
+  }, [dir, roots]);
+  const here = crumbs.at(-1)?.name ?? "this folder";
+
+  const chip = "pressable flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-fill-2 px-3.5 text-subhead text-ink";
   return (
     <Sheet
       open={open}
       onClose={() => close(null)}
       title="Choose a folder"
       eyebrow="On the host computer"
-      size="md"
-      action={
-        <Button size="sm" disabled={!dir} onClick={() => dir && close(dir.path)}>
-          Choose
+      size="lg"
+      footer={
+        <Button variant="primary" size="lg" className="w-full" disabled={!dir} onClick={() => dir && close(dir.path)}>
+          {dir ? `Use “${here}”` : "Choose"}
         </Button>
       }
     >
       <div className="flex flex-col gap-4 pb-4">
         {roots && (
-          <div className="flex flex-wrap gap-1.5">
-            <Button size="xs" variant="ghost" Icon={Home} onClick={() => go(roots.home)}>
+          <div className="scroll-x -mx-4 flex gap-2 px-4" data-no-swipe>
+            <button type="button" className={chip} onClick={() => go(roots.home)}>
+              <Home className="size-4 text-dim" strokeWidth={1.8} aria-hidden />
               Home
-            </Button>
+            </button>
             {recent.map((w) => (
-              <Button key={w.id} size="xs" variant="ghost" Icon={Clock} onClick={() => go(w.path)}>
+              <button key={w.id} type="button" className={chip} onClick={() => go(w.path)}>
+                <Clock className="size-4 text-dim" strokeWidth={1.8} aria-hidden />
                 {w.name}
-              </Button>
+              </button>
             ))}
             {roots.projects.map((p) => (
-              <Button key={p.path} size="xs" variant="ghost" Icon={p.git ? FolderGit2 : Folder} onClick={() => go(p.path)}>
+              <button key={p.path} type="button" className={chip} onClick={() => go(p.path)}>
+                {p.git ? <FolderGit2 className="size-4 text-dim" strokeWidth={1.8} aria-hidden /> : <Folder className="size-4 text-dim" strokeWidth={1.8} aria-hidden />}
                 {p.name}
-              </Button>
+              </button>
             ))}
           </div>
         )}
-        <Input value={filter} onChange={(e) => setFilter(e.currentTarget.value)} placeholder="Search in this folder" aria-label="Search in this folder" />
+        <SearchField value={filter} onChange={setFilter} placeholder={`Search in ${here}`} />
+        {crumbs.length > 0 && (
+          <nav aria-label="Path" className="scroll-x -mx-4 flex items-center gap-0.5 px-4" data-no-swipe>
+            {crumbs.map((c, i) => {
+              const last = i === crumbs.length - 1;
+              return (
+                <span key={c.path} className="flex shrink-0 items-center gap-0.5">
+                  {i > 0 && <ChevronRight className="size-3.5 text-faint" aria-hidden />}
+                  <button
+                    type="button"
+                    disabled={last}
+                    aria-current={last ? "location" : undefined}
+                    onClick={() => go(c.path)}
+                    className={cn("pressable h-8 max-w-48 truncate rounded-full px-2 text-subhead", last ? "text-bright" : "text-accent")}
+                  >
+                    {c.name}
+                  </button>
+                </span>
+              );
+            })}
+          </nav>
+        )}
         <List
-          label={dir?.path ?? "…"}
           action={
-            <Button size="xs" variant="quiet" Icon={FolderPlus} onClick={() => setCreating((v) => !v)}>
+            <Button size="sm" variant="quiet" Icon={FolderPlus} onClick={() => setCreating((v) => !v)}>
               New folder
             </Button>
           }
-          footer={isGit ? "This folder is a git repository." : undefined}
+          label={isGit ? "Git repository" : "Folders"}
         >
           {creating && (
-            <div className="flex gap-2 p-3">
+            <div className="flex gap-2 px-4 py-3">
               <Input autoFocus value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Folder name" className="flex-1" aria-label="New folder name" onKeyDown={(e) => e.key === "Enter" && void mkdir()} />
-              <Button size="sm" disabled={!name.trim()} onClick={() => void mkdir()}>
+              <Button variant="primary" disabled={!name.trim()} onClick={() => void mkdir()}>
                 Create
               </Button>
             </div>
           )}
-          {dir?.parent && (platform.kind === "desktop" || dir.path !== roots?.home) && <Row Icon={ArrowUp} title="Up" detail={dir.parent} onClick={() => go(dir.parent!)} />}
+          {dir?.parent && (platform.kind === "desktop" || dir.path !== roots?.home) && <Row Icon={ArrowUp} tile="gray" title="Up one level" onClick={() => go(dir.parent!)} />}
           {shown.map((e) => (
-            <Row key={e.path} Icon={e.git ? FolderGit2 : Folder} title={e.name} detail={e.git ? "git repository" : undefined} onClick={() => go(e.path)} />
+            <Row key={e.path} Icon={e.git ? FolderGit2 : Folder} tile={e.git ? "orange" : "blue"} title={e.name} value={e.git ? "git" : undefined} onClick={() => go(e.path)} />
           ))}
         </List>
         {loading && <Spinner label="Loading" />}
-        {!loading && dir && shown.length === 0 && <Empty Icon={Folder} title={filter ? "No match" : "No subfolders"} detail="Choose this folder, or create a new one." />}
+        {!loading && dir && shown.length === 0 && <Empty Icon={Folder} title={filter ? "No match" : "No subfolders"} detail="Use this folder, or create a new one." />}
       </div>
     </Sheet>
   );

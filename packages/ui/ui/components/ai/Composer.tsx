@@ -183,7 +183,7 @@ export function Composer({ onSend, placeholder = 'Ask anything', busy, progress,
         )}
       </AnimatePresence>
 
-      <div className={cn('relative rounded-sheet border-hair transition-[border-color,box-shadow] duration-300 focus-within:border-white/20 min-[900px]:rounded-dialog',
+      <div className={cn('relative rounded-sheet border-hair transition-[border-color,box-shadow] duration-300 focus-within:border-[rgb(var(--fg-rgb)/.2)] min-[900px]:rounded-dialog',
         compact ? 'border-transparent well' : 'glass !shadow-none', drag && '!border-accent/50 shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-accent)_12%,transparent)]')}>
         <AnimatePresence initial={false}>
           {files.length > 0 && (
@@ -298,11 +298,11 @@ function Tile({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
   return (
     <motion.div layout initial={{ scale: 0.88, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.88, opacity: 0, transition: { duration: 0.12 } }} transition={SPRING.pop} className="relative mt-1 shrink-0" title={name}>
       <button type="button" aria-label={`Remove ${name}`} onClick={onRemove}
-        className="absolute -top-1 -right-1 z-10 grid h-[18px] w-[18px] place-items-center rounded-full bg-card-3 text-ink shadow-[0_1px_3px_rgb(0_0_0/.5)] after:absolute after:-inset-3 after:content-[''] hover:text-bright">
+        className="absolute -top-1 -right-1 z-10 grid h-[18px] w-[18px] place-items-center rounded-full bg-card-3 text-ink shadow-[0_1px_3px_rgb(0_0_0/.3)] after:absolute after:-inset-3 after:content-[''] hover:text-bright">
         <X size={10} strokeWidth={2.4} />
       </button>
       {a.kind === 'file' && a.url ? (
-        <img src={a.url} alt={name} className="h-12 w-12 rounded-tile border-hair border-white/10 object-cover" />
+        <img src={a.url} alt={name} className="h-12 w-12 rounded-tile border-hair border-line object-cover" />
       ) : (
         <div className="flex h-12 w-[168px] items-center gap-2 surface rounded-field pr-2.5 pl-1.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-tile bg-fill-3 text-dim">
@@ -334,7 +334,7 @@ export function ComposerDock({ children, className }: { children: ReactNode; cla
   return (
     <div className={cn('pointer-events-none absolute inset-x-0 bottom-0 z-20', className)}
       style={{ paddingBottom: keyboard ? 8 : 'calc(var(--tabbar-space) + 6px)' }}>
-      <div aria-hidden="true" className="absolute inset-x-0 -top-8 bottom-0 bg-[linear-gradient(180deg,rgb(8_9_9/0),rgb(8_9_9/.82)_45%,var(--color-bg))]" />
+      <div aria-hidden="true" className="absolute inset-x-0 -top-8 bottom-0 bg-[linear-gradient(180deg,transparent,color-mix(in_oklab,var(--color-bg)_82%,transparent)_45%,var(--color-bg))]" />
       <div className="pointer-events-auto relative mx-auto w-full max-w-[760px] px-3">{children}</div>
     </div>
   );

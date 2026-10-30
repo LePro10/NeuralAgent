@@ -8,8 +8,9 @@
     "dev:web": "pnpm --filter @neuralagent/web dev",
     "build:web": "pnpm --filter @neuralagent/web build",
     "typecheck": "pnpm -r --parallel typecheck",
-    "test": "pnpm -r --parallel test",
-    "lint:tokens": "node scripts/check-tokens.mjs"
+    "test": "pnpm -r --parallel test && node --test scripts/changelog.test.mjs",
+    "lint:tokens": "node scripts/check-tokens.mjs",
+    "changelog": "node scripts/changelog.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

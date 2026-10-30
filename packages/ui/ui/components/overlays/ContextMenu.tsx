@@ -127,7 +127,7 @@ function Overlay({ state, items, onClose, children, target, radius }: { state: {
   return (
     <div className="fixed inset-0 z-[var(--z-context)]" onContextMenu={(e) => e.preventDefault()}>
       <motion.div
-        className={at ? 'absolute inset-0' : 'absolute inset-0 bg-black/35 backdrop-blur-md'}
+        className={at ? 'absolute inset-0' : 'absolute inset-0 bg-scrim backdrop-blur-md'}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, transition: { duration: 0.2 } }}
         exit={{ opacity: 0, transition: { duration: 0.14 } }}

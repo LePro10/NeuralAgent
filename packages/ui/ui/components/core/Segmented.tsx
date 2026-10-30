@@ -1,7 +1,8 @@
 /**
- * Segmented control. A sunk track (well) and a raised pill that slides on it
- * (spring `snap`) — like iOS, not a white blob. `sm` is the quiet secondary
- * switch inside cards. `scroll` lets many options run sideways on phones.
+ * Segmented control (iOS): a filled capsule track and a lifted thumb that
+ * slides between options (spring `snap`). md is h-control-sm (36 on phones),
+ * sm is the quiet secondary switch inside cards. `scroll` lets many options run
+ * sideways on phones.
  */
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,7 +19,7 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
   const id = useId();
   const sm = size === 'sm';
   const track = (
-    <div role="tablist" aria-label={label} className={cn('well relative flex rounded-full p-[3px]', scroll && 'w-max min-w-full', !scroll && className)}>
+    <div role="tablist" aria-label={label} className={cn('relative flex rounded-full bg-fill-3 p-[3px]', sm ? 'h-8' : 'h-control-sm', scroll && 'w-max min-w-full', !scroll && className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -29,19 +30,19 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
             aria-selected={active}
             onClick={() => { if (!active) { haptic('select'); onChange(o.value); } }}
             className={cn(
-              'relative z-10 flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full transition-colors duration-200',
-              sm ? 'h-6 px-2.5 text-meta' : 'h-[30px] px-3.5 text-chip',
-              active ? 'text-bright' : 'text-dim hover:text-ink',
+              'relative z-10 flex h-full flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full transition-colors duration-200',
+              sm ? 'px-2.5 text-footnote' : 'px-3.5 text-subhead',
+              active ? 'text-bright' : 'text-ink hover:text-bright',
             )}
           >
             {active && (
               <motion.span
                 layoutId={`seg-${id}`}
-                className="absolute inset-0 -z-10 rounded-full bg-white/[.14] shadow-[var(--shadow-raise),inset_0_var(--hair)_0_rgb(255_255_255/.2),0_0_14px_-4px_color-mix(in_oklab,var(--color-accent)_55%,transparent)]"
-                transition={SPRING.goo}
+                className="absolute inset-0 -z-10 rounded-full bg-thumb shadow-raise"
+                transition={SPRING.snap}
               />
             )}
-            {o.Icon && <o.Icon size={sm ? 12 : 13} strokeWidth={1.75} />}
+            {o.Icon && <o.Icon size={sm ? 13 : 15} strokeWidth={1.75} className={sm ? undefined : 'size-icon-sm'} />}
             {o.label}
           </button>
         );

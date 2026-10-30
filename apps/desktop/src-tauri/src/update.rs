@@ -19,6 +19,22 @@ struct Progress {
     total: Option<u64>,
 }
 
+/// The relay the app updates from (also serves `/changelog.json` for the update dialog).
+fn server() -> String {
+    std::env::var("NEURALAGENT_UPDATE_URL")
+        .ok()
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(|| "https://agent.neuralhub.dev".into())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// Base URL of the update server; the page fetches `<server>/changelog.json` itself (CSP allows it).
+#[tauri::command]
+pub fn update_server() -> String {
+    server()
+}
+
 fn updater(app: &AppHandle) -> Result<Updater, String> {
     let mut b = app.updater_builder();
     if let Some(url) = std::env::var("NEURALAGENT_UPDATE_URL").ok().filter(|u| !u.is_empty()) {

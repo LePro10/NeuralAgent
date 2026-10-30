@@ -71,7 +71,7 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, label, f
         </div>
         {steps > 0 && steps <= 20 && (
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2">
-            {Array.from({ length: steps + 1 }, (_, i) => <i key={i} className="absolute h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30" style={{ left: `${(i / steps) * 100}%` }} />)}
+            {Array.from({ length: steps + 1 }, (_, i) => <i key={i} className="absolute h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgb(var(--fg-rgb)/.3)]" style={{ left: `${(i / steps) * 100}%` }} />)}
           </div>
         )}
         <motion.div className="absolute top-1/2" style={{ left }}>

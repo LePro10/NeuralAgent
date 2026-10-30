@@ -27,6 +27,7 @@ export function Footer({ children }: { children?: ReactNode }) {
   return (
     <footer className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-8 text-detail text-dim">
       <span>&copy; {new Date().getFullYear()} Leandro Probst</span>
+      <a href="/changelog" className="hover:text-bright">Changelog</a>
       <a href="/imprint" className="hover:text-bright">Imprint</a>
       <a href="/privacy" className="hover:text-bright">Privacy</a>
       <a href="/terms" className="hover:text-bright">Terms</a>

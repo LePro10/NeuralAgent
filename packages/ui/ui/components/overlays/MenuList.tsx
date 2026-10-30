@@ -1,7 +1,7 @@
 /**
- * The one look of every small menu (pull-down, context menu): light glass
- * like a glass button, a rim lit from above (no drawn border), 13px corners, rows that are
- * 38px on phones and 30px with a pointer. Labels left, icons right (as iOS does), a check column
+ * The one look of every small menu (pull-down, context menu): an opaque
+ * material card (readable over anything), 13px corners, rows that are 44px on
+ * phones (iOS context menu) and 30px with a pointer. Labels left, icons right (as iOS does), a check column
  * on the left when the menu holds choices, tiny dim section labels, hairline
  * dividers, destructive rows in red.
  *
@@ -14,9 +14,8 @@ import { cn } from '../../lib/cn';
 import { SPRING } from '../../lib/motion';
 import type { MenuEntry } from './Menu';
 
-/** Glass of small menus: the same light glass as a glass button — a faint white veil, strong blur,
- *  a rim lit from the top. Never a dark box. */
-export const MENU_SURFACE = 'glass rim rounded-menu p-1';
+/** Surface of small menus: opaque material, so labels read over busy content. */
+export const MENU_SURFACE = 'material rounded-menu p-1';
 
 const list: Variants = { show: { transition: { staggerChildren: 0.018, delayChildren: 0.03 } } };
 const row: Variants = {
@@ -27,7 +26,7 @@ const row: Variants = {
 /** Approximate height of a list, for placing it above or below its trigger. */
 export function menuHeight(items: MenuEntry[], touch: boolean) {
   const rich = items.some((e) => e.glyph && e.detail);
-  const rowH = rich ? (touch ? 46 : 40) : touch ? 38 : 30;
+  const rowH = rich ? (touch ? 52 : 40) : touch ? 44 : 30;
   return items.length * rowH + items.filter((e) => e.divider && !e.section).length * 9 + items.filter((e) => e.section).length * 24 + 8;
 }
 
@@ -48,8 +47,8 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
       {items.map((e, i) => (
         <motion.div key={`${e.id ?? e.label}-${i}`} variants={row} role="none"
           onPointerEnter={(ev) => { if (ev.pointerType === 'mouse' && !e.disabled) setHot(i); }} onFocusCapture={() => setHot(i)}>
-          {e.divider && !e.section && i > 0 && <div className="mx-2.5 my-1 h-[var(--hair)] bg-white/[.07]" />}
-          {e.section && <div className={cn('px-2.5 pb-0.5 text-tiny text-faint', i > 0 ? 'mt-1 border-t-hair border-white/[.06] pt-2' : 'pt-1')}>{e.section}</div>}
+          {e.divider && !e.section && i > 0 && <div className="mx-2.5 my-1 h-[var(--hair)] bg-line" />}
+          {e.section && <div className={cn('px-2.5 pb-0.5 text-caption text-dim', i > 0 ? 'mt-1 border-t-hair border-line pt-2' : 'pt-1')}>{e.section}</div>}
           <button
             type="button"
             disabled={e.disabled}
@@ -57,14 +56,15 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
             aria-checked={e.checked}
             onClick={() => onChoose(e)}
             className={cn(
-              'relative isolate flex w-full items-center gap-2 rounded-item px-2.5 text-left text-chip outline-none transition-colors duration-100',
-              'active:bg-white/[.06] disabled:opacity-35',
-              rich ? (touch ? 'min-h-[46px] py-1' : 'min-h-10 py-1') : touch ? 'h-[38px]' : 'h-[30px]',
+              'relative isolate flex w-full items-center gap-2 rounded-item px-2.5 text-left outline-none transition-colors duration-100',
+              'active:bg-press disabled:opacity-35',
+              touch ? 'text-body' : 'text-chip',
+              rich ? (touch ? 'min-h-[52px] py-1' : 'min-h-10 py-1') : touch ? 'h-11' : 'h-[30px]',
               e.destructive ? 'text-danger' : 'text-bright',
             )}
           >
             {hot === i && (
-              <motion.span aria-hidden="true" layoutId={`mh-${lens}`} className="absolute inset-0 -z-10 rounded-item bg-white/[.09] shadow-[inset_0_var(--hair)_0_rgb(255_255_255/.12)]" transition={SPRING.goo} />
+              <motion.span aria-hidden="true" layoutId={`mh-${lens}`} className="absolute inset-0 -z-10 rounded-item bg-lens" transition={SPRING.goo} />
             )}
             {choices && (
               <span className="grid w-3.5 shrink-0 place-items-center text-bright">
@@ -75,7 +75,7 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
             {rich ? (
               <span className="min-w-0 flex-1">
                 <span className="block truncate leading-tight">{e.label}</span>
-                {e.detail && <span className="block truncate text-tiny leading-tight text-dim">{e.detail}</span>}
+                {e.detail && <span className="block truncate text-caption leading-tight text-dim">{e.detail}</span>}
               </span>
             ) : (
               <>
@@ -84,7 +84,7 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
               </>
             )}
             {!touch && e.shortcut && <kbd className="font-mono text-tiny text-faint">{e.shortcut}</kbd>}
-            {e.Icon && <e.Icon size={14} strokeWidth={1.6} className={cn('shrink-0', e.destructive ? '' : 'text-dim')} />}
+            {e.Icon && <e.Icon size={14} strokeWidth={1.6} className={cn('shrink-0', touch && 'size-icon-sm', e.destructive ? '' : 'text-dim')} />}
           </button>
         </motion.div>
       ))}

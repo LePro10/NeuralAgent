@@ -26,10 +26,40 @@ export function useKeyboardOpen(): boolean {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const full = window.innerHeight;
-    const check = () => setOpen(vv.height < full * 0.8);
+    // The tallest the screen has been at this width: a keyboard that resizes the layout
+    // (interactive-widget=resizes-content, Android) shrinks innerHeight too.
+    let width = window.innerWidth, full = Math.max(window.innerHeight, vv.height);
+    // Only a field the user tapped counts on its own: code that focuses a field (a terminal
+    // taking focus when it opens) does not raise the keyboard.
+    let tapped: { el: Element; at: number } | null = null;
+    const down = (e: PointerEvent) => { if (e.target instanceof Element) tapped = { el: e.target, at: performance.now() }; };
+    let userFocus = false;
+    const focusin = (e: FocusEvent) => {
+      const f = e.target instanceof Element ? e.target : null;
+      const t = tapped && performance.now() - tapped.at < 1000 ? tapped.el : null;
+      userFocus = !!(f && t && (t === f || t.contains(f) || f.contains(t) || t.closest('label, .xterm')?.contains(f)));
+      check();
+    };
+    const check = () => {
+      if (window.innerWidth !== width) { width = window.innerWidth; full = Math.max(window.innerHeight, vv.height); }
+      full = Math.max(full, window.innerHeight, vv.height);
+      const typing = !!document.activeElement?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea, [contenteditable="true"]');
+      // Touch screens without a resize signal (some WebViews, a keyboard that overlays the page):
+      // a focused text field on a coarse pointer means the on-screen keyboard is up.
+      const touch = matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches;
+      setOpen(typing && (vv.height < full * 0.8 || (touch && userFocus)));
+    };
+    check();
     vv.addEventListener('resize', check);
-    return () => vv.removeEventListener('resize', check);
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('focusin', focusin);
+    window.addEventListener('focusout', check);
+    return () => {
+      vv.removeEventListener('resize', check);
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('focusin', focusin);
+      window.removeEventListener('focusout', check);
+    };
   }, []);
   return open;
 }

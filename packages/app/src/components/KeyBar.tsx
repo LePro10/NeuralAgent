@@ -1,8 +1,15 @@
-import { IconButton } from "@neuralagent/ui";
-import { ArrowUp, ClipboardPaste, ImagePlus } from "lucide-react";
+import { IconButton, haptic } from "@neuralagent/ui";
+import { ArrowUp, ClipboardPaste, ImagePlus, TextSelect } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useClient, usePlatform } from "../lib/store";
-import { filesOf, isImage, pathToken, readClipboardFiles, uploadFile } from "./claude/files";
+import {
+  filesOf,
+  isImage,
+  pathToken,
+  readClipboardFiles,
+  uploadFile,
+} from "./claude/files";
+import { showTerminalText } from "./TerminalText";
 
 // Keys a phone keyboard lacks, for answering agent prompts (menus, approvals, interrupts).
 const KEYS: [string, string][] = [
@@ -30,8 +37,13 @@ export function KeyBar({ sid }: { sid: string }) {
     if (!imgs.length) return;
     setNote("Uploading…");
     try {
-      const paths = await Promise.all(imgs.map((f) => uploadFile(client, sid, f)));
-      setText((t) => `${t}${t && !/\s$/.test(t) ? " " : ""}${paths.map(pathToken).join(" ")} `);
+      const paths = await Promise.all(
+        imgs.map((f) => uploadFile(client, sid, f)),
+      );
+      setText(
+        (t) =>
+          `${t}${t && !/\s$/.test(t) ? " " : ""}${paths.map(pathToken).join(" ")} `,
+      );
       setNote("");
     } catch (e) {
       setNote((e as Error).message);
@@ -60,42 +72,98 @@ export function KeyBar({ sid }: { sid: string }) {
     setText("");
     setTimeout(() => client.write(sid, "\r"), text ? 60 : 0);
   };
+  // Keep the terminal (and the on-screen keyboard) focused while tapping keys.
+  const keep = (e: { preventDefault: () => void }) => e.preventDefault();
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-t border-line px-2 py-1.5">
+    <div className="material flex shrink-0 flex-col gap-2 border-t border-line px-2 pt-2 pb-2">
+      <div className="scroll-x flex gap-1.5" data-no-swipe>
+        <span onPointerDown={keep} className="contents">
+          <IconButton
+            type="button"
+            variant="fill"
+            label="Select and copy text"
+            onClick={() => showTerminalText(sid)}
+            className="!size-10 shrink-0 !rounded-item"
+          >
+            <TextSelect />
+          </IconButton>
+          <IconButton
+            type="button"
+            variant="fill"
+            label="Paste image from clipboard"
+            onClick={() => void paste()}
+            className="!size-10 shrink-0 !rounded-item"
+          >
+            <ClipboardPaste />
+          </IconButton>
+        </span>
+        <span aria-hidden className="mx-0.5 my-2 w-px shrink-0 bg-line" />
+        {KEYS.map(([label, seq]) => (
+          <button
+            key={label}
+            type="button"
+            onPointerDown={keep}
+            onClick={() => {
+              haptic("select");
+              client.write(sid, seq);
+            }}
+            className="pressable h-10 min-w-11 shrink-0 rounded-item bg-fill-2 px-3 font-mono text-subhead text-ink shadow-edge active:bg-fill-4"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <form
-        className="flex items-center gap-1.5"
+        className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           send();
         }}
       >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onPaste={(e) => {
-            const f = filesOf(e.clipboardData);
-            if (f.length) {
-              e.preventDefault();
-              void add(f);
-            } else if (!e.clipboardData.getData("text/plain") && platform.readClipboardImage) {
-              e.preventDefault();
-              void nativePaste();
-            }
-          }}
-          placeholder="Type to the agent"
-          enterKeyHint="send"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-label="Type to the agent"
-          className="h-9 min-w-0 flex-1 rounded-field bg-fill-2 px-3 text-input text-bright outline-none placeholder:text-faint"
-        />
-        <IconButton type="button" size="sm" variant="ghost" label="Paste image from clipboard" onClick={() => void paste()}>
-          <ClipboardPaste />
-        </IconButton>
-        <IconButton type="button" size="sm" variant="ghost" label="Add a photo or image" onClick={() => pick.current?.click()}>
+        <IconButton
+          type="button"
+          variant="fill"
+          label="Add a photo or image"
+          onClick={() => pick.current?.click()}
+          className="shrink-0"
+        >
           <ImagePlus />
         </IconButton>
+        <div className="flex h-11 min-w-0 flex-1 items-center rounded-full bg-fill-2 pr-1 pl-4 shadow-edge">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onPaste={(e) => {
+              const f = filesOf(e.clipboardData);
+              if (f.length) {
+                e.preventDefault();
+                void add(f);
+              } else if (
+                !e.clipboardData.getData("text/plain") &&
+                platform.readClipboardImage
+              ) {
+                e.preventDefault();
+                void nativePaste();
+              }
+            }}
+            placeholder="Type to the agent"
+            enterKeyHint="send"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="Type to the agent"
+            className="h-full min-w-0 flex-1 bg-transparent text-input text-bright outline-none placeholder:text-faint"
+          />
+          <IconButton
+            type="submit"
+            size="sm"
+            variant="solid"
+            label="Send"
+            className="shrink-0"
+          >
+            <ArrowUp />
+          </IconButton>
+        </div>
         <input
           ref={pick}
           type="file"
@@ -107,25 +175,12 @@ export function KeyBar({ sid }: { sid: string }) {
             e.target.value = "";
           }}
         />
-        <IconButton type="submit" size="sm" variant="tint" label="Send">
-          <ArrowUp />
-        </IconButton>
       </form>
-      {note && <div className="px-1 text-meta text-faint" role="status">{note}</div>}
-      <div className="flex gap-1 overflow-x-auto">
-      {KEYS.map(([label, seq]) => (
-        <button
-          key={label}
-          type="button"
-          // Keep the terminal (and the on-screen keyboard) focused.
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => client.write(sid, seq)}
-          className="h-8 min-w-10 shrink-0 rounded-xs bg-fill-2 px-2.5 font-mono text-meta text-ink active:bg-fill-4"
-        >
-          {label}
-        </button>
-      ))}
-      </div>
+      {note && (
+        <div className="px-2 text-footnote text-dim" role="status">
+          {note}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { App, DaemonProvider, type Platform, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
+import { App, DaemonProvider, type ChangelogEntry, type Platform, type ServiceSwitch, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { getVersion } from "@tauri-apps/api/app";
@@ -32,8 +32,19 @@ let canNotify: Promise<boolean> | null = null;
 const notifyAllowed = () =>
   (canNotify ??= isPermissionGranted().then(async (ok) => ok || (await requestPermission()) === "granted").catch(() => false));
 
-/** Version of the service we are connected to; after an app update it is the old one for a while. */
+/**
+ * The service we are connected to. After an app update it is the old one for a while: the switch
+ * waits until no session (agent or terminal) is alive, see the end of this file. Shown in the
+ * sidebar foot, the update dialog and Settings → Updates (lib/updates.ts in @neuralagent/app).
+ */
 let serviceVersion = "";
+let service: ServiceSwitch = { version: "", waiting: false, switching: false, error: null };
+const serviceSubs = new Set<() => void>();
+const setService = (p: Partial<ServiceSwitch>) => {
+  service = { ...service, ...p };
+  serviceSubs.forEach((f) => f());
+};
+let retryService = () => {};
 
 const platform: Platform = {
   kind: "desktop",
@@ -42,6 +53,7 @@ const platform: Platform = {
   connect: async () => {
     const { url, version } = await invoke<{ url: string; version: string }>("daemon_connect");
     serviceVersion = version;
+    setService({ version });
     return webSocketTransport(url);
   },
   pickFolder: async () => {
@@ -84,6 +96,18 @@ const platform: Platform = {
     check: () => invoke<UpdateInfo | null>("update_check"),
     install: () => invoke("update_install"),
     onProgress: (cb) => subscribe<{ done: number; total: number | null }>("update-progress", cb),
+    // The relay serves CHANGELOG.md as /changelog.json (web build); fetched here (CSP connect-src).
+    changelog: async () => {
+      const base = await invoke<string>("update_server");
+      const res = await fetch(`${base}/changelog.json`, { cache: "no-cache" });
+      if (!res.ok) throw new Error(`changelog: ${res.status}`);
+      return ((await res.json()) as { versions: ChangelogEntry[] }).versions;
+    },
+    service: {
+      get: () => service,
+      subscribe: (cb) => (serviceSubs.add(cb), () => void serviceSubs.delete(cb)),
+      retry: () => retryService(),
+    },
   },
 };
 
@@ -95,23 +119,40 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 
 const client = new DaemonClient(platform.connect, { kind: "desktop", name: platform.clientName });
 
-// After an app update the old service keeps the agents running. Once none runs, switch to this
-// version's service (the client reconnects by itself).
+// After an app update the old service keeps the agents running. Once no session (agent or
+// terminal) is alive, switch to this version's service (the client reconnects by itself). A failed
+// switch is not retried by itself (it would loop); the UI shows the error with a Retry button.
 void getVersion().then((app) => {
   let upgrading = false;
-  client.subscribe(() => {
+  let failed = false;
+  const tryUpgrade = () => {
     const st = client.state;
-    if (upgrading || !st || !serviceVersion || serviceVersion === app) return;
-    if (Object.values(st.sessions).some((s) => s.alive)) return;
+    const behind = !!serviceVersion && serviceVersion !== app;
+    const busy = !!st && Object.values(st.sessions).some((s) => s.alive);
+    if (service.waiting !== (behind && busy)) setService({ waiting: behind && busy });
+    if (upgrading || failed || !st || !behind || busy) return;
     upgrading = true;
+    setService({ switching: true, error: null });
     invoke<string>("daemon_upgrade").then(
       (v) => {
         serviceVersion = v;
         upgrading = false;
+        setService({ version: v, switching: false, waiting: false });
       },
-      (e) => console.error("service upgrade (not retried until the app restarts)", e),
+      (e) => {
+        console.error("service upgrade failed", e);
+        upgrading = false;
+        failed = true;
+        setService({ switching: false, error: String(e) });
+      },
     );
-  });
+  };
+  retryService = () => {
+    failed = false;
+    setService({ error: null });
+    tryUpgrade();
+  };
+  client.subscribe(tryUpgrade);
 });
 
 // This app is the host's UI for remote devices (D42): the daemon forwards voice settings and

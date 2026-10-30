@@ -51,6 +51,33 @@
   /* Status */
   --color-danger: #ff6b6b;
   --color-warning: #ffb454;
+  --color-success: #4fd88a;
+  --color-info: #64a8ff;
+
+  /* System colours (iOS dark values) — coloured icon tiles, semantic accents,
+     chart-free colour coding. White glyphs sit on them (text-on-color). */
+  --color-sys-blue: #0a84ff;
+  --color-sys-green: #30d158;
+  --color-sys-orange: #ff9f0a;
+  --color-sys-red: #ff453a;
+  --color-sys-yellow: #ffd60a;
+  --color-sys-purple: #bf5af2;
+  --color-sys-pink: #ff375f;
+  --color-sys-teal: #40c8e0;
+  --color-sys-indigo: #5e5ce6;
+  --color-sys-gray: #8e8e93;
+  --color-on-color: #ffffff;      /* glyphs and labels on a saturated fill */
+
+  /* Materials & interaction (opaque where text must stay readable). */
+  --color-material: #1c1e1d;      /* menus, action sheets, context menus: opaque */
+  --color-navbar: rgb(10 11 11 / 0.72); /* collapsed nav bar, under backdrop blur */
+  --color-scrim: rgb(0 0 0 / 0.48); /* dims the page under a sheet / dialog */
+  --color-press: rgb(255 255 255 / 0.08); /* row / tile pressed */
+  --color-lens: rgb(255 255 255 / 0.09);  /* menu item highlighted, segmented thumb */
+  --color-grabber: rgb(235 235 245 / 0.3);
+  --color-knob: #ffffff;          /* switch / slider thumb */
+  --color-thumb: rgb(255 255 255 / 0.16); /* segmented thumb, selected chip */
+  --color-on-bright: var(--color-bg); /* text on a bg-bright (primary) fill */
 
   /* Accent (themed below). Default = ice. Focus rings, links, selection. */
   --color-accent: #b9d3ff;
@@ -83,8 +110,10 @@
   --font-sans: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 
-  /* One scale. Every size in the UI is one of these. Small and light on purpose:
-     hierarchy comes from brightness and space, not from size or weight. */
+  /* One scale. Every size in the UI is one of these. Desktop is small and light
+     on purpose; phones (AppShell sets data-mode="phone") get the iOS sizes —
+     see the [data-mode="phone"] block below. Hierarchy comes from brightness,
+     space and size, never from bold. */
   --text-micro: 9px;      --text-micro--line-height: 1.2;   /* .eyebrow */
   --text-tiny: 10px;      --text-tiny--line-height: 1.2;    /* tab labels, kbd, axis */
   --text-meta: 11.5px;    --text-meta--line-height: 1.4;    /* timestamps, counts */
@@ -93,13 +122,40 @@
   --text-chip: 13px;      --text-chip--line-height: 1.3;    /* chips, menu items */
   --text-button: 13.5px;  --text-button--line-height: 1.3;  /* buttons, desktop fields */
   --text-body: 14.5px;    --text-body--line-height: 1.5;    /* row titles, copy */
-  --text-input: 16px;     --text-input--line-height: 1.4;   /* phone fields (no zoom) */
+  --text-input: 16px;     --text-input--line-height: 1.4;   /* fields: 16px so phones never zoom; 13.5 in desktop mode */
   --text-lead: 16px;      --text-lead--line-height: 1.55;
   --text-title: 18px;     --text-title--line-height: 1.25;  /* stat values, card titles */
-  --text-headline: 22px;  --text-headline--line-height: 1.15; /* panel titles */
   --text-display: 28px;   --text-display--line-height: 1.05; /* page title, phone */
   --text-display-lg: 42px; --text-display-lg--line-height: 1.04; /* page title, desktop */
   --text-hero: 52px;      --text-hero--line-height: 1;      /* big numbers */
+
+  /* iOS roles (Apple HIG names). Prefer these in new code: they carry size,
+     leading, weight and tracking, and switch to the iOS values on phones.
+                  desktop   phone (iOS)                                         */
+  --text-large-title: 30px; --text-large-title--line-height: 1.12; --text-large-title--font-weight: 560; --text-large-title--letter-spacing: -0.022em;
+  --text-title-1: 24px;     --text-title-1--line-height: 1.2;  --text-title-1--font-weight: 540; --text-title-1--letter-spacing: -0.018em;
+  --text-title-2: 20px;     --text-title-2--line-height: 1.25; --text-title-2--font-weight: 520; --text-title-2--letter-spacing: -0.014em;
+  --text-title-3: 17px;     --text-title-3--line-height: 1.3;  --text-title-3--font-weight: 520; --text-title-3--letter-spacing: -0.01em;
+  --text-headline: 14.5px;  --text-headline--line-height: 1.35; --text-headline--font-weight: 560; --text-headline--letter-spacing: -0.006em;
+  --text-callout: 14px;     --text-callout--line-height: 1.4;
+  --text-subhead: 13px;     --text-subhead--line-height: 1.4;
+  --text-footnote: 12px;    --text-footnote--line-height: 1.4;
+  --text-caption: 11.5px;   --text-caption--line-height: 1.35;
+  --text-caption-2: 10.5px; --text-caption-2--line-height: 1.25; --text-caption-2--font-weight: 500;
+
+  /* ── Touch & control sizes (Tailwind spacing keys → h-control, size-tap, size-icon …)
+     Desktop values here; phones get the iOS ones (see [data-mode="phone"]). */
+  --spacing-tap: 36px;          /* minimum hit area of anything pressable (44 on phones) */
+  --spacing-control-sm: 30px;   /* small button, chip, segmented */
+  --spacing-control: 36px;      /* default button / field */
+  --spacing-control-lg: 42px;   /* prominent action */
+  --spacing-row: 44px;          /* one-line list row */
+  --spacing-row-2: 56px;        /* row with subtitle */
+  --spacing-navbar: 44px;       /* inline nav bar under the status bar */
+  --spacing-icon-sm: 14px;      /* inside chips, meta */
+  --spacing-icon: 17px;         /* buttons, rows */
+  --spacing-icon-lg: 20px;      /* primary actions, tab bar */
+  --spacing-icon-tile: 28px;    /* coloured icon tile in a settings row */
 
   /* Lighter weights: "medium" is a touch above regular, never bold. */
   --font-weight-medium: 460;
@@ -131,8 +187,9 @@
        float   +3  over everything: menus, bars  .glass + shadow-float
      The edge is lit at the top and fades round the sides, so a surface
      reads as lifted without a drawn border. */
-  --color-surface: rgb(255 255 255 / 0.028);
-  --color-surface-hi: rgb(255 255 255 / 0.042);
+  /* Surfaces carry a breath of the accent, so lists and cards feel lit by it. */
+  --color-surface: color-mix(in srgb, color-mix(in srgb, var(--color-accent) 30%, white) 3.4%, transparent);
+  --color-surface-hi: color-mix(in srgb, color-mix(in srgb, var(--color-accent) 30%, white) 5.2%, transparent);
   --shadow-edge: inset 0 var(--hair) 0 rgb(255 255 255 / 0.075), inset 0 0 0 var(--hair) rgb(255 255 255 / 0.04);
   --shadow-raise: inset 0 var(--hair) 0 rgb(255 255 255 / 0.13), 0 1px 2px rgb(0 0 0 / 0.32), 0 0 0 var(--hair) rgb(0 0 0 / 0.2);
   --shadow-well: inset 0 1px 1.5px rgb(0 0 0 / 0.32), inset 0 0 0 var(--hair) rgb(255 255 255 / 0.065);
@@ -158,6 +215,11 @@
   /* A spring as a CSS curve (stiffness ~380, damping ~22): quick, one small overshoot. For transitions on the compositor. */
   --ease-spring: linear(0, 0.18 3%, 0.52 7%, 0.84 12%, 1.06 18%, 1.12 22%, 1.1 27%, 1.04 34%, 0.99 42%, 0.985 50%, 1.002 62%, 1);
 
+  /* iOS curves: sheets/pushes snap in and settle; the Claude view's soft ease-out. */
+  --ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-ios: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+
   --animate-spin-fast: spin 0.8s linear infinite;
 }
 
@@ -174,14 +236,15 @@
   --dur-base: 240ms;
   --dur-slow: 450ms;
 
-  /* Safe areas, once. Never write env() in components. */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
+  /* Safe areas, once. Never write env() in components. Browsers/PWAs fill env();
+     Capacitor's SystemBars sets --safe-area-inset-* on <html> (env() is 0 there). */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 
   /* Space a floating tab bar takes (incl. gap to the edge). 0 on desktop. */
-  --tabbar-space: calc(88px + var(--safe-bottom));
+  --tabbar-space: calc(74px + max(10px, var(--safe-bottom)));
 
   /* Z layers — never invent another. */
   --z-header: 30;
@@ -214,6 +277,10 @@
   --glass-sat: 160%;
   --glass-rim: rgb(255 255 255 / 0.1);
   --glass-hi: rgb(255 255 255 / 0.07);
+
+  /* "Ink as light": the channel every translucent fill/line is drawn with.
+     255 on dark grounds, 0 on light. Use as rgb(var(--fg-rgb) / .1). */
+  --fg-rgb: 255 255 255;
 }
 @media (min-width: 900px) {
   :root { --tabbar-space: 0px; }
@@ -303,3 +370,60 @@
   --glass-bg: rgb(30 33 32 / 0.2); --glass-blur: 10px; --glass-sat: 180%;
   --glass-rim: rgb(255 255 255 / 0.16); --glass-hi: rgb(255 255 255 / 0.22);
 }
+
+/* ── Phone mode: iOS sizes ─────────────────────────────────────────────
+   AppShell sets data-mode="phone" below 900px of its own width. Everything
+   inside (pages, sheets, menus — they portal into the shell) reads iOS sizes:
+   body ≥ 16px, 44pt hit areas, 22–26px icons. Desktop keeps the dense scale. */
+[data-mode="phone"] {
+  --text-micro: 11px;     --text-micro--line-height: 1.25;
+  --text-tiny: 11px;      --text-tiny--line-height: 1.2;
+  --text-meta: 12.5px;    --text-meta--line-height: 1.35;
+  --text-detail: 13px;    --text-detail--line-height: 1.4;
+  --text-small: 14px;     --text-small--line-height: 1.4;
+  --text-chip: 15px;      --text-chip--line-height: 1.3;
+  --text-button: 16px;    --text-button--line-height: 1.25;
+  --text-body: 16px;      --text-body--line-height: 1.4;
+  --text-input: 16px;
+  --text-lead: 17px;      --text-lead--line-height: 1.45;
+  --text-title: 20px;     --text-title--line-height: 1.25;
+  --text-display: 32px;   --text-display--line-height: 1.12;
+
+  --text-large-title: 34px; --text-large-title--line-height: 1.2;
+  --text-title-1: 28px;     --text-title-1--line-height: 1.2;
+  --text-title-2: 22px;     --text-title-2--line-height: 1.27;
+  --text-title-3: 20px;     --text-title-3--line-height: 1.25;
+  --text-headline: 17px;    --text-headline--line-height: 1.3;
+  --text-callout: 16px;     --text-callout--line-height: 1.32;
+  --text-subhead: 15px;     --text-subhead--line-height: 1.33;
+  --text-footnote: 13px;    --text-footnote--line-height: 1.38;
+  --text-caption: 12px;     --text-caption--line-height: 1.33;
+  --text-caption-2: 11px;   --text-caption-2--line-height: 1.2;
+
+  --spacing-tap: 44px;
+  --spacing-control-sm: 36px;
+  --spacing-control: 44px;
+  --spacing-control-lg: 50px;
+  --spacing-row: 50px;
+  --spacing-row-2: 62px;
+  --spacing-icon-sm: 16px;
+  --spacing-icon: 22px;
+  --spacing-icon-lg: 25px;
+  --spacing-icon-tile: 30px;
+}
+
+/* ── Claude view tokens (claude-ui.md §14) ─────────────────────────────
+   The Claude conversation view wears Claude's own warm palette on top of the
+   app. Scoped by data-appearance like everything else (see themes.css). */
+:root {
+  --claude-bg: #262624; --claude-sidebar: #1f1e1d; --claude-surface: #30302e;
+  --claude-sunken: #1f1e1d; --claude-user-bubble: #141413;
+  --claude-text: #faf9f5; --claude-text-2: #c2c0b6; --claude-text-3: #9c9a92;
+  --claude-line: rgb(222 220 209 / 0.15);
+  --claude-accent: #d97757; --claude-link: #71a9e6;
+  --claude-primary: #faf9f5; --claude-on-primary: #141413;
+  --claude-serif: "Source Serif 4", "Iowan Old Style", "Apple Garamond", Georgia, serif;
+  --claude-ease: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --claude-radius-bubble: 18px; --claude-radius-composer: 24px;
+}
+[data-mode="desktop"] { --text-input: 13.5px; }

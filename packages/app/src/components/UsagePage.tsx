@@ -1,9 +1,10 @@
 import type { TokenCounts, UsageLimit, UsageReport, UsageRow } from "@neuralagent/protocol";
-import { BarChart, Button, Callout, Empty, List, Meter, Page, Row, Segmented, Spinner, Stat } from "@neuralagent/ui";
+import { BarChart, Callout, Empty, IconButton, List, Meter, Page, Segmented, Skeleton, SkeletonList, cn } from "@neuralagent/ui";
 import { Gauge, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { compact, duration, money, totalTokens } from "../lib/format";
 import { useClient, useDaemon } from "../lib/store";
+import { Glow } from "./Glow";
 
 const RANGES = [
   { value: "1", label: "Today" },
@@ -63,19 +64,37 @@ function group(rows: UsageRow[], keyOf: (r: UsageRow) => string, labelOf: (k: st
   return [...map.values()].sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
 }
 
+/** A cost breakdown: each row with a bar for its share of the most expensive one. */
 function Groups({ label, groups, footer }: { label: string; groups: Group[]; footer?: string }) {
   if (groups.length === 0) return null;
+  const top = Math.max(...groups.map((g) => g.cost), 0);
   return (
     <List label={label} footer={footer}>
       {groups.map((g) => (
-        <Row
-          key={g.key}
-          title={<span className="truncate">{g.label}</span>}
-          detail={`${compact(g.tokens)} tokens`}
-          value={g.unknown ? (g.cost > 0 ? `${money(g.cost)} + —` : "—") : money(g.cost)}
-        />
+        <div key={g.key} className="px-4 py-3">
+          <div className="flex items-baseline gap-3">
+            <span className="min-w-0 flex-1 truncate text-body text-bright">{g.label}</span>
+            <span className="shrink-0 text-body text-bright tabular">{g.unknown ? (g.cost > 0 ? `${money(g.cost)} + —` : "—") : money(g.cost)}</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-3">
+            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-fill-2">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${top > 0 ? Math.max(2, (g.cost / top) * 100) : 0}%` }} />
+            </div>
+            <span className="shrink-0 text-footnote text-dim tabular">{compact(g.tokens)} tokens</span>
+          </div>
+        </div>
       ))}
     </List>
+  );
+}
+
+/** One figure in the grid: a big light number over a short label. */
+function Figure({ value, label, tone }: { value: string; label: string; tone?: string }) {
+  return (
+    <div className="surface rounded-list px-3.5 py-3">
+      <div className={cn("truncate text-title-2 font-light tabular", tone ?? "text-bright")}>{value}</div>
+      <div className="mt-0.5 truncate text-footnote text-dim">{label}</div>
+    </div>
   );
 }
 
@@ -137,81 +156,104 @@ export function UsagePage() {
 
   const engines = [...new Set(limits.map((l) => l.engine))];
 
+  const refresh = (
+    <IconButton label="Refresh" variant="ghost" onClick={() => void (loading || load(days))}>
+      <RefreshCw className={cn(loading && "animate-spin")} />
+    </IconButton>
+  );
+
   return (
-    <Page title="Usage" eyebrow="Costs">
-      <div className="flex flex-col gap-6 pb-8">
-        {engines.length === 0 ? (
-          <p className="px-1 text-meta text-dim">Shown once Claude Code or Codex report them (subscription plans only).</p>
-        ) : (
-          engines.map((e) => (
-            <List key={e} label={`Subscription limits · ${ENGINES[e] ?? e}`}>
-              {limits
-                .filter((l) => l.engine === e)
-                .map((l) => (
-                  <div key={l.window} className="px-3.5 py-3">
-                    <Meter
-                      value={l.used_percent}
-                      max={100}
-                      warn={0.75}
-                      variant="mono"
-                      label={windowLabel(l)}
-                      detail={`${Math.round(l.used_percent)} %${l.resets_at ? ` · ${resets(l.resets_at, now)}` : ""}`}
-                    />
-                    <div className="mt-1 text-detail text-faint">as of {ago(l.updated_at, now)}</div>
+    <div className="relative h-full">
+      <Glow tint="usage" />
+      <Page title="Usage" eyebrow="Costs" actions={refresh} header={<Segmented label="Range" value={days} options={RANGES} onChange={setDays} className="w-full" />}>
+        <div className="flex flex-col gap-7 pt-2 pb-8">
+          {engines.map((e) => (
+              <List key={e} label={`Limits · ${ENGINES[e] ?? e}`}>
+                {limits
+                  .filter((l) => l.engine === e)
+                  .map((l) => (
+                    <div key={l.window} className="px-4 py-3">
+                      <Meter
+                        value={l.used_percent}
+                        max={100}
+                        warn={0.75}
+                        label={windowLabel(l)}
+                        detail={`${Math.round(l.used_percent)} %${l.resets_at ? ` · ${resets(l.resets_at, now)}` : ""}`}
+                      />
+                      <div className="mt-1.5 text-footnote text-faint">Updated {ago(l.updated_at, now)}</div>
+                    </div>
+                  ))}
+              </List>
+            ))}
+          {error ? (
+            <Callout tone="danger" title="Could not read usage">
+              {error}
+            </Callout>
+          ) : !report ? (
+            <div className="flex flex-col gap-7" aria-busy="true" aria-label="Reading transcripts">
+              <div className="grid grid-cols-2 gap-2.5 @2xl:grid-cols-4">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="surface rounded-list px-3.5 py-3.5">
+                    <Skeleton className="h-6 w-20" />
+                    <Skeleton className="mt-2 h-3 w-24" />
                   </div>
                 ))}
-            </List>
-          ))
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Segmented label="Range" value={days} options={RANGES} onChange={setDays} size="sm" />
-          <Button size="sm" variant="quiet" Icon={RefreshCw} busy={loading} onClick={() => void load(days)}>
-            Refresh
-          </Button>
-        </div>
-
-        {error ? (
-          <Callout tone="danger" title="Could not read usage">
-            {error}
-          </Callout>
-        ) : !report ? (
-          <div className="flex items-center justify-center gap-3 py-10 text-meta text-dim">
-            <Spinner label="Reading transcripts" />
-            Reading transcripts…
-          </div>
-        ) : rows.length === 0 ? (
-          <Empty Icon={Gauge} title="No usage in this range" detail="Agent runs from Claude Code and Codex on this computer show up here." />
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <Stat value={anyUnknown && cost === 0 ? "—" : money(cost)} label="API price equivalent" />
-              <Stat value={compact(tokens.input)} label="Input tokens" />
-              <Stat value={compact(tokens.output)} label="Output tokens" />
-              <Stat value={compact(tokens.cache_read)} label="Cache read" />
-              <Stat value={compact(tokens.cache_write)} label="Cache write" />
-              <Stat value={compact(calls)} label="Model calls" />
-              <Stat value={duration(busy)} label="Agent time" />
+              </div>
+              <div className="surface rounded-list p-4">
+                <Skeleton className="h-7 w-24" />
+                <Skeleton className="mt-5 h-32 w-full" />
+              </div>
+              <SkeletonList rows={3} lead={false} label />
             </div>
-            {days !== "1" && (
-              <BarChart
-                values={byDay.map((d) => d.cost)}
-                labels={byDay.map((d) => d.day.slice(8))}
-                title={(i) => new Date(`${byDay[i]?.day}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}
-                format={(v) => money(v)}
-                average={false}
-                height={120}
+          ) : rows.length === 0 ? (
+            <Empty Icon={Gauge} title="No usage in this range" detail="Agent runs from Claude Code and Codex on this computer show up here." />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2.5 @2xl:grid-cols-4">
+                <Figure value={anyUnknown && cost === 0 ? "—" : money(cost)} label="API price equivalent" tone="text-success" />
+                <Figure value={duration(busy)} label="Agent time" />
+                <Figure value={compact(calls)} label="Model calls" />
+                <Figure value={compact(totalTokens(tokens))} label="Tokens" />
+              </div>
+              {days !== "1" && (
+                <div>
+                  <h3 className="mb-1.5 px-4 text-footnote text-dim uppercase tracking-wide">Cost per day</h3>
+                  <div className="surface rounded-list px-4 pt-3.5 pb-3">
+                    <BarChart
+                      values={byDay.map((d) => d.cost)}
+                      labels={byDay.map((d, i) => (days === "30" && i % 5 !== 4 && i !== byDay.length - 1 ? "" : d.day.slice(8).replace(/^0/, "")))}
+                      title={(i) => new Date(`${byDay[i]?.day}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}
+                      format={(v) => money(v)}
+                      height={140}
+                    />
+                  </div>
+                </div>
+              )}
+              <List label="Tokens">
+                {[
+                  ["Input", tokens.input],
+                  ["Output", tokens.output],
+                  ["Cache read", tokens.cache_read],
+                  ["Cache write", tokens.cache_write],
+                ].map(([k, v]) => (
+                  <div key={k as string} className="flex min-h-row items-center justify-between gap-3 px-4">
+                    <span className="text-body text-ink">{k}</span>
+                    <span className="text-body text-bright tabular">{compact(v as number)}</span>
+                  </div>
+                ))}
+              </List>
+              <Groups label="By model" groups={byModel} />
+              <Groups
+                label="By workspace"
+                groups={byWorkspace}
+                footer={`${anyUnknown ? "— means the model's price is unknown, so it is not counted. " : ""}Costs are estimates at API list prices from the CLIs' transcripts on this computer. With a subscription you pay the plan, not these amounts.`}
               />
-            )}
-            <Groups label="By model" groups={byModel} />
-            <Groups
-              label="By workspace"
-              groups={byWorkspace}
-              footer={`${anyUnknown ? "— means the model's price is unknown, so it is not counted. " : ""}Costs are estimates at API list prices from the CLIs' transcripts on this computer. With a subscription you pay the plan, not these amounts.`}
-            />
-          </>
-        )}
-      </div>
-    </Page>
+            </>
+          )}
+
+          {engines.length === 0 && <p className="px-4 text-footnote text-dim">Subscription limits show here once Claude Code or Codex report them (subscription plans only).</p>}
+        </div>
+      </Page>
+    </div>
   );
 }

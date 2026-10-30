@@ -190,7 +190,8 @@ export function Final() {
   );
 }
 
-export function SiteFooter() {
+/** `away`: on another page (changelog): product links go to the landing page's sections. */
+export function SiteFooter({ away }: { away?: boolean } = {}) {
   return (
     <footer className="s-foot">
       <div className="s-wrap">
@@ -199,8 +200,8 @@ export function SiteFooter() {
             <a href="/" className="s-logo"><BrandMark size={20} /> NeuralAgent</a>
             <p style={{ margin: "8px 0 0", maxWidth: 320, lineHeight: 1.55 }}>The calm home for your AI coding agents. By NeuralHub, made by Leandro Probst.</p>
           </div>
-          <nav aria-label="Product"><h5 className="eyebrow">Product</h5>{NAV.slice(0, 4).map((n) => <a key={n.id} href={`#${n.id}`}>{n.label}</a>)}</nav>
-          <nav aria-label="Get it"><h5 className="eyebrow">Get it</h5><a href="/download">Download</a><a href="/app/">Web remote</a><a href="/session/">How it was built</a></nav>
+          <nav aria-label="Product"><h5 className="eyebrow">Product</h5>{NAV.slice(0, 4).map((n) => <a key={n.id} href={`${away ? "/" : ""}#${n.id}`}>{n.label}</a>)}</nav>
+          <nav aria-label="Get it"><h5 className="eyebrow">Get it</h5><a href="/download">Download</a><a href="/changelog">Changelog</a><a href="/app/">Web remote</a><a href="/session/">How it was built</a></nav>
           <nav aria-label="Legal"><h5 className="eyebrow">Legal</h5><a href="/imprint">Imprint</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href={`mailto:${MAIL}`}>{MAIL}</a></nav>
         </div>
         <div className="s-foot-base">

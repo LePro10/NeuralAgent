@@ -22,14 +22,17 @@ import { haptic } from '../../lib/haptics';
 import { MOD_KEY } from '../../lib/hooks';
 import { SPRING } from '../../lib/motion';
 import { useShell } from '../../lib/surface';
+import { ACTIVITY_LABEL, ActivityMark, type Activity } from '../core/Activity';
 import { PLACES, type Place, type Signal } from '../../lib/tokens';
 
 export interface SidebarItem<T extends string = string> {
   id: T;
   label: string;
   Icon: LucideIcon;
-  /** Quiet dot; a string becomes its accessible description. */
+  /** Generic red dot (prefer `activity`); a string becomes its accessible description. */
   badge?: boolean | string;
+  /** What the agents behind this item are doing: ring (working) or dot (waiting/done/error). See core/Activity. */
+  activity?: Activity;
   /** Items with the same group sit together under its label. */
   group?: string;
   /** Hairline above this item without a label (if you do not use `group`). */
@@ -125,7 +128,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setPeek(false); }}
         // Collapsed it is barely there: thin, clear glass with a faint rim. Opened (peek or pin) it fills in.
         className={cn('glass rim pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
-          !open && '!border-white/[.05] !bg-[rgb(22_24_23/.22)]')}
+          !open && '!border-[rgb(var(--fg-rgb)/.05)] !bg-[color-mix(in_srgb,var(--color-chrome)_24%,transparent)]')}
         initial={false}
         animate={{ width: open ? OPEN : RAIL, height: open && full ? full : 'auto' }}
         // A peeking island floats over the page; a pinned one sits in its place.
@@ -172,12 +175,12 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
                   </div>
                 )}
                 <button type="button" onClick={() => { haptic('select'); onChange(it.id); }} aria-current={active ? 'page' : undefined} aria-label={it.label}
-                  aria-description={typeof it.badge === 'string' ? it.badge : undefined}
+                  aria-description={it.activity ? ACTIVITY_LABEL[it.activity] : typeof it.badge === 'string' ? it.badge : undefined}
                   className={cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[13px] text-chip transition-colors duration-200', active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink')}>
-                  {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-white/[.09] shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
+                  {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-lens shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
                   <span className="relative transition-colors duration-300" style={active && sig ? { color: `var(--color-signal-${sig})` } : undefined}>
                     <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />
-                    {it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-ember ring-[1.5px] ring-chrome" />}
+                    {it.activity ? <ActivityMark activity={it.activity} edge="ring-chrome" size={7} /> : it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-sys-red ring-[1.5px] ring-chrome" />}
                   </span>
                   <span className={cn('relative', fade)} style={show}>{it.label}</span>
                   {shortcuts && i < 9 && <kbd className={cn('relative ml-auto font-mono text-tiny text-faint opacity-0 transition-opacity', open && 'group-hover:opacity-100')}>{MOD_KEY}{i + 1}</kbd>}
@@ -188,7 +191,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
         </ul>
         {/* You: always at the foot, set apart by a hairline and a slightly deeper ground. */}
         {(footer || onSettings) && (
-          <div className={cn('-mx-2 -mb-2 mt-2 flex shrink-0 items-center gap-1 border-t-hair p-2 transition-[background-color,border-color] duration-300', open ? 'border-line bg-black/[.14]' : 'border-transparent')}>
+          <div className={cn('-mx-2 -mb-2 mt-2 flex shrink-0 items-center gap-1 border-t-hair p-2 transition-[background-color,border-color] duration-300', open ? 'border-line bg-fill-1' : 'border-transparent')}>
             <div className="min-w-0 flex-1">{footer?.(open)}</div>
             {onSettings && (
               <button type="button" onClick={() => { haptic('select'); onSettings(); }} aria-label="Settings" title="Settings" tabIndex={open ? 0 : -1}

@@ -1,10 +1,10 @@
 import type { CatalogEntry, Profile, Session } from "@neuralagent/protocol";
-import { Button, Callout, List, Pill, Row, Sheet, toast } from "@neuralagent/ui";
+import { Button, Callout, IconButton, List, Row, Sheet, toast } from "@neuralagent/ui";
 import { ExternalLink, Plus, RotateCw } from "lucide-react";
 import { useState } from "react";
 import { joinArgs } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon, usePlatform, useUi } from "../lib/store";
-import { GlyphTile } from "./AgentGlyph";
+import { EngineTile } from "./EngineTile";
 import { ProfileEditor } from "./ProfileEditor";
 
 /** Every known agent CLI: what is installed, and a one-click install that runs visibly in a pane. */
@@ -44,7 +44,8 @@ export function AgentCatalog() {
     }
   };
 
-  const sorted = [...(catalog ?? [])].sort((a, b) => Number(b.installed) - Number(a.installed));
+  const installed = (catalog ?? []).filter((a) => a.installed);
+  const available = (catalog ?? []).filter((a) => !a.installed);
 
   return (
     <Sheet
@@ -66,62 +67,67 @@ export function AgentCatalog() {
       {editing ? (
         <ProfileEditor key={editing === "new" ? "new" : editing.id} profile={editing === "new" ? null : editing} onDone={() => setEditing(null)} />
       ) : (
-        <div className="flex flex-col gap-6 pb-4">
+        <div className="flex flex-col gap-7 pb-4">
           {!target && <Callout tone="warning">Add a workspace first: installs run in one of its panes.</Callout>}
-          <List footer={target ? `Installs run in a pane of ${target.name}, so you can see and answer every step.` : undefined}>
-            {sorted.map((a) => (
-              <Row
-                key={a.id}
-                leading={<GlyphTile engine={a.id} />}
-                title={
-                  <span className="flex items-center gap-2">
-                    {a.name}
-                    {a.installed && (
-                      <Pill size="sm" tone="success">
-                        {a.version ?? "Installed"}
-                      </Pill>
-                    )}
-                  </span>
-                }
-                detail={
-                  a.installed ? (
-                    <span className="font-mono">{a.path}</span>
-                  ) : (
-                    <span className="flex flex-col gap-0.5">
-                      <span className="font-mono break-all text-faint">{a.install}</span>
-                      {a.install_note && <span>{a.install_note}</span>}
+          {installed.length > 0 && (
+            <List label="Installed">
+              {installed.map((a) => (
+                <Row
+                  key={a.id}
+                  leading={<EngineTile engine={a.id} />}
+                  title={a.name}
+                  detail={<span className="block truncate font-mono">{a.path}</span>}
+                  value={a.version ?? undefined}
+                  chevron={false}
+                  trailing={
+                    platform.openExternal && (
+                      <IconButton size="sm" variant="ghost" label={`${a.name} docs`} onClick={() => platform.openExternal?.(a.docs_url)}>
+                        <ExternalLink />
+                      </IconButton>
+                    )
+                  }
+                />
+              ))}
+            </List>
+          )}
+          {available.length > 0 && (
+            <List label="Available" footer={target ? `Installs run in a pane of ${target.name}, so you can see and answer every step.` : undefined}>
+              {available.map((a) => (
+                <Row
+                  key={a.id}
+                  leading={<EngineTile engine={a.id} />}
+                  title={a.name}
+                  detail={<span className="block truncate">{a.install_note ?? <span className="font-mono">{a.install}</span>}</span>}
+                  chevron={false}
+                  trailing={
+                    <span className="flex items-center gap-1">
+                      {platform.openExternal && (
+                        <IconButton size="sm" variant="ghost" label={`${a.name} docs`} onClick={() => platform.openExternal?.(a.docs_url)}>
+                          <ExternalLink />
+                        </IconButton>
+                      )}
+                      {a.install && (
+                        <Button size="sm" variant="tint" disabled={!target} onClick={() => install(a)}>
+                          Install
+                        </Button>
+                      )}
                     </span>
-                  )
-                }
-                wrap
-                trailing={
-                  <span className="flex items-center gap-1">
-                    {platform.openExternal && (
-                      <Button size="xs" variant="quiet" Icon={ExternalLink} onClick={() => platform.openExternal?.(a.docs_url)} aria-label={`${a.name} docs`}>
-                        Docs
-                      </Button>
-                    )}
-                    {!a.installed && a.install && (
-                      <Button size="xs" variant="ghost" disabled={!target} onClick={() => install(a)}>
-                        Install
-                      </Button>
-                    )}
-                  </span>
-                }
-              />
-            ))}
-          </List>
+                  }
+                />
+              ))}
+            </List>
+          )}
           <List label="Profiles" footer="A profile starts a CLI with your own arguments, for example another model.">
             {custom.map((p) => (
               <Row
                 key={p.id}
-                leading={<GlyphTile engine={p.engine} />}
+                leading={<EngineTile engine={p.engine} />}
                 title={p.name}
-                detail={<span className="font-mono">{[p.command, joinArgs(p.args)].filter(Boolean).join(" ")}</span>}
+                detail={<span className="block truncate font-mono">{[p.command, joinArgs(p.args)].filter(Boolean).join(" ")}</span>}
                 onClick={() => setEditing(p)}
               />
             ))}
-            <Row Icon={Plus} title="New profile" onClick={() => setEditing("new")} />
+            <Row Icon={Plus} tile="blue" title="New profile" onClick={() => setEditing("new")} />
           </List>
         </div>
       )}

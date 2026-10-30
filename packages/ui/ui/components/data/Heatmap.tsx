@@ -59,7 +59,7 @@ export function CalendarHeatmap({ days, color = 'var(--color-tab)', empty = 'Not
                 return (
                   <button key={c} type="button" onClick={() => { haptic('tick'); setSel(cell.idx); }} onMouseEnter={() => setSel(cell.idx)}
                     aria-label={`${cell.d.date}: ${cell.d.value ? cell.d.detail ?? cell.d.value : empty}`}
-                    className={cn('aspect-square w-full rounded-[2.5px] transition-transform duration-150 hover:scale-125', sel === cell.idx && 'ring-1 ring-white/80')}
+                    className={cn('aspect-square w-full rounded-[2.5px] transition-transform duration-150 hover:scale-125', sel === cell.idx && 'ring-1 ring-[rgb(var(--fg-rgb)/.8)]')}
                     style={{ background: tint(color, ALPHA[step(cell.d.value, max)]) }} />
                 );
               })}
@@ -95,7 +95,7 @@ export function GridHeatmap({ values, rowLabels, colLabels, color = 'var(--color
             {row.map((v, c) => (
               <button key={c} type="button" aria-label={describe?.(r, c, v) ?? `${rowLabels[r]} ${c}: ${v}`}
                 onClick={() => { haptic('tick'); setSel([r, c]); }} onMouseEnter={() => setSel([r, c])}
-                className={cn('h-3.5 rounded-[2.5px] transition-transform duration-150 hover:scale-y-125', sel?.[0] === r && sel?.[1] === c && 'ring-1 ring-white/80')}
+                className={cn('h-3.5 rounded-[2.5px] transition-transform duration-150 hover:scale-y-125', sel?.[0] === r && sel?.[1] === c && 'ring-1 ring-[rgb(var(--fg-rgb)/.8)]')}
                 style={{ background: v ? `color-mix(in oklab, ${color} ${Math.round((0.08 + (v / max) * 0.85) * 100)}%, transparent)` : 'var(--color-fill-2)' }} />
             ))}
           </div>

@@ -1,0 +1,249 @@
+/*
+ * Claude view: Claude's own warm palette, type and motion for the conversation
+ * view over the Claude Code CLI (packages/app/src/components/claude). Values
+ * from research-local/polish/claude-ui.md (claude.ai CSS, v1 "warm" palette in
+ * light and dark). Builds on the base `--claude-*` variables in tokens.css /
+ * themes.css and adds the rest; utilities are `*-cv-*` (bg-cv-bg, text-cv-muted,
+ * font-cv-serif, rounded-cv-composer, shadow-cv-pop …).
+ *
+ * Light follows `data-appearance="light"` like the rest of the app.
+ */
+
+/* ── Claude view: variables (dark first, like the app) ───────────────── */
+:root {
+  --cv-bg: var(--claude-bg, #262624);
+  --cv-surface: var(--claude-surface, #30302e);
+  --cv-sunken: #1f1e1d;
+  --cv-bubble: var(--claude-user-bubble, #141413);
+  --cv-text: var(--claude-text, #faf9f5);
+  --cv-text-2: var(--claude-text-2, #c2c0b6);
+  --cv-muted: var(--claude-text-3, #9c9a92);
+  --cv-placeholder: #7b7974;
+  --cv-line: rgb(222 220 209 / 0.15);
+  --cv-line-soft: rgb(222 220 209 / 0.08);
+  --cv-line-strong: rgb(222 220 209 / 0.25);
+  --cv-hover: rgb(222 220 209 / 0.075);
+  --cv-press: rgb(222 220 209 / 0.14);
+  --cv-chip: rgb(222 220 209 / 0.08);
+  --cv-clay: #d97757;
+  --cv-clay-strong: #e08a6d;
+  --cv-clay-soft: rgb(217 119 87 / 0.18);
+  --cv-blue: #71a9e6;
+  --cv-primary: var(--claude-primary, #faf9f5);
+  --cv-on-primary: var(--claude-on-primary, #141413);
+  --cv-on-clay: #ffffff;
+  --cv-success: #5cbb30;
+  --cv-danger: #e06a6a;
+  --cv-danger-soft: rgb(221 83 83 / 0.16);
+  --cv-warning: #daa22a;
+  --cv-code-ink: #f0a58f;
+  --cv-code-bg: rgb(222 220 209 / 0.08);
+  --cv-diff-add-bg: rgb(12 163 12 / 0.16);
+  --cv-diff-del-bg: rgb(221 83 83 / 0.16);
+  --cv-diff-add: #79d36d;
+  --cv-diff-del: #f08a8a;
+  --cv-diff-add-pill: rgb(12 163 12 / 0.22);
+  --cv-diff-del-pill: rgb(221 83 83 / 0.22);
+  --cv-glass: rgb(48 48 46 / 0.78);
+  --cv-scrim: rgb(0 0 0 / 0.55);
+  --cv-shadow-composer: 0 0 0 0.5px rgb(222 220 209 / 0.15), 0 4px 20px rgb(0 0 0 / 0.25);
+  --cv-shadow-card: 0 0 0 0.5px rgb(222 220 209 / 0.14), 0 2px 4px rgb(0 0 0 / 0.3), 0 6px 16px rgb(0 0 0 / 0.3);
+  --cv-shadow-pop: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 6px rgb(0 0 0 / 0.2), inset 0 0 0 1px rgb(222 220 209 / 0.1);
+  --cv-shadow-pill: 0 0 0 0.5px rgb(222 220 209 / 0.14), 0 4px 14px rgb(0 0 0 / 0.35);
+  --cv-weight-body: 360;
+  --cv-weight-strong: 560;
+}
+
+[data-appearance="light"] {
+  --cv-bg: var(--claude-bg, #faf9f5);
+  --cv-surface: var(--claude-surface, #ffffff);
+  --cv-sunken: #f5f4ed;
+  --cv-bubble: var(--claude-user-bubble, #f0eee6);
+  --cv-text: var(--claude-text, #141413);
+  --cv-text-2: var(--claude-text-2, #3d3d3a);
+  --cv-muted: var(--claude-text-3, #73726c);
+  --cv-placeholder: #a3a19b;
+  --cv-line: rgb(31 30 29 / 0.15);
+  --cv-line-soft: rgb(31 30 29 / 0.08);
+  --cv-line-strong: rgb(31 30 29 / 0.25);
+  --cv-hover: rgb(31 30 29 / 0.05);
+  --cv-press: rgb(31 30 29 / 0.1);
+  --cv-chip: rgb(31 30 29 / 0.055);
+  --cv-clay: #d97757;
+  --cv-clay-strong: #c6613f;
+  --cv-clay-soft: #f7d8cb;
+  --cv-blue: #2c84db;
+  --cv-primary: var(--claude-primary, #141413);
+  --cv-on-primary: var(--claude-on-primary, #faf9f5);
+  --cv-success: #2f7613;
+  --cv-danger: #b53333;
+  --cv-danger-soft: rgb(181 51 51 / 0.1);
+  --cv-warning: #875c08;
+  --cv-code-ink: #a3402a;
+  --cv-code-bg: rgb(31 30 29 / 0.05);
+  --cv-diff-add-bg: #ddf2df;
+  --cv-diff-del-bg: #f5e5e5;
+  --cv-diff-add: #1e7a2e;
+  --cv-diff-del: #b53333;
+  --cv-diff-add-pill: #ceecd4;
+  --cv-diff-del-pill: #f0d4d8;
+  --cv-glass: rgb(255 255 255 / 0.8);
+  --cv-scrim: rgb(0 0 0 / 0.3);
+  --cv-shadow-composer: 0 0 0 0.5px rgb(31 30 29 / 0.15), 0 4px 20px rgb(0 0 0 / 0.04);
+  --cv-shadow-card: 0 0 0 0.5px rgb(31 30 29 / 0.14), 0 2px 4px rgb(11 11 11 / 0.05), 0 8px 22px rgb(11 11 11 / 0.07);
+  --cv-shadow-pop: 0 8px 24px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.08), inset 0 0 0 0.5px rgb(31 30 29 / 0.12);
+  --cv-shadow-pill: 0 0 0 0.5px rgb(31 30 29 / 0.12), 0 4px 14px rgb(11 11 11 / 0.1);
+  --cv-weight-body: 400;
+  --cv-weight-strong: 600;
+}
+
+/* ── Claude view: utilities ──────────────────────────────────────────── */
+@theme inline {
+  --color-cv-bg: var(--cv-bg);
+  --color-cv-surface: var(--cv-surface);
+  --color-cv-sunken: var(--cv-sunken);
+  --color-cv-bubble: var(--cv-bubble);
+  --color-cv-text: var(--cv-text);
+  --color-cv-text-2: var(--cv-text-2);
+  --color-cv-muted: var(--cv-muted);
+  --color-cv-placeholder: var(--cv-placeholder);
+  --color-cv-line: var(--cv-line);
+  --color-cv-line-soft: var(--cv-line-soft);
+  --color-cv-line-strong: var(--cv-line-strong);
+  --color-cv-hover: var(--cv-hover);
+  --color-cv-press: var(--cv-press);
+  --color-cv-chip: var(--cv-chip);
+  --color-cv-clay: var(--cv-clay);
+  --color-cv-clay-strong: var(--cv-clay-strong);
+  --color-cv-clay-soft: var(--cv-clay-soft);
+  --color-cv-blue: var(--cv-blue);
+  --color-cv-primary: var(--cv-primary);
+  --color-cv-on-primary: var(--cv-on-primary);
+  --color-cv-on-clay: var(--cv-on-clay);
+  --color-cv-success: var(--cv-success);
+  --color-cv-danger: var(--cv-danger);
+  --color-cv-danger-soft: var(--cv-danger-soft);
+  --color-cv-warning: var(--cv-warning);
+  --color-cv-code-ink: var(--cv-code-ink);
+  --color-cv-code-bg: var(--cv-code-bg);
+  --color-cv-diff-add-bg: var(--cv-diff-add-bg);
+  --color-cv-diff-del-bg: var(--cv-diff-del-bg);
+  --color-cv-diff-add: var(--cv-diff-add);
+  --color-cv-diff-del: var(--cv-diff-del);
+  --color-cv-diff-add-pill: var(--cv-diff-add-pill);
+  --color-cv-diff-del-pill: var(--cv-diff-del-pill);
+  --color-cv-glass: var(--cv-glass);
+  --color-cv-scrim: var(--cv-scrim);
+
+  --font-cv-serif: "Source Serif 4 Variable", "Source Serif 4", "Iowan Old Style", "Charter", ui-serif, Georgia, "Times New Roman", serif;
+  --font-cv-sans: var(--font-sans);
+  --font-cv-mono: "SF Mono", ui-monospace, "IBM Plex Mono", Menlo, Consolas, monospace;
+
+  --font-weight-cv-body: var(--cv-weight-body);
+  --font-weight-cv-strong: var(--cv-weight-strong);
+
+  --radius-cv-xs: 5px;
+  --radius-cv-sm: 8px;
+  --radius-cv-md: 12px;
+  --radius-cv-card: 20px;
+  --radius-cv-bubble: var(--claude-radius-bubble, 18px);
+  --radius-cv-composer: var(--claude-radius-composer, 24px);
+
+  --shadow-cv-composer: var(--cv-shadow-composer);
+  --shadow-cv-card: var(--cv-shadow-card);
+  --shadow-cv-pop: var(--cv-shadow-pop);
+  --shadow-cv-pill: var(--cv-shadow-pill);
+
+  --ease-cv: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-cv-snap: cubic-bezier(0.32, 0.72, 0, 1);
+
+}
+
+/* Sizes stay variables (not inlined) so phones can raise them below. */
+@theme {
+  /* Reading sizes: assistant prose 16/1.65 on desktop, 17 on phones (claude-ui.md §1.4, §2). */
+  --text-cv-prose: 16px;
+  --text-cv-prose--line-height: 1.65;
+  --text-cv-ui: 14px;
+  --text-cv-ui--line-height: 1.45;
+  --text-cv-meta: 12.5px;
+  --text-cv-meta--line-height: 1.4;
+  --text-cv-code: 13px;
+  --text-cv-input: 16px;
+  --text-cv-input--line-height: 1.5;
+  --text-cv-code--line-height: 1.55;
+  --text-cv-display: 34px;
+  --text-cv-display--line-height: 1.15;
+  --text-cv-h1: 23px;
+  --text-cv-h1--line-height: 1.3;
+  --text-cv-h2: 19.5px;
+  --text-cv-h2--line-height: 1.35;
+  --text-cv-h3: 17px;
+  --text-cv-h3--line-height: 1.4;
+
+  --animate-cv-spark: cv-spark 2.4s cubic-bezier(0.165, 0.84, 0.44, 1) infinite;
+  --animate-cv-rise: cv-rise 0.32s cubic-bezier(0.165, 0.84, 0.44, 1) both;
+  --animate-cv-pop: cv-pop 0.18s cubic-bezier(0.165, 0.84, 0.44, 1) both;
+  --animate-cv-dots: cv-dots 1.4s steps(4, end) infinite;
+}
+
+[data-mode="phone"] {
+  --text-cv-prose: 17px;
+  --text-cv-ui: 16px;
+  --text-cv-meta: 13px;
+  --text-cv-code: 13.5px;
+  --text-cv-display: 30px;
+  --text-cv-h1: 24px;
+  --text-cv-h2: 20.5px;
+  --text-cv-h3: 18px;
+}
+
+/* ── Claude view: motion ─────────────────────────────────────────────── */
+@keyframes cv-spark {
+  0% { transform: rotate(0deg) scale(1); }
+  40% { transform: rotate(150deg) scale(0.82); }
+  70% { transform: rotate(250deg) scale(1.06); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+@keyframes cv-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cv-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cv-dots {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 -1ch 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-cv-spark, .animate-cv-rise, .animate-cv-pop { animation: none !important; }
+}
+
+/* Smooth disclosure: grid rows 0fr → 1fr. */
+.cv-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.26s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.2s ease; opacity: 0; }
+.cv-fold[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.cv-fold > * { min-height: 0; overflow: hidden; }
+
+/* Sheets opened by the Claude view wear Claude's surface (the Sheet portals out of the view). */
+.glass:has(.cv-sheet) {
+  --glass-bg: var(--cv-surface);
+  --color-sheet: var(--cv-surface);
+  --color-bright: var(--cv-text);
+  --color-ink: var(--cv-text-2);
+  --color-dim: var(--cv-muted);
+  --color-faint: var(--cv-placeholder);
+  --color-fill-3: var(--cv-chip);
+  --color-fill-4: var(--cv-press);
+  background: var(--cv-surface) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Prose details the utilities cannot express. */
+.cv-prose { font-optical-sizing: auto; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+.cv-prose ::selection, .cv ::selection { background: var(--cv-clay-soft); }
+.cv-scroll { scrollbar-width: thin; scrollbar-color: var(--cv-line) transparent; }
+.cv-noscrollbar { scrollbar-width: none; }
+.cv-noscrollbar::-webkit-scrollbar { display: none; }

@@ -6,6 +6,7 @@
 import { openAsBlob, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findRelease, readChangelog, releaseMarkdown } from "./changelog.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const [dir, base = "https://agent.neuralhub.dev"] = process.argv.slice(2);
@@ -17,8 +18,11 @@ if (!dir || !token) {
 const version = readFileSync(join(root, "Cargo.toml"), "utf8").match(/\[workspace\.package\][^[]*?\nversion = "([^"]+)"/)[1];
 const auth = { authorization: `Bearer ${token}` };
 
-// The tagged commit's message, without trailers.
-const notes = (process.env.RELEASE_NOTES ?? "").replace(/\n[\w-]+: .*$/gm, "").trim();
+// Notes: this version's CHANGELOG.md section. Fallback for tags cut before CHANGELOG.md existed
+// (≤ 0.2.1): the tagged commit's message (RELEASE_NOTES), without trailers.
+const section = findRelease(readChangelog(), version);
+const notes = section ? releaseMarkdown(section) : (process.env.RELEASE_NOTES ?? "").replace(/\n[\w-]+: .*$/gm, "").trim();
+if (!section) console.warn(`CHANGELOG.md has no section for ${version}; using the commit message as notes`);
 const manifest = { version, notes, pub_date: new Date().toISOString(), updates: {}, downloads: {} };
 for (const f of readdirSync(dir).filter((f) => /^part-.*\.json$/.test(f))) {
   const part = JSON.parse(readFileSync(join(dir, f), "utf8"));

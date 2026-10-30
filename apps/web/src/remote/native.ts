@@ -12,6 +12,7 @@ interface NeuralAgentPlugin {
   setNames(o: { json: string }): Promise<void>;
   pinWidget(): Promise<{ ok: boolean }>;
   readClipboardImage(): Promise<{ type?: string; data?: string }>;
+  copyText(o: { text: string }): Promise<void>;
   callActive(o: { on: boolean; route?: string }): Promise<{ output?: string }>;
   callRoute(o: { route: string }): Promise<{ output: string }>;
   addListener(event: "dial", cb: (o: { start: boolean }) => void): Promise<PluginListenerHandle>;
@@ -48,7 +49,11 @@ void App.getLaunchUrl().then((l) => {
   if (l?.url && !location.search && !location.pathname.startsWith("/app/pair")) opened(l.url);
 });
 
-export const onActive = (cb: (active: boolean) => void) => void App.addListener("appStateChange", (s) => cb(s.isActive));
+/** The app went to the background (false) or came back (true); returns a function that stops listening. */
+export const onActive = (cb: (active: boolean) => void) => {
+  const h = App.addListener("appStateChange", (s) => cb(s.isActive));
+  return () => void h.then((x) => x.remove());
+};
 
 const toFile = (o: { type?: string; data?: string }): File | null => {
   if (!o.data || !o.type) return null;
@@ -60,6 +65,9 @@ const toFile = (o: { type?: string; data?: string }): File | null => {
 
 /** The image on the Android clipboard (the WebView cannot read it itself). */
 export const clipboardImage = () => plugin.readClipboardImage().then(toFile);
+
+/** Text onto the Android clipboard (the WebView may refuse navigator.clipboard). */
+export const copyText = (text: string) => plugin.copyText({ text });
 
 /** Images the keyboard inserts straight into the page; the composer and the terminal pick them up. */
 void plugin.addListener("paste", (o) => {

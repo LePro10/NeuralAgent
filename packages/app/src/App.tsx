@@ -1,8 +1,13 @@
 import type { Workspace } from "@neuralagent/protocol";
-import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
-import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
+import { AppShell, Button, CommandPalette, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
+import { Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
+import { LaunchScreen } from "./components/LaunchScreen";
+import { MorePage, type MoreItem } from "./components/MorePage";
+import { WorkspacesPage } from "./components/WorkspacesPage";
+import { UpdateBadge } from "./components/UpdateBadge";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
@@ -18,8 +23,9 @@ import { SwarmPage } from "./components/SwarmPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
-import { mostUrgent } from "./lib/status";
+import { activityOf } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
+import { useUpdateWatch } from "./lib/updates";
 import { startTheme } from "./lib/theme";
 
 startTheme();
@@ -33,34 +39,11 @@ const MCP = "__mcp";
 const USAGE = "__usage";
 const REMOTE = "__remote";
 const SETTINGS = "__settings";
-
-/** Desktop: looks for an update shortly after start and every six hours; offers each version once. */
-function useUpdateNotice() {
-  const updates = usePlatform().updates;
-  useEffect(() => {
-    if (!updates) return;
-    let offered = "";
-    const look = () =>
-      updates.check().then(
-        (u) => {
-          if (!u || u.version === offered) return;
-          offered = u.version;
-          toast(`NeuralAgent ${u.version} is ready. Agents keep running.`, {
-            actionLabel: "Install",
-            undo: () => void updates.install().catch((e) => toast(`Update failed: ${String(e)}`, { tone: "danger" })),
-            duration: 20000,
-          });
-        },
-        () => {}, // offline or no release yet: try again later
-      );
-    const first = setTimeout(look, 15_000);
-    const every = setInterval(look, 6 * 3600_000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(every);
-    };
-  }, [updates]);
-}
+// Phone tabs that are pages of their own: the workspace list and everything else ("More").
+const WORKSPACES = "__workspaces";
+const MORE = "__more";
+/** Pages that live under the More tab on phones. */
+const UNDER_MORE = [HISTORY, USAGE, MCP, REMOTE, SETTINGS];
 
 /** Height of the strip along the window's top edge that drags the window (macOS: the title bar's place). */
 const DRAG_STRIP = 40;
@@ -100,13 +83,26 @@ function useWindowDrag() {
   }, [startDrag]);
 }
 
+/** True once the daemon has been out of reach for `ms`: short reconnects (a phone waking up) stay invisible. */
+function useLongDisconnect(ms = 2500) {
+  const status = useDaemon((c) => c.status);
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    if (status === "open") return setLong(false);
+    const t = setTimeout(() => setLong(true), ms);
+    return () => clearTimeout(t);
+  }, [status === "open", ms]);
+  return long && status !== "open";
+}
+
 export function App() {
   const client = useClient();
   const platform = usePlatform();
   const status = useDaemon((c) => c.status);
   const state = useDaemon((c) => c.state);
+  const disconnected = useLongDisconnect();
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
-  useUpdateNotice();
+  useUpdateWatch(); // version label, Update button and dialog (lib/updates.ts)
   useWindowDrag();
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
@@ -119,7 +115,9 @@ export function App() {
   const mcp = workspace === MCP;
   const usage = workspace === USAGE;
   const remotePage = workspace === REMOTE;
-  const current = neural || dashboard || swarmPage || settingsOpen || history || mcp || usage || remotePage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const wsList = workspace === WORKSPACES;
+  const more = workspace === MORE;
+  const current = neural || dashboard || swarmPage || settingsOpen || history || mcp || usage || remotePage || wsList || more ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural, …": until the orchestrator exists, show what was heard.
   useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
@@ -215,48 +213,92 @@ export function App() {
   const waiting = allStatuses.filter((s) => s === "waiting").length;
   const running = (state?.swarms ?? []).filter((w) => !w.ended).length;
   const items: NavItem[] = [
-    { id: NEURAL, label: "Neural", Icon: Sparkles, badge: state?.orchestrator.busy ? "Working" : undefined },
-    { id: AGENTS, label: "Agents", Icon: LayoutDashboard, badge: waiting > 0 ? `${waiting} waiting` : undefined },
-    { id: SWARM, label: "Swarm", Icon: Users, badge: running > 0 ? `${running} running` : undefined },
+    { id: NEURAL, label: "Neural", Icon: Sparkles, activity: state?.orchestrator.busy ? "working" : undefined },
+    { id: AGENTS, label: "Agents", Icon: LayoutDashboard, activity: waiting > 0 ? "waiting" : undefined },
+    { id: SWARM, label: "Swarm", Icon: Users, activity: running > 0 ? "working" : undefined },
     { id: HISTORY, label: "History", Icon: History },
     { id: MCP, label: "MCP", Icon: Plug },
     { id: USAGE, label: "Usage", Icon: Gauge },
     ...(platform.account
       ? [{ id: REMOTE, label: platform.account.label, Icon: Smartphone }]
       : platform.kind === "desktop"
-        ? [{ id: REMOTE, label: "Remote", Icon: Smartphone, badge: state?.remote.status === "pending" ? "Waiting" : undefined }]
+        ? [{ id: REMOTE, label: "Remote", Icon: Smartphone, activity: state?.remote.status === "pending" ? ("waiting" as const) : undefined }]
         : []),
     ...workspaces.map((w) => {
       const statuses = Object.values(state?.sessions ?? {}).filter((s) => s.workspace_id === w.id).map((s) => s.status);
-      const urgent = mostUrgent(statuses);
+      // "Done" means finished and not looked at yet: the open workspace never shows it.
+      const act = activityOf(statuses.filter((s) => s !== "done" || w.id !== current?.id));
       return {
         id: w.id,
         label: w.name,
         Icon: w.git ? FolderGit2 : Folder,
         group: "Workspaces",
-        badge: urgent === "waiting" ? "Needs input" : urgent === "done" ? "Done" : urgent === "error" ? "Error" : undefined,
+        activity: act,
       };
     }),
     { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
   ];
 
-  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : (current?.id ?? "");
-  // Phones: a tab bar with the agents and the workspaces first; the rest (and settings) under "More".
+  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : wsList ? WORKSPACES : more ? MORE : (current?.id ?? "");
+  // Phones: five tabs — Neural · Agents · Workspaces · Swarm · More. A workspace is pushed from the
+  // Workspaces list, History/Usage/MCP/Remote/Settings from More; back returns to the list.
   const byId = new Map(items.map((i) => [i.id, i]));
+  const tabOf = (id: string) => (UNDER_MORE.includes(id) || id === MORE ? MORE : [NEURAL, AGENTS, SWARM].includes(id) ? id : WORKSPACES);
+  const tab = tabOf(selected);
+  const wsActivity = topActivity(items.filter((i) => i.group === "Workspaces").map((i) => i.activity));
   const phoneItems: NavItem[] = [
     byId.get(NEURAL)!,
     byId.get(AGENTS)!,
+    { id: WORKSPACES, label: "Workspaces", Icon: Folders, activity: wsActivity },
     byId.get(SWARM)!,
-    ...items.filter((i) => i.group === "Workspaces").map((i) => ({ ...i, group: undefined })),
-    ...[HISTORY, USAGE, MCP, REMOTE].flatMap((id) => (byId.has(id) ? [{ ...byId.get(id)!, group: undefined }] : [])),
-    { id: SETTINGS, label: "Settings", Icon: Settings },
+    { id: MORE, label: "More", Icon: Ellipsis, activity: byId.get(REMOTE)?.activity },
   ];
+  const moreItems: MoreItem[] = [
+    { id: HISTORY, label: "History", Icon: History, tile: "indigo" },
+    { id: USAGE, label: "Usage", Icon: Gauge, tile: "green" },
+    { id: MCP, label: "MCP servers", Icon: Plug, tile: "purple" },
+    ...(byId.has(REMOTE) ? [{ id: REMOTE, label: byId.get(REMOTE)!.label, Icon: Smartphone, tile: "blue" as const, activity: byId.get(REMOTE)!.activity, value: byId.get(REMOTE)!.activity ? "Waiting" : undefined }] : []),
+    { id: SETTINGS, label: "Settings", Icon: Settings, tile: "gray", group: " " },
+  ];
+  // Each tab remembers where you were in it (iOS): tapping it again from elsewhere returns there,
+  // tapping the active tab pops to its root.
+  const lastIn = useRef<Record<string, string>>({});
+  if (selected) lastIn.current[tab] = selected;
+  const goTab = (id: string) => {
+    setWorkspace(id === tab ? id : (lastIn.current[id] ?? id));
+  };
   const go = (id: string) => (id === ADD ? void addWorkspace() : setWorkspace(id));
+  // ⌘K (desktop sidebar): jump to any page or workspace, or start something.
+  const [palette, setPalette] = useState(false);
+  const paletteGroups: CommandGroup[] = [
+    {
+      label: "Workspaces",
+      items: items.filter((i) => i.group === "Workspaces").map((i) => ({ id: i.id, label: i.label, Icon: i.Icon, detail: i.activity ? ACTIVITY_LABEL[i.activity] : undefined, onSelect: () => setWorkspace(i.id) })),
+    },
+    {
+      label: "Go to",
+      items: [
+        ...items.filter((i) => !i.group && i.id !== ADD).map((i) => ({ id: i.id, label: i.label, Icon: i.Icon, onSelect: () => setWorkspace(i.id) })),
+        { id: SETTINGS, label: "Settings", Icon: Settings, keywords: "appearance theme account", onSelect: () => setWorkspace(SETTINGS) },
+      ],
+    },
+    {
+      label: "Actions",
+      items: [
+        { id: "add-workspace", label: "Add workspace…", Icon: FolderPlus, keywords: "folder project open", onSelect: () => void addWorkspace() },
+        { id: "new-swarm", label: "New swarm…", Icon: Users, keywords: "team agents", onSelect: () => setWorkspace(SWARM) },
+      ],
+    },
+  ];
+  // Back target and depth of the shown page (phones; desktop ignores both).
+  const back: NavBack | null = UNDER_MORE.includes(selected)
+    ? { label: "More", onBack: () => setWorkspace(MORE) }
+    : current
+      ? { label: "Workspaces", onBack: () => setWorkspace(WORKSPACES) }
+      : null;
 
   const body = !state ? (
-    <div className="grid h-full place-items-center">
-      {status === "offline" ? <Callout tone="danger" title="Daemon not reachable">Trying to reconnect…</Callout> : <Spinner label="Connecting" />}
-    </div>
+    <div className="h-full" />
   ) : swarmPage ? (
     <SwarmPage />
   ) : neural ? (
@@ -273,6 +315,10 @@ export function App() {
     <UsagePage />
   ) : remotePage ? (
     platform.account ? platform.account.render() : <RemotePage />
+  ) : wsList ? (
+    <WorkspacesPage workspaces={workspaces} onOpen={setWorkspace} onAdd={addWorkspace} />
+  ) : more ? (
+    <MorePage items={moreItems} onGo={setWorkspace} onAccount={() => setWorkspace(SETTINGS)} />
   ) : current ? (
     <WorkspaceView key={current.id} workspaceId={current.id} />
   ) : (
@@ -294,20 +340,22 @@ export function App() {
     <AppShell
       nav={{
         items: phoneItems,
-        value: selected,
-        onChange: go,
-        moreHeader: (close) => (
-          <AccountRow plain open active={settingsOpen} onSettings={() => { close(); setWorkspace(SETTINGS); }} />
-        ),
+        value: tab,
+        onChange: goTab,
+        tabs: 5,
       }}
       sidebar={
         <Sidebar
           items={items}
           value={settingsOpen ? "" : selected}
           onChange={go}
+          search={() => setPalette((v) => !v)}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
           footer={(open) => (
-            <AccountRow open={open} active={settingsOpen} onSettings={() => setWorkspace(SETTINGS)} onRemote={byId.has(REMOTE) ? () => setWorkspace(REMOTE) : undefined} />
+            <div className="flex flex-col gap-1">
+              <UpdateBadge open={open} />
+              <AccountRow open={open} active={settingsOpen} onSettings={() => setWorkspace(SETTINGS)} onRemote={byId.has(REMOTE) ? () => setWorkspace(REMOTE) : undefined} />
+            </div>
           )}
           pinned={sidebarPinned}
           onPinnedChange={setSidebarPinned}
@@ -316,17 +364,16 @@ export function App() {
         />
       }
     >
-      {state && status !== "open" && (
-        <div className="absolute inset-x-0 top-2 z-20 flex justify-center">
-          <Callout tone="warning">Reconnecting to the daemon…</Callout>
-        </div>
-      )}
-      <div key={selected} className="page-in h-full">
+      <NavPage id={selected || "welcome"} depth={back ? 1 : 0} back={back}>
         {body}
-      </div>
+      </NavPage>
+      <ConnectionPill show={!!state && disconnected} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} groups={paletteGroups} placeholder="Jump to a workspace or page…" />
+      <LaunchScreen ready={!!state} offline={status === "offline"} />
       {state && <AgentCatalog />}
       {state && <ChangesSheet />}
       {state && <FolderBrowserSheet />}
+      <UpdateDialog />
       <Toaster />
     </AppShell>
   );

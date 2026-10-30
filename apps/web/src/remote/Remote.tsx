@@ -1,12 +1,13 @@
 import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, useClient, useDaemon, type Platform } from "@neuralagent/app";
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
-import { Avatar, Button, Callout, ConfirmButton, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
+import { Avatar, Button, Callout, ConfirmSheet, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
 import { Bell, Code, LayoutGrid, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Brand } from "../brand";
 import { disablePush, doneOpening, enablePush, onOpenRequest, pushState, rememberNames, startWorker, syncPush, takeLaunchRequest, type PushState } from "./push";
 import { account, deviceName, lastHost, link, native, REDIRECT, useLink } from "./session";
+import { webUpdate } from "./webUpdate";
 
 startWorker();
 const launch = takeLaunchRequest();
@@ -14,7 +15,10 @@ const launch = takeLaunchRequest();
 /** Centered column for everything before a computer is open. */
 function Screen({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 px-4 py-10">
+    <main
+      className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-7 px-4"
+      style={{ paddingTop: "calc(var(--safe-top) + 40px)", paddingBottom: "calc(var(--safe-bottom) + 40px)" }}
+    >
       <Brand />
       {children}
     </main>
@@ -22,6 +26,34 @@ function Screen({ children }: { children: React.ReactNode }) {
 }
 
 const fail = (e: unknown) => toast((e as Error).message, { tone: "danger" });
+
+interface Ask {
+  title: string;
+  message: string;
+  label: string;
+  run: () => Promise<unknown>;
+}
+
+/** Destructive steps (sign out, disconnect) ask first, in an iOS confirmation sheet. */
+function useAsk(): [(a: Ask) => void, React.ReactNode] {
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const node = (
+    <ConfirmSheet
+      open={!!ask}
+      onClose={() => setAsk(null)}
+      onConfirm={async () => {
+        await ask?.run();
+      }}
+      title={ask?.title ?? ""}
+      message={ask?.message}
+      confirmLabel={ask?.label ?? "OK"}
+      destructive
+    />
+  );
+  return [setAsk, node];
+}
+
+const SIGN_OUT: Omit<Ask, "run"> = { title: "Sign out on this device?", message: "You can sign in again any time; nothing changes on the computer.", label: "Sign out" };
 
 /** "0.10.2" > "0.9.9"; pre-release tags are ignored (only stable APKs are offered). */
 const newer = (a: string, b: string) => {
@@ -73,13 +105,26 @@ export function Remote() {
     return () => link.stop();
   }, []);
 
-  // The relay pushes only to devices nobody is looking at.
+  // The relay pushes only to devices nobody is looking at. Coming back (or a new network)
+  // checks the relay socket at once: it may have died while the phone slept.
   useEffect(() => {
-    const seen = () => link.setVisible(document.visibilityState === "visible");
+    const seen = () => {
+      const v = document.visibilityState === "visible";
+      link.setVisible(v);
+      if (v) link.wake();
+    };
+    const online = () => link.wake();
     seen();
     document.addEventListener("visibilitychange", seen);
-    native?.onActive((active) => link.setVisible(active));
-    return () => document.removeEventListener("visibilitychange", seen);
+    window.addEventListener("online", online);
+    native?.onActive((active) => {
+      link.setVisible(active);
+      if (active) link.wake();
+    });
+    return () => {
+      document.removeEventListener("visibilitychange", seen);
+      window.removeEventListener("online", online);
+    };
   }, []);
   useEffect(() => {
     if (l.status === "online") void syncPush();
@@ -257,14 +302,12 @@ function Waiting() {
 
 function SignedInAs() {
   const user = account.user;
+  const [ask, asking] = useAsk();
   return (
     <List>
-      <Row
-        leading={<Avatar name={user?.name || user?.email || "?"} src={user?.avatar ?? undefined} size={26} />}
-        title={user?.name || "Signed in"}
-        detail={user?.email}
-        trailing={<ConfirmButton label="Sign out" size="sm" onConfirm={() => void account.signOut().catch(fail)} />}
-      />
+      <Row leading={<Avatar name={user?.name || user?.email || "?"} src={user?.avatar ?? undefined} size={32} />} title={user?.name || "Signed in"} detail={user?.email} />
+      <Row Icon={LogOut} danger title="Sign out" onClick={() => ask({ ...SIGN_OUT, run: () => account.signOut().catch(fail) })} />
+      {asking}
     </List>
   );
 }
@@ -288,9 +331,9 @@ function Hosts({ hosts, onPick }: { hosts: RelayDevice[]; onPick: (id: string) =
             <Row
               key={h.id}
               Icon={Monitor}
+              tile={h.online ? "green" : "gray"}
               title={h.name}
-              detail={h.online ? "Online" : "Offline: NeuralAgent is closed, asleep or disconnected"}
-              trailing={<Pill tone={h.online ? "success" : "neutral"} dot>{h.online ? "Online" : "Offline"}</Pill>}
+              detail={h.online ? "Online" : "Offline · NeuralAgent is closed, asleep or disconnected"}
               onClick={() => onPick(h.id)}
             />
           ))}
@@ -319,7 +362,15 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
   useEffect(() => {
     const wake = () => document.visibilityState === "visible" && client.poke();
     document.addEventListener("visibilitychange", wake);
-    return () => document.removeEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    window.addEventListener("focus", wake);
+    const offActive = native?.onActive((active) => active && client.poke());
+    return () => {
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("online", wake);
+      window.removeEventListener("focus", wake);
+      offActive?.();
+    };
   }, [client]);
 
   // Agent names for notification titles, kept on this device only.
@@ -346,9 +397,11 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
     () => ({
       kind: native ? "android" : "web",
       clientName: deviceName,
+      webUpdate,
       connect,
       openExternal: (url) => void window.open(url, "_blank", "noopener"),
       readClipboardImage: native ? () => native!.clipboardImage() : undefined,
+      copyText: native ? (text) => native!.copyText(text) : undefined,
       focused: () => document.visibilityState === "visible" && document.hasFocus(),
       notify: (title, body) => {
         if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "/logo.png" });
@@ -412,6 +465,7 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
   const client = useClient();
   const status = useDaemon((c) => c.status);
   const user = account.user;
+  const [ask, asking] = useAsk();
   return (
     <Page title="This device" eyebrow={native ? "Android app" : "Web remote"}>
       <div className="flex flex-col gap-6 pb-8">
@@ -443,22 +497,22 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
             Icon={PlugZap}
             title="Disconnect remote"
             danger
-            trailing={
-              <ConfirmButton
-                label="Disconnect"
-                size="sm"
-                onConfirm={() =>
-                  void client.req({ m: "remote_enable", p: { enabled: false } }).then(() => toast("Remote access is off on that computer."), fail)
-                }
-              />
+            onClick={() =>
+              ask({
+                title: "Disconnect remote access?",
+                message: "Every phone and browser loses this computer until you turn remote access back on there.",
+                label: "Disconnect",
+                run: () => client.req({ m: "remote_enable", p: { enabled: false } }).then(() => toast("Remote access is off on that computer."), fail),
+              })
             }
           />
         </List>
         <List label="Account">
           <Row leading={<Avatar name={user?.name || user?.email || "?"} src={user?.avatar ?? undefined} size={26} />} title={user?.name || "Signed in"} detail={user?.email} />
           <Row Icon={Smartphone} title={deviceName} detail="This device" />
-          <Row Icon={LogOut} title="Sign out on this device" trailing={<ConfirmButton label="Sign out" size="sm" onConfirm={() => void account.signOut().catch(fail)} />} />
+          <Row Icon={LogOut} danger title="Sign out on this device" onClick={() => ask({ ...SIGN_OUT, run: () => account.signOut().catch(fail) })} />
         </List>
+        {asking}
       </div>
     </Page>
   );

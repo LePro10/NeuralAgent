@@ -7,6 +7,10 @@ export const PROTOCOL_VERSION = 1;
 export interface Transport {
   send(text: string): void;
   close(): void;
+  /** Optional: this session stopped answering; the carrier (e.g. the relay socket) should check itself. */
+  stale?(): void;
+  /** Optional: bytes still waiting to go out (a big upload on a slow uplink delays every answer). */
+  sending?(): number;
   onmessage: ((text: string) => void) | null;
   onclose: ((reason: string) => void) | null;
 }
@@ -15,6 +19,24 @@ export interface Transport {
 export type Connect = () => Promise<Transport>;
 
 export type ConnStatus = "connecting" | "open" | "offline";
+
+/** Heartbeat: a ping this often while open (and nothing else arrived meanwhile)… */
+export const PING_EVERY = 10_000;
+/** …and a connection that stays silent this long after a ping is dead. */
+export const PING_TIMEOUT = 8_000;
+/** After the app comes back (or the network changes) the check is quicker. */
+export const WAKE_TIMEOUT = 3_000;
+/** A connection still sending (an upload) is only dead when its outgoing data stops moving this long. */
+export const SEND_STALL = 45_000;
+/**
+ * After a big send the network is busy with it for a while, even when `sending` reads 0 (OS and
+ * runtime buffers): answers are not expected before it went out at this slow-uplink rate.
+ */
+export const SLOW_UPLINK = 100_000;
+/** When a send of `bytes` (made now) should be out, given the previous estimate. */
+export const drainedBy = (prev: number, bytes: number, now = Date.now()) => (bytes > 64_000 ? Math.max(prev, now) + (bytes / SLOW_UPLINK) * 1000 : prev);
+/** Requests made while reconnecting wait this long for the connection before failing. */
+export const REQUEST_WAIT = 20_000;
 
 export class RequestError extends Error {
   code: ApiError["code"];
@@ -73,6 +95,21 @@ export class DaemonClient {
   private retry = 0;
   private closed = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Each connection attempt has a number; a stale attempt's transport is closed when it arrives. */
+  private attempt = 0;
+  private attemptAt = 0;
+  /** The transport said hello: requests can go out. */
+  private live = false;
+  private waiters = new Set<() => void>();
+  /** Heartbeat: when something last came in, and the deadline of an unanswered ping. */
+  private lastIn = 0;
+  private deadline = 0;
+  private lastTick = 0;
+  private lastOut = 0;
+  private outMoved = 0;
+  private drained = 0;
+  private liveAt = 0;
+  private beat: ReturnType<typeof setInterval> | undefined;
 
   private connect: Connect;
   private client: ClientInfo;
@@ -128,16 +165,113 @@ export class DaemonClient {
   close() {
     this.closed = true;
     clearTimeout(this.timer);
+    clearInterval(this.beat);
     this.t?.close();
+    this.wakeWaiters();
   }
 
-  /** Reconnect right away (e.g. the app came back to the foreground). */
+  /**
+   * The app came back to the foreground, or the network changed: reconnect right away if the
+   * connection is down, or check quickly that an open one still answers (a socket can die
+   * silently while the phone sleeps, and timers were frozen meanwhile).
+   */
   poke() {
-    if (this.status === "offline" && !this.closed) {
+    if (this.closed) return;
+    if (this.status === "offline") {
       clearTimeout(this.timer);
       this.retry = 0;
       void this.open();
+    } else if (this.t && this.live) {
+      this.ping(WAKE_TIMEOUT);
+    } else if (Date.now() - this.attemptAt > WAKE_TIMEOUT) {
+      // An attempt that hangs (e.g. on a dead relay socket): start a fresh one.
+      this.retry = 0;
+      void this.open();
     }
+  }
+
+  private ping(timeout: number) {
+    const t = this.t;
+    if (!t || !this.live) return;
+    const until = Date.now() + timeout;
+    if (!this.deadline || until < this.deadline) this.deadline = until;
+    t.send(JSON.stringify({ t: "ping", at: Date.now() }));
+    // Judge right at the deadline, not on the next tick.
+    setTimeout(this.tick, timeout + 50);
+  }
+
+  /** Runs every few seconds while a transport is up. */
+  private tick = () => {
+    const now = Date.now();
+    // Timers were frozen (phone asleep, app in the background): check quickly.
+    const slept = this.lastTick && now - this.lastTick > PING_EVERY * 2;
+    this.lastTick = now;
+    if (!this.t || !this.live) return;
+    // A connection that held for a while: the next drop reconnects at once again.
+    if (this.retry && now - this.liveAt > 10_000) this.retry = 0;
+    // In the background the browser throttles timers: no verdicts then; coming back checks.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.deadline = 0;
+      return;
+    }
+    // Still pushing a big upload out: the answer is queued behind it. Wait while it moves.
+    const out = this.t.sending?.() ?? 0;
+    if (!out || out < this.lastOut) this.outMoved = now;
+    this.lastOut = out;
+    if (this.deadline && now > this.deadline) {
+      const busy = (out > 0 && now - this.outMoved < SEND_STALL) || now < this.drained;
+      if (busy) this.deadline = now + 1000;
+      else return this.dead("no answer from the computer");
+    }
+    if (slept) this.ping(WAKE_TIMEOUT);
+    else if (!this.deadline && now - this.lastIn >= PING_EVERY) this.ping(PING_TIMEOUT);
+  };
+
+  /** The transport stopped answering: drop it and reconnect now. */
+  private dead(why: string) {
+    const t = this.t;
+    if (!t) return;
+    console.warn(`daemon connection: ${why}`);
+    t.stale?.();
+    t.onmessage = null;
+    t.onclose = null;
+    t.close();
+    this.lost(t);
+    clearTimeout(this.timer);
+    this.retry = 0;
+    void this.open();
+  }
+
+  private lost(t: Transport) {
+    if (this.t !== t) return;
+    this.t = null;
+    this.live = false;
+    this.deadline = 0;
+    clearInterval(this.beat);
+    for (const [, p] of this.pending) p.reject(new Error("The connection to the computer was lost. Try again."));
+    this.pending.clear();
+    this.setStatus("offline");
+  }
+
+  private wakeWaiters() {
+    for (const w of this.waiters) w();
+    this.waiters.clear();
+  }
+
+  /** Resolves when requests can go out (or after `ms`, rejecting). */
+  private whenLive(ms: number): Promise<Transport> {
+    if (this.t && this.live) return Promise.resolve(this.t);
+    if (this.closed) return Promise.reject(new Error("offline"));
+    return new Promise((resolve, reject) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.waiters.delete(done);
+        if (this.t && this.live) resolve(this.t);
+        else reject(new Error(this.closed ? "offline" : "Not connected to the computer. Try again in a moment."));
+      };
+      const timer = setTimeout(done, ms);
+      this.waiters.add(done);
+    });
   }
 
   private setStatus(s: ConnStatus) {
@@ -148,17 +282,34 @@ export class DaemonClient {
   }
 
   private async open() {
+    if (this.closed) return;
+    clearTimeout(this.timer);
+    const n = ++this.attempt;
+    this.attemptAt = Date.now();
+    if (this.t) {
+      // A fresh attempt replaces a transport that never said hello.
+      const old = this.t;
+      old.onmessage = null;
+      old.onclose = null;
+      old.close();
+      this.lost(old);
+    }
     this.setStatus("connecting");
     let t: Transport;
     try {
       t = await this.connect();
     } catch {
-      return this.scheduleReconnect();
+      if (n === this.attempt) this.scheduleReconnect();
+      return;
     }
-    if (this.closed) return t.close();
+    if (this.closed || n !== this.attempt) return t.close();
     this.t = t;
+    this.lastIn = Date.now();
+    this.deadline = 0;
     let helloDone = false;
     t.onmessage = (text) => {
+      this.lastIn = Date.now();
+      this.deadline = 0;
       let m: ServerMsg;
       try {
         m = JSON.parse(text);
@@ -168,24 +319,26 @@ export class DaemonClient {
       if (!helloDone) {
         if (m.t !== "hello_ok") return;
         helloDone = true;
+        this.live = true;
+        this.liveAt = Date.now();
         this.host = m.host;
         this.daemonVersion = m.daemon_version;
-        this.retry = 0;
         if (this.hostUi) t.send(JSON.stringify({ t: "host_ui_register", on: true }));
         for (const l of this.helloListeners) l(m.daemon_version);
         // Resume where we were; the daemon answers with replayed events or a snapshot.
         t.send(JSON.stringify(this.state ? { t: "sub", since: this.seq } : { t: "sub" }));
         if (this.calling) t.send(JSON.stringify({ t: "call_start" }));
+        clearInterval(this.beat);
+        this.lastTick = Date.now();
+        this.beat = setInterval(this.tick, 2_000);
+        this.wakeWaiters();
         return;
       }
       this.onMsg(m);
     };
     t.onclose = () => {
       if (this.t !== t) return;
-      this.t = null;
-      for (const [, p] of this.pending) p.reject(new Error("connection lost"));
-      this.pending.clear();
-      this.setStatus("offline");
+      this.lost(t);
       this.scheduleReconnect();
     };
     t.send(JSON.stringify({ t: "hello", v: PROTOCOL_VERSION, client: this.client }));
@@ -194,7 +347,10 @@ export class DaemonClient {
   private scheduleReconnect() {
     if (this.closed) return;
     this.setStatus("offline");
-    const delay = Math.min(10_000, 250 * 2 ** this.retry++) * (0.75 + Math.random() * 0.5);
+    clearTimeout(this.timer);
+    // The first retry is immediate: most drops are a dead socket, not a down computer.
+    const delay = this.retry === 0 ? 0 : Math.min(10_000, 250 * 2 ** this.retry) * (0.75 + Math.random() * 0.5);
+    this.retry++;
     this.timer = setTimeout(() => void this.open(), delay);
   }
 
@@ -272,14 +428,22 @@ export class DaemonClient {
     }
   }
 
+  /**
+   * A request to the daemon. While the connection is coming back it waits for it (up to
+   * `REQUEST_WAIT`) instead of failing at once, so a short reconnect does not break the UI.
+   */
   req<T = unknown>(r: Request): Promise<T> {
-    const t = this.t;
-    if (!t) return Promise.reject(new Error("offline"));
-    const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      t.send(JSON.stringify({ t: "req", id, req: r }));
-    });
+    const send = (t: Transport) => {
+      const id = this.nextId++;
+      return new Promise<T>((resolve, reject) => {
+        this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+        const text = JSON.stringify({ t: "req", id, req: r });
+        this.drained = drainedBy(this.drained, text.length);
+        t.send(text);
+      });
+    };
+    if (this.t) return send(this.t);
+    return this.whenLive(REQUEST_WAIT).then(send);
   }
 
   /** Streams a session's terminal into `sink` until the returned function is called. */
@@ -387,6 +551,7 @@ export function webSocketTransport(url: string): Promise<Transport> {
     const t: Transport = {
       send: (text) => ws.readyState === WebSocket.OPEN && ws.send(text),
       close: () => ws.close(),
+      sending: () => ws.bufferedAmount,
       onmessage: null,
       onclose: null,
     };

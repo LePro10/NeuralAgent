@@ -1,8 +1,9 @@
 /**
- * Pull-down menu for toolbars and rows (sort, filter, "more", account switch,
- * any choice that would otherwise be a <select>). On phones and desktop alike
- * it grows out of the button you tapped — a small translucent card, no sheet,
- * no dimmed screen — the way menus work in iOS apps.
+ * Menu for toolbars and rows (sort, filter, "more", account switch, any choice
+ * that would otherwise be a <select>). Desktop: a pull-down that grows out of
+ * the button you clicked — a small opaque card, no dimmed screen. Phones: the
+ * same entries rise as an ActionSheet (finger-sized rows, Cancel below), so a
+ * menu never runs off the screen or out of a sheet.
  *
  * Motion: grows from the trigger's corner (spring 520/36 from 0.7), rows
  * follow 18ms apart; closing is quicker (140ms, shrinks to 0.94 and fades).
@@ -24,6 +25,7 @@ import { SPRING, prefersReducedMotion } from '../../lib/motion';
 import { useLayoutMode, usePortalTarget } from '../../lib/surface';
 import { frameOf, toLocal, type Box } from './geometry';
 import { MENU_SURFACE, MenuItems, menuHeight } from './MenuList';
+import { ActionSheet } from './ActionSheet';
 
 export interface MenuEntry {
   label: string;
@@ -89,6 +91,7 @@ export function Menu({ trigger, items, title, align = 'end', width = 220, block 
   block?: boolean;
 }) {
   const target = usePortalTarget();
+  const phone = useLayoutMode() === 'phone';
   const ref = useRef<HTMLSpanElement>(null);
   const [at, setAt] = useState<Box | null>(null);
   const open = () => {
@@ -103,7 +106,9 @@ export function Menu({ trigger, items, title, align = 'end', width = 220, block 
   return (
     <span ref={ref} className={block ? 'relative flex w-full min-w-0 [&>*]:w-full' : 'relative inline-flex'}>
       {trigger(open, !!at)}
-      <PullDown at={at} align={align} width={width} items={items} title={title} onClose={close} onChoose={choose} target={target} />
+      {phone
+        ? <ActionSheet open={!!at} onClose={close} title={title} items={items} onChoose={choose} />
+        : <PullDown at={at} align={align} width={width} items={items} title={title} onClose={close} onChoose={choose} target={target} />}
     </span>
   );
 }

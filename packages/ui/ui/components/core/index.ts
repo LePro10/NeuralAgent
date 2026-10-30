@@ -8,3 +8,5 @@ export * from './List';
 export * from './Feedback';
 export * from './Stat';
 export * from './Avatar';
+export * from './ConnectionPill';
+export * from './Activity';

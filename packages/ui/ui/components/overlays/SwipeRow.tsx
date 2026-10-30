@@ -27,10 +27,10 @@ export interface SwipeAction {
 
 const TONES = {
   neutral: 'bg-card-3 text-bright',
-  accent: 'bg-accent-deep text-white',
-  success: 'bg-mint text-bg',
-  warning: 'bg-warning text-bg',
-  danger: 'bg-danger text-white',
+  accent: 'bg-accent-deep text-on-color',
+  success: 'bg-sys-green text-on-color',
+  warning: 'bg-sys-orange text-on-color',
+  danger: 'bg-danger text-on-color',
 } as const;
 const ACTION_W = 68;
 const FULL = 0.6;
@@ -62,7 +62,7 @@ export function SwipeRow({ children, leading, trailing = [], fullSwipe = true, c
   const leadVis = useTransform(x, (v) => (v > 0.5 ? 'visible' : 'hidden'));
   // At rest the row stays see-through, so the card's surface shows instead of a black slab.
   // While moving, the row needs an opaque face; this is the list's own tone (fill-1 over the ground), so nothing shifts.
-  const cover = useTransform(x, (v) => (Math.abs(v) > 0.5 ? 'color-mix(in srgb, var(--color-bg), #fff 2.5%)' : 'rgb(0 0 0 / 0)'));
+  const cover = useTransform(x, (v) => (Math.abs(v) > 0.5 ? 'color-mix(in srgb, var(--color-bg), rgb(var(--fg-rgb)) 2.5%)' : 'rgb(0 0 0 / 0)'));
   const settle = (to: number) => animate(x, to, SPRING.sheet);
 
   useEffect(() => {

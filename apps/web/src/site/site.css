@@ -221,7 +221,7 @@ body[data-page="landing"] { overflow-x: clip; }
 .s-phone { position: relative; width: 262px; height: 440px; border-radius: 40px; background: var(--color-bg); box-shadow: 0 0 0 6px var(--color-card-2), 0 0 0 7px var(--color-line-2), var(--shadow-float); overflow: hidden; flex: none; }
 .s-phone::before { content: ""; position: absolute; top: 9px; left: 50%; width: 76px; height: 20px; margin-left: -38px; border-radius: 12px; background: var(--color-card-3); z-index: 5; }
 .s-phone-in { position: absolute; inset: 0; padding: 48px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
-.s-phone h4 { margin: 0 0 2px; font-weight: 300; letter-spacing: -.03em; font-size: var(--text-headline); color: var(--color-bright); }
+.s-phone h4 { margin: 0 0 2px; font-weight: 300; letter-spacing: -.03em; font-size: var(--text-title-2); color: var(--color-bright); }
 .s-row { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: var(--radius-list); background: var(--color-card); box-shadow: var(--shadow-edge); font-size: var(--text-detail); color: var(--color-bright); }
 .s-row small { display: block; margin-top: 2px; color: var(--color-dim); font-size: var(--text-meta); }
 .s-row .tx { min-width: 0; flex: 1; }

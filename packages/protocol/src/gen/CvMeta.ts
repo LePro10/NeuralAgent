@@ -2,6 +2,10 @@
 
 export type CvMeta = { model?: string, 
 /**
+ * Reasoning effort: `low`, `medium`, `high`, `xhigh` or `max` (what `/effort <level>` takes).
+ */
+effort?: string, 
+/**
  * `default`, `acceptEdits`, `plan`, `bypassPermissions`, …
  */
 mode?: string, title?: string, 

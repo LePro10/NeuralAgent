@@ -1110,10 +1110,13 @@ impl Core {
             }
         };
         if event == "statusline" {
-            // Claude Code's statusline input: subscription limits, nothing about the status.
+            // Claude Code's statusline input: subscription limits and the live effort, nothing about the status.
             let limits = crate::usage::claude_limits(payload, now_ms());
             if !limits.is_empty() {
                 self.set_limits("claude", limits);
+            }
+            if let Some(level) = payload.pointer("/effort/level").and_then(Value::as_str) {
+                self.cv_status_effort(sid, level);
             }
             return;
         }

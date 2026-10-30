@@ -2,6 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://agent.neuralhub.dev/</loc></url>
   <url><loc>https://agent.neuralhub.dev/download</loc></url>
+  <url><loc>https://agent.neuralhub.dev/changelog</loc></url>
   <url><loc>https://agent.neuralhub.dev/privacy</loc></url>
   <url><loc>https://agent.neuralhub.dev/imprint</loc></url>
   <url><loc>https://agent.neuralhub.dev/terms</loc></url>

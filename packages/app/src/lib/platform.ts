@@ -40,8 +40,12 @@ export interface Platform {
   voice?: VoiceApi;
   /** App updates (desktop only). */
   updates?: UpdateApi;
+  /** Web remote / Android shell: a newer web build is deployed on the relay (reload to update). See lib/updates.ts. */
+  webUpdate?: WebUpdateApi;
   /** Native shells: the image on the system clipboard (the WebView cannot always read it), or null. */
   readClipboardImage?: () => Promise<File | null>;
+  /** Native shells: put text on the system clipboard (Android WebViews may refuse navigator.clipboard). */
+  copyText?: (text: string) => Promise<void>;
   /**
    * Desktop (Tauri swallows OS file drops before the page sees them): files dropped on the window,
    * as local paths with the drop position in CSS pixels.
@@ -63,4 +67,44 @@ export interface UpdateApi {
   /** Downloads, installs and restarts the app; agents keep running. */
   install: () => Promise<void>;
   onProgress: (cb: (p: { done: number; total: number | null }) => void) => () => void;
+  /** All release notes (CHANGELOG.md as served by the relay's /changelog.json), newest first. */
+  changelog?: () => Promise<ChangelogEntry[]>;
+  /** The switch to this version's background service after an update (it waits until no agent runs). */
+  service?: ServiceSwitchApi;
+}
+
+/** One version's notes (scripts/changelog.mjs). */
+export interface ChangelogEntry {
+  version: string;
+  date: string | null;
+  unreleased?: boolean;
+  summary: string;
+  groups: { title: string; items: string[] }[];
+}
+
+export interface ServiceSwitch {
+  /** Version of the service the app talks to ("" until connected). */
+  version: string;
+  /** Agents are still running on the old service: the switch waits for them. */
+  waiting: boolean;
+  switching: boolean;
+  /** The last switch failed (it is not retried by itself). */
+  error: string | null;
+}
+
+export interface ServiceSwitchApi {
+  get: () => ServiceSwitch;
+  subscribe: (cb: () => void) => () => void;
+  /** Try the switch again now (only does something once no agent runs). */
+  retry: () => void;
+}
+
+export interface WebUpdateApi {
+  /** The version and build id of the page that is running. */
+  current: { version: string; build: string };
+  /** The deployed build (`/version.json`), or null when unknown. */
+  deployed: () => Promise<{ version: string; build: string } | null>;
+  changelog: () => Promise<ChangelogEntry[]>;
+  /** Loads the new build. */
+  reload: () => void;
 }

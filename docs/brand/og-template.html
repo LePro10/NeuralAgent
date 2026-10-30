@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Open Graph card template (1200×630), filled in by build-web-icons.mjs. Placeholders are the double-brace names below. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: "DM Sans"; src: url("{{SANS}}") format("woff2"); font-weight: 100 1000; }
+  @font-face { font-family: "Plex Mono"; src: url("{{MONO}}") format("woff2"); font-weight: 400; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #080909; }
+  body { position: relative; font-family: "DM Sans", sans-serif; color: #eef1ee; -webkit-font-smoothing: antialiased; }
+  .aurora { position: absolute; inset: 0;
+    background:
+      radial-gradient(520px 420px at 250px 300px, rgb(59 91 255 / .34), transparent 70%),
+      radial-gradient(700px 520px at 0px 0px, rgb(59 91 255 / .22), transparent 70%),
+      radial-gradient(620px 420px at 1180px 640px, rgb(159 231 200 / .13), transparent 72%); }
+  .grid { position: absolute; inset: 0; opacity: .55;
+    background-image: linear-gradient(rgb(255 255 255 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .045) 1px, transparent 1px);
+    background-size: 64px 64px; background-position: -8px -8px;
+    -webkit-mask-image: radial-gradient(70% 90% at 22% 50%, black, transparent 80%); }
+  .icon { position: absolute; left: 92px; top: 175px; width: 280px; height: 280px; border-radius: 64px; overflow: hidden;
+    box-shadow: 0 0 0 1.5px rgb(238 241 238 / .14), 0 40px 90px rgb(0 0 0 / .65), 0 0 120px rgb(59 91 255 / .35); }
+  .icon svg { width: 100%; height: 100%; display: block; }
+  .copy { position: absolute; left: 444px; right: 72px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; }
+  .brand { font-size: 30px; font-weight: 500; letter-spacing: -.01em; color: #eef1ee; display: flex; align-items: center; gap: 14px; }
+  .brand i { width: 9px; height: 9px; border-radius: 50%; background: #9fe7c8; box-shadow: 0 0 14px #9fe7c8; }
+  h1 { margin: 26px 0 0; font-weight: 300; font-size: 82px; line-height: 1.02; letter-spacing: -.045em; }
+  h1 span { display: block; }
+  h1 .soft { color: #8a918c; }
+  p { margin: 26px 0 0; font-size: 27px; line-height: 1.4; color: #a9afaa; letter-spacing: -.005em; max-width: 660px; }
+  .url { position: absolute; left: 444px; bottom: 54px; font-family: "Plex Mono", monospace; font-size: 23px; color: #b9d3ff; letter-spacing: .01em; }
+  .url b { font-weight: 400; color: #eef1ee; }
+</style>
+</head>
+<body>
+  <div class="aurora"></div>
+  <div class="grid"></div>
+  <div class="icon">{{ICON}}</div>
+  <div class="copy">
+    <div class="brand"><i></i>NeuralAgent</div>
+    <h1><span>{{L1}}</span><span class="soft">{{L2}}</span></h1>
+    <p>{{SUB}}</p>
+  </div>
+  <div class="url">agent.neuralhub.dev<b>{{PATH}}</b></div>
+</body>
+</html>

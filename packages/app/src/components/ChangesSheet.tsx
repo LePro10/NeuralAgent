@@ -1,5 +1,5 @@
 import type { GitChanges, GitDiff, GitFile, GitFileStatus } from "@neuralagent/protocol";
-import { Button, Callout, ConfirmButton, Empty, Sheet, Spinner, cn, toast } from "@neuralagent/ui";
+import { Button, Callout, ConfirmSheet, Empty, IconTile, Sheet, Spinner, cn, toast, useLayoutMode } from "@neuralagent/ui";
 import { GitBranch, GitMerge, RotateCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useChanges, useClient, useDaemon } from "../lib/store";
@@ -62,6 +62,10 @@ export function ChangesSheet() {
   }, [client, key, file, changes]);
 
   const wt = session?.worktree;
+  const phone = useLayoutMode() === "phone";
+  const [asking, setAsking] = useState(false);
+  const adds = changes?.files.reduce((n, f) => n + f.additions, 0) ?? 0;
+  const dels = changes?.files.reduce((n, f) => n + f.deletions, 0) ?? 0;
   const merge = async () => {
     if (!session) return;
     setBusy(true);
@@ -94,30 +98,42 @@ export function ChangesSheet() {
         </Button>
       }
     >
-      <div className="flex flex-col gap-4 pb-4">
+      <div className="flex flex-col gap-5 pb-4">
         {changes && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-dim">
-            <span className="flex items-center gap-1.5 text-ink">
-              <GitBranch size={13} strokeWidth={1.6} aria-hidden />
-              {wt ? wt.branch : changes.branch}
-            </span>
-            {wt && <span>from {workspace?.git?.branch ?? "the workspace"} at {wt.base.slice(0, 7)}</span>}
-            {!wt && (changes.ahead > 0 || changes.behind > 0) && (
-              <span>
-                {changes.ahead} ahead · {changes.behind} behind
+          <div className="surface flex items-center gap-3 rounded-list p-4">
+            <IconTile color={wt ? "purple" : "gray"} className="size-11 rounded-tile">
+              <GitBranch />
+            </IconTile>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-headline text-bright">{wt ? wt.branch : changes.branch}</span>
+              <span className="truncate text-footnote text-dim">
+                {wt
+                  ? `From ${workspace?.git?.branch ?? "the workspace"} at ${wt.base.slice(0, 7)}`
+                  : changes.ahead > 0 || changes.behind > 0
+                    ? `${changes.ahead} ahead · ${changes.behind} behind`
+                    : "Nothing to push or pull"}
               </span>
-            )}
-            <span>{changes.files.length === 1 ? "1 file changed" : `${changes.files.length} files changed`}</span>
+            </div>
+            <div className="flex shrink-0 flex-col items-end font-mono text-footnote tabular-nums">
+              <span className="text-ink">{changes.files.length === 1 ? "1 file" : `${changes.files.length} files`}</span>
+              <span>
+                <span className="text-mint">+{adds}</span> <span className="text-danger">−{dels}</span>
+              </span>
+            </div>
           </div>
         )}
         {error && <Callout tone="danger">{error}</Callout>}
         {wt && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" Icon={GitMerge} busy={busy} onClick={merge}>
-              Merge into {workspace?.git?.branch ?? "workspace"}
-            </Button>
-            <ConfirmButton size="sm" label="Discard worktree" confirmLabel="Click again to discard" Icon={Trash2} onConfirm={discard} />
-            <span className="text-meta text-faint">Merging commits the agent's work, merges it and closes the agent.</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button variant="primary" size="lg" Icon={GitMerge} busy={busy} onClick={merge} className="flex-1">
+                Merge into {workspace?.git?.branch ?? "workspace"}
+              </Button>
+              <Button variant="danger" size="lg" Icon={Trash2} onClick={() => setAsking(true)} aria-label="Discard worktree">
+                {phone ? undefined : "Discard"}
+              </Button>
+            </div>
+            <p className="px-1 text-footnote text-dim">Merging commits the agent's work, merges it and closes the agent.</p>
           </div>
         )}
         {!changes && !error && (
@@ -127,8 +143,8 @@ export function ChangesSheet() {
         )}
         {changes && changes.files.length === 0 && <Empty bare Icon={GitBranch} title="No changes" detail={wt ? "The agent has not changed anything yet." : "The working tree is clean."} />}
         {changes && changes.files.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <ul className="flex max-h-56 flex-col overflow-auto rounded-field bg-fill-1 py-1">
+          <div className="flex flex-col gap-4">
+            <ul className="surface flex max-h-80 flex-col overflow-auto rounded-list py-1">
               {changes.files.map((f) => (
                 <FileRow key={f.path} f={f} selected={f.path === file} onSelect={() => setFile(f.path)} />
               ))}
@@ -137,6 +153,16 @@ export function ChangesSheet() {
           </div>
         )}
       </div>
+      <ConfirmSheet
+        open={asking}
+        onClose={() => setAsking(false)}
+        onConfirm={discard}
+        title="Discard this worktree?"
+        message={`Everything ${session?.title ?? "the agent"} changed on ${wt?.branch ?? "its branch"} is deleted and the agent closes.`}
+        confirmLabel="Discard"
+        destructive
+        Icon={Trash2}
+      />
     </Sheet>
   );
 }
@@ -149,17 +175,20 @@ function FileRow({ f, selected, onSelect }: { f: GitFile; selected: boolean; onS
       <button
         type="button"
         onClick={onSelect}
-        className={cn("flex w-full items-center gap-2.5 px-3 py-1 text-left text-small transition-colors", selected ? "bg-fill-2 text-bright" : "text-ink hover:bg-fill-2")}
+        aria-pressed={selected}
+        className={cn("press-row flex min-h-12 w-full items-center gap-3 px-3 py-1.5 text-left transition-colors", selected ? "bg-fill-3" : "hover:bg-fill-2")}
       >
-        <span className={cn("w-3 shrink-0 text-center font-mono text-meta", s.cls)} title={s.label}>
+        <span className={cn("grid size-7 shrink-0 place-items-center rounded-item bg-fill-2 font-mono text-footnote", s.cls)} title={s.label} aria-label={s.label}>
           {s.l}
         </span>
-        <span className="min-w-0 flex-1 truncate">
-          {slash >= 0 && <span className="text-dim">{f.path.slice(0, slash + 1)}</span>}
-          {f.path.slice(slash + 1)}
-          {f.from && <span className="text-faint"> ← {f.from}</span>}
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className={cn("truncate text-subhead", selected ? "text-bright" : "text-ink")}>
+            {f.path.slice(slash + 1)}
+            {f.from && <span className="text-faint"> ← {f.from}</span>}
+          </span>
+          {slash >= 0 && <span className="truncate text-caption text-dim">{f.path.slice(0, slash)}</span>}
         </span>
-        <span className="shrink-0 font-mono text-meta">
+        <span className="shrink-0 font-mono text-footnote tabular-nums">
           {f.additions > 0 && <span className="text-mint">+{f.additions}</span>}
           {f.deletions > 0 && <span className="ml-1.5 text-danger">−{f.deletions}</span>}
         </span>
@@ -170,9 +199,9 @@ function FileRow({ f, selected, onSelect }: { f: GitFile; selected: boolean; onS
 
 function DiffView({ diff }: { diff: GitDiff }) {
   const lines = diff.text.split("\n");
-  if (!diff.text.trim()) return <p className="text-small text-dim">No text changes (binary file or mode change).</p>;
+  if (!diff.text.trim()) return <p className="px-1 text-subhead text-dim">No text changes (binary file or mode change).</p>;
   return (
-    <div className="overflow-auto rounded-field bg-fill-1 py-2 font-mono text-meta leading-relaxed">
+    <div className="surface overflow-auto rounded-list py-2.5 font-mono text-footnote leading-relaxed">
       {lines.map((l, i) => {
         // The file header lines repeat what the list shows.
         if (/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to) )/.test(l)) return null;

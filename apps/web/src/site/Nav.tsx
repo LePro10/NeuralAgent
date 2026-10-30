@@ -28,7 +28,8 @@ export function goTo(id: string) {
   setTimeout(fix, 700);
 }
 
-export function Nav() {
+/** `away`: on another page (changelog): section links go to the landing page instead of scrolling. */
+export function Nav({ away }: { away?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [on, setOn] = useState("");
   const { cta } = useRelease();
@@ -65,7 +66,8 @@ export function Nav() {
         <div className="s-nav-in">
           <a href="/" className="s-logo" aria-label="NeuralAgent, home"><BrandMark size={22} /> NeuralAgent</a>
           <nav className="s-links" aria-label="Sections">
-            {NAV.map((n) => <a key={n.id} href={`#${n.id}`} className={on === n.id ? "on" : ""} onClick={(e) => { e.preventDefault(); goTo(n.id); }}>{n.label}</a>)}
+            {NAV.map((n) => <a key={n.id} href={`${away ? "/" : ""}#${n.id}`} className={on === n.id ? "on" : ""} onClick={(e) => { if (away) return; e.preventDefault(); goTo(n.id); }}>{n.label}</a>)}
+            <a href="/changelog" className={away ? "on" : ""}>Changelog</a>
           </nav>
           <div className="s-nav-cta">
             <span className="s-hide-xs"><Btn href={cta.href} size="sm">{cta.label.startsWith("Download for") ? "Download" : cta.label}</Btn></span>
@@ -76,7 +78,8 @@ export function Nav() {
         </div>
         {open && (
           <nav className="s-sheet" aria-label="Menu">
-            {NAV.map((n) => <a key={n.id} href={`#${n.id}`} onClick={(e) => { e.preventDefault(); setOpen(false); goTo(n.id); }}>{n.label}</a>)}
+            {NAV.map((n) => <a key={n.id} href={`${away ? "/" : ""}#${n.id}`} onClick={(e) => { setOpen(false); if (away) return; e.preventDefault(); goTo(n.id); }}>{n.label}</a>)}
+            <a href="/changelog">Changelog</a>
             <a href="/app/">Web remote</a>
             <a href="/download">All downloads</a>
           </nav>

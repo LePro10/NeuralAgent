@@ -247,3 +247,37 @@ async fn account_flow_and_isolation() {
     assert_eq!(s["users"], 2); // boss + bob (ann is blocked)
     assert!(s["days"][0]["connections"].as_i64().unwrap() >= 3);
 }
+
+#[tokio::test]
+async fn heartbeat_and_slow_peers_are_closed() {
+    let t = T::start().await;
+    let host = t.sign_in("boss@example.com", "host", None).await;
+    let phone = t.sign_in("boss@example.com", "client", None).await;
+    let mut host_ws = t.ws(&host).await;
+    let mut phone_ws = t.ws(&phone).await;
+
+    // Heartbeat: answered at once, so a client can tell a dead socket from a quiet one.
+    phone_ws.send(Message::Text(json!({ "t": "ping" }).to_string().into())).await.unwrap();
+    next(&mut phone_ws, "pong").await;
+
+    // The phone stops reading while the computer keeps sending: once its queue is full the relay
+    // closes the connection for real (it used to stay open but unrouted, looking alive).
+    let env = "x".repeat(32 << 10);
+    for _ in 0..3000 {
+        route(&mut host_ws, &phone.device, &env).await;
+        if !t.relay.hub.online(&phone.device) {
+            break;
+        }
+    }
+    assert!(!t.relay.hub.online(&phone.device), "slow peer dropped from routing");
+    let ended = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            match phone_ws.next().await {
+                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(ended.is_ok(), "the slow peer's socket is closed");
+}

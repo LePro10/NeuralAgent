@@ -1,4 +1,5 @@
 import type { AgentStatus } from "@neuralagent/protocol";
+import { topActivity, type Activity } from "@neuralagent/ui";
 
 type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "live" | "ember";
 
@@ -26,4 +27,10 @@ export function since(ms: number, now = Date.now()): string {
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
+}
+
+/** Agent statuses → the one activity mark for a nav item (ring = working; dots = waiting / done / error). */
+const ACTIVITY: Partial<Record<AgentStatus, Activity>> = { starting: "working", working: "working", waiting: "waiting", done: "done", error: "error" };
+export function activityOf(list: AgentStatus[]): Activity | undefined {
+  return topActivity(list.map((s) => ACTIVITY[s]));
 }

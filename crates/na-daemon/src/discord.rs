@@ -11,6 +11,8 @@ use na_protocol::{AgentStatus, DiscordPresence, State};
 
 const APP_ID: &str = "1563621751861153933";
 const RETRY: Duration = Duration::from_secs(20);
+/// Images come from the website (Discord fetches external URLs), so no dev-portal assets are needed.
+const IMAGES: &str = "https://agent.neuralhub.dev/discord";
 
 /// What Discord should show; `None` clears it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,15 +21,24 @@ pub struct Presence {
     pub state: Option<String>,
     /// Unix seconds when the first of the running agents started.
     pub since: i64,
+    /// The small badge: "waiting" if any agent needs input, else "working" or "idle".
+    pub badge: &'static str,
 }
 
 /// Derives the presence from the daemon state.
 pub fn presence(s: &State) -> Option<Presence> {
     let running: Vec<_> = s.sessions.values().filter(|x| x.alive && is_agent(&x.profile_id)).collect();
     let since = running.iter().map(|x| x.started_at).min()? / 1000;
+    let badge = if running.iter().any(|x| x.status == AgentStatus::Waiting) {
+        "waiting"
+    } else if running.iter().any(|x| x.status == AgentStatus::Working) {
+        "working"
+    } else {
+        "idle"
+    };
     match s.settings.discord_presence {
         DiscordPresence::Off => None,
-        DiscordPresence::General => Some(Presence { details: "Working with AI agents".into(), state: None, since }),
+        DiscordPresence::General => Some(Presence { details: "Working with AI agents".into(), state: None, since, badge }),
         DiscordPresence::Detailed => {
             // The workspace with the most recent activity.
             let latest = running.iter().max_by_key(|x| x.status_since)?;
@@ -39,6 +50,7 @@ pub fn presence(s: &State) -> Option<Presence> {
                 details: format!("In {workspace}"),
                 state: Some(if working > 0 { format!("{agents} · {working} working") } else { agents }),
                 since,
+                badge,
             })
         }
     }
@@ -112,10 +124,16 @@ fn run(rx: Receiver<Option<Presence>>) {
 }
 
 fn activity(p: &Presence) -> Activity<'_> {
+    let (large, small) = (format!("{IMAGES}/logo-512.png"), format!("{IMAGES}/small-{}.png", p.badge));
+    let small_text = match p.badge {
+        "waiting" => "An agent needs input",
+        "working" => "Agents working",
+        _ => "Agents idle",
+    };
     let mut a = Activity::new()
         .details(p.details.as_str())
         .timestamps(Timestamps::new().start(p.since))
-        .assets(Assets::new().large_image("logo").large_text("NeuralAgent"))
+        .assets(Assets::new().large_image(large).large_text("NeuralAgent").small_image(small).small_text(small_text))
         .buttons(vec![Button::new("Get NeuralAgent", "https://agent.neuralhub.dev")]);
     if let Some(s) = &p.state {
         a = a.state(s.as_str());
@@ -146,7 +164,7 @@ mod tests {
     fn shows_in_discord() {
         let mut c = DiscordIpcClient::new(APP_ID);
         c.connect().expect("Discord running");
-        let p = Presence { details: "In website".into(), state: Some("2 agents · 1 working".into()), since: now() };
+        let p = Presence { details: "In website".into(), state: Some("2 agents · 1 working".into()), since: now(), badge: "working" };
         c.set_activity(activity(&p)).unwrap();
         let (_, reply) = c.recv().unwrap();
         println!("{reply}");

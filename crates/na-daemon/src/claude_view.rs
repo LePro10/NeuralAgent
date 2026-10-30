@@ -55,6 +55,10 @@ struct TailState {
     meta: CvMeta,
     prompt: Option<CvPrompt>,
     skills: HashMap<String, String>,
+    /// The effort came from the session itself (transcript or screen), not the settings default.
+    effort_seen: bool,
+    /// The last effort read off the screen: only a change there overrides the transcript.
+    screen_effort: Option<String>,
 }
 
 /// What one transcript line means.
@@ -65,7 +69,47 @@ pub struct Parsed {
     pub title: Option<String>,
     pub context: Option<u64>,
     pub model: Option<String>,
+    /// `Some("")`: back to the default (`/effort auto`).
+    pub effort: Option<String>,
     pub skills: Vec<(String, String)>,
+}
+
+/// Effort levels Claude Code takes, lowest first.
+pub const EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+
+/// The effort a `/effort` output sets: "Set effort level to high (this session only): …",
+/// "… Effort stays high.", "Effort level set to auto" (→ `""`, the default again).
+pub fn effort_from_output(out: &str) -> Option<String> {
+    let lower = out.to_lowercase();
+    for key in ["set effort level to ", "effort level set to ", "effort stays "] {
+        if let Some(i) = lower.find(key) {
+            let word: String = lower[i + key.len()..].chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+            if EFFORTS.contains(&word.as_str()) {
+                return Some(word);
+            }
+            if word == "auto" || word == "default" {
+                return Some(String::new());
+            }
+        }
+    }
+    None
+}
+
+/// The effort in the CLI's status line ("◐ medium · /effort").
+pub fn detect_effort(screen: &str) -> Option<&'static str> {
+    screen.lines().find_map(|l| {
+        let before = &l[..l.find("/effort")?];
+        let word = before.trim_end().trim_end_matches('·').trim_end().rsplit(|c: char| c.is_whitespace()).next()?.to_lowercase();
+        EFFORTS.iter().find(|e| **e == word).copied()
+    })
+}
+
+/// The default effort for `model` in Claude Code's settings (`modelSettings.<model>.effortLevel`, then `effortLevel`).
+pub fn settings_effort(dir: &Path, model: Option<&str>) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join("settings.json")).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let per_model = model.and_then(|m| v["modelSettings"][m]["effortLevel"].as_str());
+    per_model.or(v["effortLevel"].as_str()).filter(|e| EFFORTS.contains(e)).map(str::to_string)
 }
 
 fn clip(s: &str, max: usize) -> String {
@@ -170,6 +214,7 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                     if out.is_empty() {
                         return p;
                     }
+                    p.effort = effort_from_output(&out);
                     ("output", out)
                 }
                 _ => return p,
@@ -246,6 +291,7 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                     p.msg = Some(mk(Some("command"), vec![CvBlock::Text { text: line }]));
                 } else if let Some(out) = between(s, "<local-command-stdout>", "</local-command-stdout>") {
                     let out = strip_ansi(out).trim().to_string();
+                    p.effort = effort_from_output(&out);
                     if !out.is_empty() {
                         p.msg = Some(mk(Some("output"), vec![CvBlock::Text { text: clip(&out, MAX_TEXT) }]));
                     }
@@ -324,6 +370,19 @@ impl TailState {
         m
     }
 
+    /// The effort shown on the screen: a new value there wins (the CLI's status line is live).
+    fn see_effort(&mut self, effort: Option<&str>) -> bool {
+        let Some(e) = effort else { return false };
+        if self.screen_effort.as_deref() == Some(e) {
+            return false;
+        }
+        self.screen_effort = Some(e.to_string());
+        self.effort_seen = true;
+        let changed = self.meta.effort.as_deref() != Some(e);
+        self.meta.effort = Some(e.to_string());
+        changed
+    }
+
     /// Feeds whole lines starting at file position `base`.
     fn feed(&mut self, data: &[u8], base: u64) -> (Vec<CvEvent>, bool) {
         let mut events = vec![];
@@ -354,6 +413,12 @@ impl TailState {
                 meta_changed |= self.meta.context_tokens != Some(c);
                 self.meta.context_tokens = Some(c);
             }
+            if let Some(e) = p.effort {
+                self.effort_seen = !e.is_empty();
+                let e = Some(e).filter(|e| !e.is_empty());
+                meta_changed |= self.meta.effort != e;
+                self.meta.effort = e;
+            }
             for (n, d) in p.skills {
                 self.skills.insert(n, d);
             }
@@ -363,6 +428,14 @@ impl TailState {
             }
         }
         self.offset = base + pos as u64;
+        // Not set in this session: the default from the settings, for the model in use.
+        if !self.effort_seen
+            && let Some(dir) = claude_dir()
+        {
+            let e = settings_effort(&dir, self.meta.model.as_deref());
+            meta_changed |= self.meta.effort != e;
+            self.meta.effort = e;
+        }
         (events, meta_changed)
     }
 
@@ -387,6 +460,8 @@ impl TailState {
             self.by_id.clear();
             self.skills.clear();
             self.meta = CvMeta { transcript: path.file_name().map(|n| n.to_string_lossy().into_owned()), ..Default::default() };
+            self.effort_seen = false;
+            self.screen_effort = None;
             self.more = start > 0;
             self.offset = start;
             self.started = true;
@@ -482,15 +557,20 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
     if lines[end + 1..=last].iter().filter(|l| !is_border(l)).count() > 3 {
         return None;
     }
-    // The question: the lines above the options, up to the nearest rule (a diff preview or the
-    // box's top edge ends it). Blank lines inside are kept.
+    // The question: the lines above the options, up to the nearest solid rule (the box's top
+    // edge). Blank lines inside are kept. A dashed box holds the command or diff itself: it is
+    // kept between ``` lines, and reading goes on above it.
     let mut title: Vec<String> = vec![];
-    for l in lines[..start].iter().rev().take(14) {
+    for l in lines[..start].iter().rev().take(28) {
         let t = l.trim().trim_matches('│').trim();
         if t.is_empty() {
             if !title.is_empty() {
                 title.push(String::new());
             }
+            continue;
+        }
+        if t.chars().count() >= 3 && t.chars().all(|c| "╌╍┄┅┈┉".contains(c)) {
+            title.push("```".into());
             continue;
         }
         if is_rule(t) || is_border(l) {
@@ -500,7 +580,7 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
             break;
         }
         title.push(t.to_string());
-        if title.len() >= 9 {
+        if title.len() >= 20 {
             break;
         }
     }
@@ -508,6 +588,13 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
         title.pop();
     }
     title.reverse();
+    while title.first().is_some_and(|l| l.is_empty()) {
+        title.remove(0);
+    }
+    if title.iter().filter(|l| *l == "```").count() % 2 == 1 {
+        // Cut off at the top: the opening fence is missing.
+        title.insert(0, "```".into());
+    }
     Some(CvPrompt { title: title.join("\n"), options })
 }
 
@@ -534,7 +621,9 @@ pub fn detect_mode(screen: &str) -> Option<&'static str> {
         Some("bypassPermissions")
     } else if has("auto mode on") {
         Some("auto")
-    } else if has("? for shortcuts") || has("shift+tab to cycle") {
+    } else if has("don't ask on") || has("don\u{2019}t ask on") || has("dontask mode on") {
+        Some("dontAsk")
+    } else if has("manual mode on") || has("? for shortcuts") || has("shift+tab to cycle") {
         Some("default")
     } else {
         None
@@ -805,8 +894,10 @@ impl Core {
             let prompt = detect_prompt(&screen);
             let activity = detect_activity(&screen);
             let mode = detect_mode(&screen);
+            let effort = detect_effort(&screen);
             let mut st = tail.st.lock();
             let mut meta_changed = false;
+            meta_changed |= st.see_effort(effort);
             if let Some(m) = mode
                 && st.meta.mode.as_deref() != Some(m)
             {
@@ -828,6 +919,17 @@ impl Core {
         let mut stt = self.cv.stt.lock();
         if stt.as_ref().is_some_and(|(_, used)| used.elapsed() > STT_KEEP) {
             *stt = None;
+        }
+    }
+
+    /// Claude Code hands its statusline command the live effort (`effort.level`): the surest
+    /// source, since the "◐ medium · /effort" hint on the screen is only shown now and then.
+    pub fn cv_status_effort(&self, sid: &Id, level: &str) {
+        let Some(level) = EFFORTS.iter().find(|e| **e == level).copied() else { return };
+        let Some(tail) = self.cv.tails.lock().get(sid).cloned() else { return };
+        let mut st = tail.st.lock();
+        if st.see_effort(Some(level)) {
+            let _ = tail.tx.send(CvEvent::Meta { meta: st.meta.clone() });
         }
     }
 
@@ -853,6 +955,7 @@ impl Core {
         if let Some(m) = detect_mode(&screen) {
             st.meta.mode = Some(m.into());
         }
+        st.see_effort(detect_effort(&screen));
         let res = CvAttachResult { messages: st.page(), more: st.more_before(), meta: st.meta.clone(), prompt: st.prompt.clone() };
         Ok((res, rx))
     }
@@ -1084,6 +1187,37 @@ mod tests {
     }
 
     #[test]
+    fn effort_comes_from_effort_output_screen_and_settings() {
+        // Both shapes the CLI writes: a system `local_command` line and a user stdout line.
+        let (st, _) = feed(&[
+            json!({"type":"system","subtype":"local_command","uuid":"s1","content":"<local-command-stdout>Set effort level to \u{1b}[1mhigh\u{1b}[22m (saved as your default for new sessions): Deeper reasoning</local-command-stdout>"}),
+        ]);
+        assert_eq!(st.meta.effort.as_deref(), Some("high"));
+        let (mut st, _) = feed(&[
+            json!({"type":"user","uuid":"o","message":{"role":"user","content":"<local-command-stdout>Set effort level to low (this session only): Quick answers</local-command-stdout>"}}),
+        ]);
+        assert_eq!(st.meta.effort.as_deref(), Some("low"));
+        assert_eq!(effort_from_output("Ultracode off. Effort stays xhigh."), Some("xhigh".into()));
+        assert_eq!(effort_from_output("Effort level set to auto"), Some(String::new()));
+        assert_eq!(effort_from_output("Set model to opus"), None);
+        // The status line: only a change there counts, so the transcript is not overridden on every tick.
+        let screen = "  ⏵⏵ accept edits on\n  ◐ medium · /effort\n";
+        assert_eq!(detect_effort(screen), Some("medium"));
+        assert_eq!(detect_effort("> /effort high\n"), None);
+        assert!(st.see_effort(detect_effort(screen)));
+        assert_eq!(st.meta.effort.as_deref(), Some("medium"));
+        assert!(!st.see_effort(Some("medium")));
+        // Settings: per model first, then the global default.
+        let dir = std::env::temp_dir().join(format!("na-effort-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("settings.json"), r#"{"effortLevel":"low","modelSettings":{"claude-opus-5-5":{"effortLevel":"max"}}}"#)
+            .unwrap();
+        assert_eq!(settings_effort(&dir, Some("claude-opus-5-5")).as_deref(), Some("max"));
+        assert_eq!(settings_effort(&dir, Some("claude-haiku-5-5")).as_deref(), Some("low"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn assistant_blocks_merge_and_tool_results_pair() {
         let (st, evs) = feed(&[
             json!({"type":"user","uuid":"u1","timestamp":"2026-10-30T10:00:00.000Z","message":{"role":"user","content":"list files"}}),
@@ -1167,9 +1301,45 @@ mod tests {
     }
 
     #[test]
+    fn command_in_a_dashed_box_is_kept() {
+        let screen = "\
+────────────────────────────────────────\n\
+ Bash command\n\
+\n\
+ List files and count lines\n\
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\
+│ find cv-demo -type f\n\
+│ --exclude-dir=node_modules\n\
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n\
+ A nested command in this command can't be checked before it runs\n\
+\n\
+ Do you want to proceed?\n\
+ ❯ 1. Yes\n\
+   2. Yes, and switch to auto mode · auto mode handles these prompts for you\n\
+   3. No\n\
+\n\
+ Esc to cancel · Tab to amend\n";
+        let p = detect_prompt(screen).expect("menu");
+        assert_eq!(
+            p.title,
+            "Bash command\n\nList files and count lines\n```\nfind cv-demo -type f\n--exclude-dir=node_modules\n```\nA nested command in this command can't be checked before it runs\n\nDo you want to proceed?"
+        );
+    }
+
+    #[test]
     fn numbered_list_in_output_is_not_a_menu() {
         let screen = "● Here is the plan:\n  1. First\n  2. Second\n  3. Third\n\n╭──╮\n│ > │\n╰──╯\n  ? for shortcuts\n";
         assert!(detect_prompt(screen).is_none());
+    }
+
+    #[test]
+    fn mode_from_the_footer() {
+        assert_eq!(detect_mode("> \n  \u{23f8} manual mode on (shift+tab to cycle)"), Some("default"));
+        assert_eq!(detect_mode("  \u{23f5}\u{23f5} accept edits on (shift+tab to cycle)"), Some("acceptEdits"));
+        assert_eq!(detect_mode("  \u{23f8} plan mode on (shift+tab to cycle)"), Some("plan"));
+        assert_eq!(detect_mode("  don't ask on (shift+tab to cycle)"), Some("dontAsk"));
+        assert_eq!(detect_mode("  ? for shortcuts"), Some("default"));
+        assert_eq!(detect_mode("just output"), None);
     }
 
     #[test]

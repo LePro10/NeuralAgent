@@ -206,11 +206,21 @@ impl Conn {
                     t.abort();
                 }
                 let sub = self.core.subscribe(since);
-                if matches!(sub.first, ServerMsg::Snapshot { .. }) {
-                    let _ = self.out.send(sub.first).await;
-                }
+                // A snapshot, or (resuming with nothing to replay) a pong after the replay: either
+                // tells the client it is live again. Without it a quiet daemon left the client
+                // "reconnecting" until the next event.
+                let pong = match sub.first {
+                    snap @ ServerMsg::Snapshot { .. } => {
+                        let _ = self.out.send(snap).await;
+                        None
+                    }
+                    other => Some(other),
+                };
                 for m in sub.replay {
                     let _ = self.out.send(m).await;
+                }
+                if let Some(p) = pong {
+                    let _ = self.out.send(p).await;
                 }
                 self.state_task = Some(tokio::spawn(forward_state(self.core.clone(), sub.rx, self.out.clone())));
             }

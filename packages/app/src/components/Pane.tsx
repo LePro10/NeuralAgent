@@ -1,16 +1,16 @@
-import type { PaneContent, Session } from "@neuralagent/protocol";
-import { StatusDot, useLayoutMode } from "@neuralagent/ui";
-import { Columns2, GitBranch, Globe, Maximize2, Minimize2, MessageSquareText, Rows2, RotateCw, SquareTerminal, X } from "lucide-react";
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
-import { cn } from "@neuralagent/ui";
+import type { PaneContent } from "@neuralagent/protocol";
+import { Button, Menu, Pill, Segmented, StatusDot, cn, useLayoutMode } from "@neuralagent/ui";
+import { Columns2, Ellipsis, GitBranch, Globe, Maximize2, MessageSquareText, Minimize2, RotateCw, Rows2, SquareTerminal, X } from "lucide-react";
+import { useState, type DragEvent, type ReactNode } from "react";
 import { STATUS } from "../lib/status";
-import { useChanges, useClient, useDaemon, useUi } from "../lib/store";
-import { AgentGlyph } from "./AgentGlyph";
+import { useChanges, useClient, useUi } from "../lib/store";
+import { EngineTile } from "./EngineTile";
 import { BrowserPane } from "./BrowserPane";
 import { EmptyPane } from "./EmptyPane";
 import { ClaudeView } from "./claude/ClaudeView";
 import { KeyBar } from "./KeyBar";
 import { TerminalView } from "./TerminalView";
+import { paneTitle, usePaneMenu, usePaneSession } from "./workspace/paneMenu";
 
 export interface PaneActions {
   focus: () => void;
@@ -31,17 +31,24 @@ function HeaderButton({ label, onClick, children }: { label: string; onClick: ()
       type="button"
       aria-label={label}
       title={label}
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
-      className="hoverable grid size-6 place-items-center rounded-xs text-dim transition-colors hover:text-ink"
+      className="hoverable grid size-7 shrink-0 place-items-center rounded-full text-dim transition-colors hover:text-bright"
     >
       {children}
     </button>
   );
 }
 
+/**
+ * One pane: an agent's terminal or Claude view, a preview, or a launcher. Desktop: a card with a
+ * header (agent, status, Chat/Terminal, split, zoom, close, "…"); drag the header to swap panes.
+ * Phones: no header — the workspace header and its action sheet carry the actions, and a Claude
+ * pane fills the screen edge to edge.
+ */
 export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, actions }: {
   workspaceId: string;
   paneId: string;
@@ -51,31 +58,17 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
   webgl: boolean;
   actions: PaneActions;
 }) {
-  const sid = content.kind === "terminal" ? content.session : null;
-  const session: Session | undefined = useDaemon((c) => (sid ? c.state?.sessions[sid] : undefined));
-  const profile = useDaemon((c) => (session ? c.state?.profiles.find((p) => p.id === session.profile_id) : undefined));
   const client = useClient();
   const phone = useLayoutMode() === "phone";
   const showChanges = useChanges((c) => c.show);
-  const claudePref = useUi((u) => u.claudeView);
   const setClaudePref = useUi((u) => u.setClaudeView);
-  const isClaude = profile?.engine === "claude";
-  const claudeView = isClaude && (claudePref ?? phone);
+  const { sid, session, profile, isClaude, claudeView } = usePaneSession(content, phone);
+  const menu = usePaneMenu({ workspaceId, content, actions, zoomed, phone });
   const [dropTarget, setDropTarget] = useState(false);
-  // Closing a pane stops its process; a running one needs a second click within 3 s.
-  const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  const close = () => {
-    if (session?.alive && !armed) setArmed(true);
-    else actions.close();
-  };
 
   const st = session ? STATUS[session.status] : null;
-  const title = session ? session.title : content.kind === "browser" ? hostOf(content.url) : "Empty";
+  const title = content.kind === "empty" ? "New agent" : paneTitle(content, session);
+  const restart = () => session && client.req({ m: "session_restart", p: { id: session.id } }).catch(() => {});
 
   const onDragStart = (e: DragEvent) => {
     e.dataTransfer.setData(DRAG_TYPE, paneId);
@@ -93,77 +86,103 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
     if (other && other !== paneId) actions.swapWith(other);
   };
 
+  const bare = phone && claudeView;
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-tile bg-chrome transition-shadow",
-        focused ? "shadow-edge" : "shadow-rim",
+        "relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden transition-shadow",
+        bare ? "bg-cv-bg" : "rounded-tile bg-chrome",
+        !phone && (focused ? "shadow-edge" : "shadow-rim"),
         dropTarget && "shadow-well-focus",
       )}
       onDragOver={onDragOver}
       onDragLeave={() => setDropTarget(false)}
       onDrop={onDrop}
     >
-      <div
-        draggable
-        onDragStart={onDragStart}
-        onMouseDown={actions.focus}
-        onDoubleClick={actions.zoom}
-        className="group flex h-7 shrink-0 cursor-default items-center gap-2 pr-1 pl-2.5 select-none"
-      >
-        {st ? <StatusDot tone={st.tone} pulse={st.pulse} label={st.label} /> : <span className="size-1.5" />}
-        {profile && <AgentGlyph engine={profile.engine} size={12} className={focused ? "text-ink" : "text-faint"} />}
-        <span className={cn("truncate text-detail", focused ? "text-bright" : "text-dim")}>{title}</span>
-        {session?.worktree && (
-          <button
-            type="button"
-            title={`Own worktree on ${session.worktree.branch}: review, merge or discard`}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => showChanges(workspaceId, session.id)}
-            className="hoverable flex h-5 shrink-0 items-center gap-1 rounded-xs bg-fill-1 px-1.5 text-meta text-dim hover:text-ink"
-          >
-            <GitBranch size={11} strokeWidth={1.6} aria-hidden />
-            Worktree
-          </button>
-        )}
-        {session?.last_line && <span className="min-w-0 flex-1 truncate text-meta text-faint">{session.last_line}</span>}
-        {!session?.last_line && <span className="flex-1" />}
-        <div className={cn("flex items-center gap-0.5 transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-          {isClaude && (
-            <HeaderButton label={claudeView ? "Show the terminal" : "Show the Claude view"} onClick={() => setClaudePref(!claudeView)}>
-              {claudeView ? <SquareTerminal size={13} strokeWidth={1.6} /> : <MessageSquareText size={13} strokeWidth={1.6} />}
-            </HeaderButton>
-          )}
-          {session?.preview_url && (
-            <HeaderButton label={`Preview ${session.preview_url}`} onClick={() => actions.preview(session.preview_url!)}>
-              <Globe size={13} strokeWidth={1.6} />
-            </HeaderButton>
-          )}
-          {session && !session.alive && (
-            <HeaderButton label="Restart" onClick={() => client.req({ m: "session_restart", p: { id: session.id } }).catch(() => {})}>
-              <RotateCw size={13} strokeWidth={1.6} />
-            </HeaderButton>
-          )}
-          <HeaderButton label="Split right" onClick={() => actions.split("row")}>
-            <Columns2 size={13} strokeWidth={1.6} />
-          </HeaderButton>
-          <HeaderButton label="Split down" onClick={() => actions.split("column")}>
-            <Rows2 size={13} strokeWidth={1.6} />
-          </HeaderButton>
-          <HeaderButton label={zoomed ? "Restore" : "Zoom"} onClick={actions.zoom}>
-            {zoomed ? <Minimize2 size={13} strokeWidth={1.6} /> : <Maximize2 size={13} strokeWidth={1.6} />}
-          </HeaderButton>
-          {armed ? (
-            <button type="button" onClick={(e) => (e.stopPropagation(), actions.close())} className="h-6 rounded-xs px-2 text-meta text-danger hoverable">
-              Stop &amp; close
-            </button>
+      {!phone && (
+        <div
+          draggable
+          onDragStart={onDragStart}
+          onMouseDown={actions.focus}
+          onDoubleClick={actions.zoom}
+          className="group flex h-10 shrink-0 cursor-default items-center gap-2 pr-1.5 pl-2 select-none"
+        >
+          {profile ? (
+            <EngineTile engine={profile.engine} className={cn("!size-6 transition-opacity", !focused && "opacity-60")} />
+          ) : content.kind === "browser" ? (
+            <span className="grid size-6 shrink-0 place-items-center rounded-tile bg-fill-3 text-ink"><Globe size={14} strokeWidth={1.7} /></span>
           ) : (
-            <HeaderButton label="Close pane" onClick={close}>
-              <X size={14} strokeWidth={1.6} />
-            </HeaderButton>
+            <span className="size-6 shrink-0" />
           )}
+          <span className={cn("min-w-0 shrink truncate text-chip", focused ? "text-bright" : "text-dim")}>{title}</span>
+          {st && session && (session.status === "waiting" || session.status === "error") ? (
+            <Pill size="sm" tone={st.tone === "warning" ? "warning" : "danger"} dot className="shrink-0">{st.label}</Pill>
+          ) : (
+            st && session?.status === "working" && <StatusDot tone={st.tone} pulse label={st.label} size={7} />
+          )}
+          {session?.worktree && (
+            <button
+              type="button"
+              title={`Own worktree on ${session.worktree.branch}: review, merge or discard`}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => showChanges(workspaceId, session.id)}
+              className="hoverable flex h-6 shrink-0 items-center gap-1 rounded-full bg-fill-2 px-2 text-meta text-ink hover:text-bright"
+            >
+              <GitBranch size={12} strokeWidth={1.7} aria-hidden />
+              Worktree
+            </button>
+          )}
+          <span className="min-w-0 flex-1 truncate text-meta text-faint">{session?.last_line && session.status !== "waiting" ? session.last_line : ""}</span>
+          {isClaude && (
+            <div onMouseDown={(e) => e.stopPropagation()} className={cn("shrink-0 transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+              <Segmented
+                size="sm"
+                label="Show as"
+                value={claudeView ? "chat" : "terminal"}
+                options={[
+                  { value: "chat", label: "Chat", Icon: MessageSquareText },
+                  { value: "terminal", label: "Terminal", Icon: SquareTerminal },
+                ]}
+                onChange={(v) => setClaudePref(v === "chat")}
+              />
+            </div>
+          )}
+          <div className={cn("flex shrink-0 items-center transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100")}>
+            {session?.preview_url && (
+              <HeaderButton label={`Preview ${session.preview_url}`} onClick={() => actions.preview(session.preview_url!)}>
+                <Globe size={15} strokeWidth={1.7} />
+              </HeaderButton>
+            )}
+            {session && !session.alive && (
+              <HeaderButton label="Restart" onClick={() => void restart()}>
+                <RotateCw size={15} strokeWidth={1.7} />
+              </HeaderButton>
+            )}
+            <HeaderButton label="Split right (⌘D)" onClick={() => actions.split("row")}>
+              <Columns2 size={15} strokeWidth={1.7} />
+            </HeaderButton>
+            <HeaderButton label="Split down (⌘\\)" onClick={() => actions.split("column")}>
+              <Rows2 size={15} strokeWidth={1.7} />
+            </HeaderButton>
+            <HeaderButton label={zoomed ? "Restore (⌘↩)" : "Zoom (⌘↩)"} onClick={actions.zoom}>
+              {zoomed ? <Minimize2 size={15} strokeWidth={1.7} /> : <Maximize2 size={15} strokeWidth={1.7} />}
+            </HeaderButton>
+            <Menu
+              title={title}
+              items={menu.items}
+              width={240}
+              trigger={(open) => (
+                <HeaderButton label="More" onClick={open}>
+                  <Ellipsis size={16} strokeWidth={1.7} />
+                </HeaderButton>
+              )}
+            />
+            <HeaderButton label="Close (⌘W)" onClick={menu.requestClose}>
+              <X size={16} strokeWidth={1.7} />
+            </HeaderButton>
+          </div>
         </div>
-      </div>
+      )}
       <div className="relative min-h-0 flex-1">
         {sid && session && claudeView ? (
           <ClaudeView session={session} webgl={webgl} onFocus={actions.focus} />
@@ -175,25 +194,18 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
           <EmptyPane workspaceId={workspaceId} paneId={paneId} onFocus={actions.focus} onBrowser={(url) => actions.setContent({ kind: "browser", url })} />
         )}
         {session && !session.alive && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3">
-            <div className="glass pointer-events-auto flex items-center gap-3 rounded-menu px-3 py-1.5 text-small text-ink">
-              <span>{session.exit_code ? `Exited with code ${session.exit_code}` : "Process exited"}</span>
-              <button type="button" className="text-accent" onClick={() => client.req({ m: "session_restart", p: { id: session.id } }).catch(() => {})}>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-4">
+            <div className="material pointer-events-auto flex items-center gap-3 rounded-full py-1.5 pr-1.5 pl-4 text-subhead text-ink shadow-float">
+              <span>{session.exit_code ? `Exited with code ${session.exit_code}` : "The agent has stopped"}</span>
+              <Button size="sm" variant="primary" Icon={RotateCw} onClick={() => void restart()}>
                 Restart
-              </button>
+              </Button>
             </div>
           </div>
         )}
       </div>
       {phone && sid && session?.alive && !claudeView && <KeyBar sid={sid} />}
+      {menu.confirm}
     </div>
   );
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host || "Browser";
-  } catch {
-    return "Browser";
-  }
 }

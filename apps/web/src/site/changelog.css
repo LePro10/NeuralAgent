@@ -1,0 +1,51 @@
+/*
+ * /changelog page (src/changelog.tsx). Tokens only. A timeline: version and date on the left
+ * (sticky on wide screens), a dot on the line, the release card on the right.
+ */
+html:has(body[data-page="changelog"]), body[data-page="changelog"] { height: auto; min-height: 100%; }
+body[data-page="changelog"] #root { height: auto; overflow: visible; }
+body[data-page="changelog"] { overflow-x: clip; }
+
+.c-page { padding-top: calc(120px + env(safe-area-inset-top)); }
+.c-cta { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+.c-list { list-style: none; margin: 0; padding: 0; position: relative; display: grid; gap: 28px; }
+/* the line */
+.c-list::before { content: ""; position: absolute; top: 8px; bottom: 8px; left: 5px; width: var(--hair); background: linear-gradient(to bottom, var(--color-accent), var(--color-line) 30%, var(--color-line) 85%, transparent); }
+
+.c-rel { position: relative; display: grid; gap: 12px; padding-left: 30px; scroll-margin-top: 96px; }
+.c-dot { position: absolute; left: 0; top: 6px; width: 11px; height: 11px; border-radius: var(--r-pill); background: var(--color-bg); box-shadow: inset 0 0 0 var(--hair) var(--color-line-2); }
+.c-rel.latest .c-dot { background: var(--color-accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 0 18px color-mix(in oklab, var(--color-accent) 60%, transparent); }
+.c-rel.next .c-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--color-dim); }
+
+.c-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.c-ver { font-family: var(--font-mono); font-size: var(--text-title); color: var(--color-bright); text-decoration: none; letter-spacing: -.01em; }
+.c-ver:hover { color: var(--color-accent); }
+.c-date { color: var(--color-dim); font-size: var(--text-small); }
+.c-tag { align-self: center; padding: 2px 9px; border-radius: var(--r-pill); font-size: var(--text-meta); color: var(--color-accent); background: color-mix(in oklab, var(--color-accent) 14%, transparent); box-shadow: var(--shadow-lip); }
+.c-rel.next .c-tag { color: var(--color-dim); background: var(--color-fill-2); }
+
+.c-card { display: grid; gap: 18px; padding: clamp(18px, 3vw, 26px); }
+.c-rel.next .c-card { background: color-mix(in oklab, var(--color-card) 55%, transparent); box-shadow: inset 0 0 0 var(--hair) var(--color-line); }
+.c-sum { margin: 0; color: var(--color-ink); font-size: var(--text-lead); line-height: 1.5; text-wrap: pretty; }
+
+.c-gt { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 3px 10px 3px 8px; border-radius: var(--r-pill); font-size: var(--text-meta); font-weight: 460; letter-spacing: .02em; text-transform: uppercase; }
+.c-gt.t-new { color: var(--color-accent); background: color-mix(in oklab, var(--color-accent) 13%, transparent); }
+.c-gt.t-improved { color: var(--color-signal-sky); background: color-mix(in oklab, var(--color-signal-sky) 12%, transparent); }
+.c-gt.t-fixed { color: var(--color-signal-green); background: color-mix(in oklab, var(--color-signal-green) 12%, transparent); }
+
+.c-group ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.c-group li { position: relative; padding-left: 18px; color: var(--color-dim); font-size: var(--text-body); line-height: 1.55; text-wrap: pretty; }
+.c-group li::before { content: ""; position: absolute; left: 4px; top: .7em; width: 5px; height: 5px; border-radius: var(--r-pill); background: var(--color-faint); }
+.c-group b { color: var(--color-bright); font-weight: 460; }
+.c-group code { font-family: var(--font-mono); font-size: .9em; padding: 1px 5px; border-radius: var(--radius-xs); background: var(--color-fill-2); color: var(--color-ink); }
+.c-group a { color: var(--color-accent); }
+
+@media (min-width: 900px) {
+  .c-list { gap: 40px; }
+  .c-list::before { left: 185px; }
+  .c-rel { grid-template-columns: 160px minmax(0, 1fr); gap: 50px; padding-left: 0; }
+  .c-dot { left: 180px; }
+  .c-meta { flex-direction: column; align-items: flex-end; text-align: right; gap: 4px; position: sticky; top: 96px; align-self: start; }
+  .c-tag { align-self: flex-end; margin-top: 4px; }
+}

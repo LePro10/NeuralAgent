@@ -1,5 +1,5 @@
 /**
- * Chips filter, Pills label. Chips are buttons (32px, quiet surfaces, scroll
+ * Chips filter, Pills label. Chips are buttons (h-control-sm: 36 on phones, quiet surfaces, scroll
  * sideways on phones without triggering a pager); Pills are static status
  * labels in a soft tone.
  */
@@ -11,9 +11,9 @@ import { haptic } from '../../lib/haptics';
 import { SPRING } from '../../lib/motion';
 
 const chipCls = (on: boolean, own = true) => cn(
-  'pressable relative isolate flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-chip',
+  'pressable relative isolate flex h-control-sm shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-chip',
   'after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-[""]',
-  on ? cn('text-bg', own && 'bg-bright shadow-lit') : 'bg-fill-1 text-ink shadow-edge hover:bg-fill-2 hover:text-bright',
+  on ? cn('text-on-bright', own && 'bg-bright shadow-lit') : 'bg-fill-1 text-ink shadow-edge hover:bg-fill-2 hover:text-bright',
 );
 
 export interface ChipOption<T extends string> { value: T; label: string; count?: number; dot?: string; Icon?: LucideIcon; }
@@ -39,7 +39,7 @@ export function Chips<T extends string>({ value, options, onChange, lead, nowrap
             {o.dot && <i className="h-1.5 w-1.5 rounded-full" style={{ background: o.dot }} />}
             {o.Icon && <o.Icon size={13} strokeWidth={1.75} />}
             {o.label}
-            {o.count !== undefined && <span className={cn('tabular text-meta', on ? 'text-bg/55' : 'text-dim')}>{o.count}</span>}
+            {o.count !== undefined && <span className={cn('tabular text-meta', on ? 'text-on-bright/60' : 'text-dim')}>{o.count}</span>}
           </button>
         );
       })}
@@ -53,7 +53,7 @@ export function ToggleChip({ on, onChange, label, count, Icon }: { on: boolean; 
     <button type="button" aria-pressed={on} onClick={() => { haptic('select'); onChange(!on); }} className={chipCls(on)}>
       {Icon && <Icon size={13} strokeWidth={1.75} />}
       {label}
-      {count !== undefined && <span className={cn('tabular text-meta', on ? 'text-bg/55' : 'text-dim')}>{count}</span>}
+      {count !== undefined && <span className={cn('tabular text-meta', on ? 'text-on-bright/60' : 'text-dim')}>{count}</span>}
     </button>
   );
 }
@@ -75,7 +75,7 @@ export const TONE: Record<Tone, { text: string; bg: string; border: string; dot:
 export function Pill({ children, tone = 'neutral', Icon, dot, size = 'md', className }: { children: ReactNode; tone?: Tone; Icon?: LucideIcon; dot?: boolean; size?: 'sm' | 'md'; className?: string }) {
   const t = TONE[tone];
   return (
-    <span className={cn('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full', size === 'sm' ? 'h-[18px] px-1.5 text-tiny' : 'h-[22px] px-2 text-meta', t.bg, t.text, className)}>
+    <span className={cn('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full', size === 'sm' ? 'h-5 px-1.5 text-tiny' : 'h-6 px-2.5 text-meta', t.bg, t.text, className)}>
       {dot && <i className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
       {Icon && <Icon size={size === 'sm' ? 10 : 11} strokeWidth={2} />}
       {children}

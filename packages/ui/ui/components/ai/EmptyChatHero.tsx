@@ -33,7 +33,7 @@ export function EmptyChatHero({ name, greeting = 'How can I help', visual = 'mar
           ? <AssistantOrb size={56} className="[@media(max-height:700px)]:!h-10 [@media(max-height:700px)]:!w-10" />
           : <LogoLoader size={40} active={!!working} label="Getting ready" className="[@media(max-height:700px)]:h-8 [@media(max-height:700px)]:w-8" />)}
       </motion.div>
-      <RevealText as="h1" delay={0.12} className="display mt-5 text-display @min-[700px]:text-display-lg [@media(max-height:700px)]:mt-3 [@media(max-height:700px)]:text-headline">
+      <RevealText as="h1" delay={0.12} className="display mt-5 text-display @min-[700px]:text-display-lg [@media(max-height:700px)]:mt-3 [@media(max-height:700px)]:text-title-2">
         {/* Explicit lines: RevealText treats every child as a line, so the name gets its own (dim) one. */}
         {name ? <RevealText.Line>{greeting},</RevealText.Line> : <RevealText.Line>{greeting}?</RevealText.Line>}
         {name && <RevealText.Line className="text-dim">{name}?</RevealText.Line>}

@@ -1,7 +1,7 @@
 # NeuralAgent — Plan
 
-Architecture, interfaces, milestones and done-criteria. Product behaviour is specified in
-[`SPEC.md`](SPEC.md); decisions and benchmarks live in [`DECISIONS.md`](DECISIONS.md); progress in
+Architecture, interfaces, milestones and done-criteria. Product behaviour: the brief in
+`research-local/PROMPT.md` (not in git; there is no `SPEC.md`); decisions and benchmarks live in [`DECISIONS.md`](DECISIONS.md); progress in
 [`STATUS.md`](STATUS.md).
 
 ## 1. Components
@@ -128,7 +128,7 @@ Each device holds an X25519 identity key (OS keychain / Android Keystore-wrapped
 IndexedDB non-extractable). Session: client ephemeral + static keys × host static key →
 HKDF-SHA256 → two AES-256-GCM keys, 96-bit counter nonces, replay window. Host checks the
 client's static key against the account's device list. QR pairing additionally pins the
-host key fingerprint. Honest limits in `SPEC.md` (server ships the web code; protects
+host key fingerprint. Honest limits in DECISIONS D28 and `ADMIN-HANDBUCH.md` (server ships the web code; protects
 against passive reading, not against a compromised server).
 
 ## 4. Milestones

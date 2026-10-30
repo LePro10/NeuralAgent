@@ -49,7 +49,8 @@ function DownloadPage() {
         ) : (
           <>
             <p className="mt-2 text-body text-dim">
-              Version {latest.version} · {new Date(latest.pub_date).toLocaleDateString()} · The app updates itself; your agents keep running.
+              Version {latest.version} · {new Date(latest.pub_date).toLocaleDateString()} · The app updates itself; your agents keep running.{" "}
+              <a href={`/changelog#${latest.version}`} className="text-ink underline decoration-line-2 underline-offset-4 hover:text-bright">What's new</a>
             </p>
             {mine && (
               <div className="mt-6">

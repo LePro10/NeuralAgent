@@ -2,10 +2,14 @@
  * Colour schemes — the ground, surfaces, ink and glass under one name. Set
  * `data-scheme` on <html> (or any subtree, e.g. a preview card); no attribute
  * is the default (Night, see tokens.css). Every scheme keeps the same steps and
- * contrast as Night, so components never need to know which one is on. All of
- * them are dark: the recipes (lit edges, sunk wells, white fills) assume it.
+ * contrast as Night, so components never need to know which one is on.
+ * Every scheme has a dark and a light variant: `data-appearance="light"` on
+ * <html> (lib/theme.ts resolves System/Light/Dark) switches to the light set at
+ * the bottom of this file. Components never branch on it — they use tokens;
+ * translucent fills are drawn with rgb(var(--fg-rgb) / x).
  * Accent and signal colours are separate (data-accent, data-signal).
  */
+:root, [data-appearance="dark"] { color-scheme: dark; }
 /* Night, the default, spelled out so a preview inside another scheme can show it. */
 [data-scheme="night"] {
   --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.34;
@@ -47,4 +51,121 @@
   --color-sheet: #0e1612; --color-popover: #131e18; --color-card-2: #15201a; --color-card-3: #1b2a22;
   --color-bright: #ebf3ee; --color-ink: #c2cdc6; --color-dim: #76877d; --color-faint: #435249;
   --glass-bg: rgb(22 34 28 / 0.58);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LIGHT APPEARANCE — iOS grouped look: a soft grey ground, white cards,
+   black-tinted fills and hairlines, deeper accents (AA on white).
+   ════════════════════════════════════════════════════════════════════════ */
+[data-appearance="light"] {
+  color-scheme: light;
+  --fg-rgb: 0 0 0;
+  --color-bg: #f2f3f5; --color-chrome: #ebedf0; --color-raised: #e7e9ec; --color-card: #ffffff;
+  --color-sheet: #f7f8fa; --color-popover: #ffffff; --color-card-2: #f5f6f8; --color-card-3: #eceef1;
+  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #666c74; --color-faint: #9a9fa7;
+  --color-fill-1: rgb(20 24 32 / 0.035); --color-fill-2: rgb(20 24 32 / 0.055);
+  --color-fill-3: rgb(20 24 32 / 0.08);  --color-fill-4: rgb(20 24 32 / 0.12);
+  --color-line: rgb(20 24 32 / 0.11); --color-line-2: rgb(20 24 32 / 0.18);
+  --color-surface: color-mix(in srgb, var(--color-accent) 1.6%, white);
+  --color-surface-hi: color-mix(in srgb, var(--color-accent) 4%, #f7f8fa);
+
+  --color-ice: #2557e0; --color-azure: #3b5bff; --color-lilac: #5a42d4; --color-sand: #80601f;
+  --color-ember: #bf4517; --color-mint: #0a7a58; --color-live: #1f66d6;
+  --color-danger: #d1242f; --color-warning: #9a5800; --color-success: #127a3b; --color-info: #1f66d6;
+  --color-signal-silver: #575d59; --color-signal-periwinkle: #4359d6; --color-signal-amber: #9a5c00;
+  --color-signal-teal: #0b7a70; --color-signal-coral: #c63c22; --color-signal-sky: #1b6ad1;
+  --color-signal-cyan: #0a7590; --color-signal-green: #2a7d3b; --color-signal-sage: #4f6d4b;
+  --color-signal-sand: #7d6026; --color-signal-violet: #6745d6; --color-signal-rose: #c2335f;
+  --color-sys-blue: #007aff; --color-sys-green: #34c759; --color-sys-orange: #ff9500; --color-sys-red: #ff3b30;
+  --color-sys-yellow: #ffcc00; --color-sys-purple: #af52de; --color-sys-pink: #ff2d55; --color-sys-teal: #30b0c7;
+  --color-sys-indigo: #5856d6; --color-sys-gray: #8e8e93;
+
+  --color-material: #fbfbfd; --color-navbar: rgb(246 247 249 / 0.78);
+  --color-scrim: rgb(10 14 20 / 0.28); --color-press: rgb(20 24 32 / 0.07); --color-lens: rgb(20 24 32 / 0.065);
+  --color-grabber: rgb(60 60 67 / 0.3); --color-thumb: #ffffff;
+
+  --shadow-edge: 0 0 0 var(--hair) rgb(20 24 32 / 0.07), 0 1px 2px rgb(20 24 32 / 0.04);
+  --shadow-raise: 0 0 0 var(--hair) rgb(20 24 32 / 0.08), 0 1px 3px rgb(20 24 32 / 0.14), 0 3px 8px -3px rgb(20 24 32 / 0.1);
+  --shadow-well: inset 0 1px 1.5px rgb(20 24 32 / 0.05), inset 0 0 0 var(--hair) rgb(20 24 32 / 0.12);
+  --shadow-well-focus: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  --shadow-lit: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 1px 2px rgb(20 24 32 / 0.2), 0 4px 12px -6px rgb(20 24 32 / 0.35);
+  --shadow-lip: inset 0 var(--hair) 0 rgb(255 255 255 / 0.4);
+  --shadow-key: inset 0 -1px 0 rgb(20 24 32 / 0.12), 0 0 0 var(--hair) rgb(20 24 32 / 0.12);
+  --shadow-rim: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --shadow-float: 0 16px 44px -18px rgb(20 28 44 / 0.3), 0 2px 8px -3px rgb(20 28 44 / 0.12), 0 0 0 var(--hair) rgb(20 24 32 / 0.06);
+  --shadow-menu: 0 14px 40px -12px rgb(20 28 44 / 0.28), 0 2px 6px -2px rgb(20 28 44 / 0.12), 0 0 0 var(--hair) rgb(20 24 32 / 0.07);
+  --shadow-sheet: 0 -12px 40px -16px rgb(20 28 44 / 0.22);
+  --shadow-dialog: 0 30px 80px -28px rgb(20 28 44 / 0.4), 0 4px 12px -6px rgb(20 28 44 / 0.18);
+  --shadow-fab: 0 6px 20px -8px rgb(20 28 44 / 0.4);
+
+  --glass-bg: rgb(250 250 252 / 0.74); --glass-rim: rgb(20 24 32 / 0.08); --glass-hi: rgb(255 255 255 / 0.9);
+  --aurora-strength: 0.16;
+
+  --claude-bg: #faf9f5; --claude-sidebar: #f5f4ed; --claude-surface: #ffffff;
+  --claude-sunken: #f0eee6; --claude-user-bubble: #f0eee6;
+  --claude-text: #141413; --claude-text-2: #3d3d3a; --claude-text-3: #73726c;
+  --claude-line: rgb(31 30 29 / 0.15); --claude-link: #2c84db;
+  --claude-primary: #141413; --claude-on-primary: #faf9f5;
+}
+[data-appearance="light"][data-glass="subtle"], [data-appearance="light"] [data-glass="subtle"] { --glass-bg: rgb(250 250 252 / 0.9); }
+[data-appearance="light"][data-glass="strong"], [data-appearance="light"] [data-glass="strong"] { --glass-bg: rgb(250 250 252 / 0.6); }
+[data-appearance="light"][data-glass="clear"], [data-appearance="light"] [data-glass="clear"] { --glass-bg: rgb(250 250 252 / 0.36); --glass-rim: rgb(20 24 32 / 0.1); }
+[data-appearance="light"][data-scheme="night"], [data-appearance="light"] [data-scheme="night"] {
+  --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.16;
+  --color-bg: #f2f3f5; --color-chrome: #ebedf0; --color-raised: #e7e9ec; --color-card: #ffffff;
+  --color-sheet: #f7f8fa; --color-popover: #ffffff; --color-card-2: #f5f6f8; --color-card-3: #eceef1;
+  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #666c74; --color-faint: #9a9fa7;
+  --glass-bg: rgb(250 251 251 / 0.74);
+}
+[data-appearance="light"][data-scheme="graphite"], [data-appearance="light"] [data-scheme="graphite"] {
+  --aurora-1: #7d8aa6; --aurora-3: #8a7fa0; --aurora-strength: 0.12;
+  --color-bg: #f2f2f4; --color-chrome: #ebebee; --color-raised: #e6e6e9; --color-card: #ffffff;
+  --color-sheet: #f7f7f9; --color-popover: #ffffff; --color-card-2: #f4f4f6; --color-card-3: #ececef;
+  --color-bright: #0e0e10; --color-ink: #2c2c30; --color-dim: #68686f; --color-faint: #9c9ca3;
+  --glass-bg: rgb(250 250 252 / 0.74);
+}
+[data-appearance="light"][data-scheme="midnight"], [data-appearance="light"] [data-scheme="midnight"] {
+  --aurora-1: #4b4bff; --aurora-3: #2f8fe0; --aurora-strength: 0.2;
+  --color-bg: #eff2f8; --color-chrome: #e7ebf3; --color-raised: #e2e7f0; --color-card: #ffffff;
+  --color-sheet: #f5f7fb; --color-popover: #ffffff; --color-card-2: #f2f5fa; --color-card-3: #e8ecf4;
+  --color-bright: #0b0f1a; --color-ink: #283044; --color-dim: #636b80; --color-faint: #97a0b4;
+  --glass-bg: rgb(248 250 255 / 0.74);
+}
+[data-appearance="light"][data-scheme="black"], [data-appearance="light"] [data-scheme="black"] {
+  --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.08;
+  --color-bg: #ffffff; --color-chrome: #f5f5f5; --color-raised: #efefef; --color-card: #ffffff;
+  --color-sheet: #ffffff; --color-popover: #ffffff; --color-card-2: #f7f7f7; --color-card-3: #efefef;
+  --color-bright: #000000; --color-ink: #1c1c1c; --color-dim: #5f5f5f; --color-faint: #9a9a9a;
+  --glass-bg: rgb(255 255 255 / 0.8);
+}
+[data-appearance="light"][data-scheme="dusk"], [data-appearance="light"] [data-scheme="dusk"] {
+  --aurora-1: #ff7a45; --aurora-3: #d0458c; --aurora-strength: 0.18;
+  --color-bg: #f6f2ee; --color-chrome: #efe9e3; --color-raised: #ebe4dd; --color-card: #ffffff;
+  --color-sheet: #faf7f4; --color-popover: #ffffff; --color-card-2: #f8f4f0; --color-card-3: #efe8e2;
+  --color-bright: #16100c; --color-ink: #3a2f28; --color-dim: #76685d; --color-faint: #a99c91;
+  --glass-bg: rgb(253 250 247 / 0.74);
+}
+[data-appearance="light"][data-scheme="forest"], [data-appearance="light"] [data-scheme="forest"] {
+  --aurora-1: #18b27c; --aurora-3: #2a93a8; --aurora-strength: 0.18;
+  --color-bg: #eef3f0; --color-chrome: #e6ede9; --color-raised: #e1e9e4; --color-card: #ffffff;
+  --color-sheet: #f5f8f6; --color-popover: #ffffff; --color-card-2: #f2f6f4; --color-card-3: #e7eee9;
+  --color-bright: #08120d; --color-ink: #26332c; --color-dim: #5f7066; --color-faint: #93a39a;
+  --glass-bg: rgb(248 252 250 / 0.74);
+}
+/* Accents on light: the deep tone carries text and focus (AA on white). */
+[data-appearance="light"] { --color-accent: #2557e0; --color-accent-deep: #3b5bff; --ring-a: #3b6cff; }
+[data-appearance="light"][data-accent="ice"], [data-appearance="light"] [data-accent="ice"] { --color-accent: #2557e0; --color-accent-deep: #3b5bff; --ring-a: #3b6cff; }
+[data-appearance="light"][data-accent="mint"], [data-appearance="light"] [data-accent="mint"] { --color-accent: #0a7a58; --color-accent-deep: #12a379; --ring-a: #13a77a; }
+[data-appearance="light"][data-accent="ember"], [data-appearance="light"] [data-accent="ember"] { --color-accent: #bf4517; --color-accent-deep: #ef6530; --ring-a: #f0622c; }
+[data-appearance="light"][data-accent="lilac"], [data-appearance="light"] [data-accent="lilac"] { --color-accent: #5a42d4; --color-accent-deep: #7b66e8; --ring-a: #7b66e8; }
+[data-appearance="light"][data-accent="sand"], [data-appearance="light"] [data-accent="sand"] { --color-accent: #80601f; --color-accent-deep: #b88a4a; --ring-a: #b88a4a; }
+[data-appearance="light"][data-accent="graphite"], [data-appearance="light"] [data-accent="graphite"] { --color-accent: #24282b; --color-accent-deep: #5c635e; --ring-a: #5c635e; }
+/* Light glass lens: a soft dark wash with a white specular rim instead of a white bead. */
+[data-appearance="light"] .glass-lens {
+  background: linear-gradient(180deg, rgb(20 24 32 / .05), rgb(20 24 32 / .09));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .7), inset 0 1px 0 rgb(255 255 255 / .9),
+    inset 0 -6px 12px -8px color-mix(in oklab, var(--color-accent) 35%, transparent), 0 4px 12px -6px rgb(20 28 44 / .25);
+}
+[data-appearance="light"] .rim::before {
+  background: linear-gradient(180deg, rgb(255 255 255 / .9), rgb(255 255 255 / .3) 40%, rgb(20 24 32 / .04) 70%, rgb(20 24 32 / .08));
 }

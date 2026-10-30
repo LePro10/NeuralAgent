@@ -474,3 +474,31 @@ On macOS the credentials move from the keychain to `remote-credentials.json` (06
 startup path. LLM keys stay in the keychain: they are read only when used. In the relay loop
 nothing waits on a session any more (`try_send`; a session that cannot keep up is closed) and
 every send to the relay has a timeout.
+
+## D44 — One CHANGELOG.md feeds release notes, website and the update dialog (2026-10-30)
+`CHANGELOG.md` (Keep a Changelog; groups New / Improved / Fixed, user words) is the only source
+of release notes. `scripts/changelog.mjs` parses it. `set-version` cuts `[Unreleased]` into the
+version and refuses without notes. CI checks the section, and `release-publish` sends it as the
+manifest notes. The web build emits `/changelog.json` and `/version.json` (CORS `*`) and renders
+`/changelog`. The desktop app fetches `<relay>/changelog.json` from the webview (CSP allows the
+relay) instead of a Rust HTTPS client, which would risk the rustls dual-backend panic of D43.
+Update checks: 4 s after start, on focus (≥ 60 s apart) and every 5 min while visible. The update
+endpoints are cached for 60 s. The desktop dialog opens by itself once per version. Web remotes
+compare the build id baked into the bundle with `/version.json` (static files are `no-cache`,
+hashed assets immutable) and offer a reload. Code: `packages/app/src/lib/updates.ts`,
+`UpdateBadge` / `UpdateDialog` / `UpdateSettings`. A failed daemon switch is no longer retried
+blindly: it shows Retry.
+
+## D45 — iOS-grade design foundation: modes, appearance, phone navigation, activity marks (2026-10-30)
+`packages/ui` is rebuilt as the base for all screens; the guide is `docs/notes/design-system.md`.
+Sizes follow the shell's own `data-mode` (phone/desktop), not the viewport. On phones that means
+iOS type roles (large title 34, body 17/16, inputs 16 px against zoom), 44 px tap targets, 50/62 px
+rows and 22–25 px icons. Every scheme has light and dark, chosen by an Appearance setting
+(System/Light/Dark) through `data-appearance`, with translucency via `--fg-rgb`. Safe areas have a
+single source (`--safe-*` = max(env, Capacitor var)). Phone IA is five tabs (Neural · Agents ·
+Workspaces · Swarm · More) with push/pop navigation, large-title pages, a back button from context
+and swipe-back. Each tab keeps its stack. Overriding DESIGN-CONTRACT: on phones a `Menu` becomes an
+action sheet (pull-downs overflowed inside sheets). Sheets stay under the status bar and above the
+keyboard for any portal target. Agent state on nav items is structured (`activity`): a running
+light ring for working, an accent pulse for waiting, ember only for "finished, not seen", red for
+error. Launch motion is ≤1.2 s and never blocks.

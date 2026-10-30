@@ -30,6 +30,7 @@ export function PaneTree({ node, ctx }: { node: LayoutNode; ctx: TreeCtx }) {
 function Split({ node, ctx }: { node: Extract<LayoutNode, { type: "split" }>; ctx: TreeCtx }) {
   const box = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState<number[] | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
   const sizes = live ?? node.sizes;
   // Keep the dragged sizes until the daemon echoes the new layout back (no snap-back flicker).
   useEffect(() => setLive(null), [node.sizes]);
@@ -43,6 +44,7 @@ function Split({ node, ctx }: { node: Extract<LayoutNode, { type: "split" }>; ct
     const total = row ? rect.width : rect.height;
     const start = row ? e.clientX : e.clientY;
     const base = [...sizes];
+    setDragging(i);
     let cur = base;
     const move = (ev: PointerEvent) => {
       const d = ((row ? ev.clientX : ev.clientY) - start) / total;
@@ -56,6 +58,7 @@ function Split({ node, ctx }: { node: Extract<LayoutNode, { type: "split" }>; ct
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       document.body.style.cursor = "";
+      setDragging(null);
       if (cur !== base) ctx.onSizes(node.id, cur);
     };
     document.body.style.cursor = row ? "col-resize" : "row-resize";
@@ -75,9 +78,17 @@ function Split({ node, ctx }: { node: Extract<LayoutNode, { type: "split" }>; ct
               aria-orientation={row ? "vertical" : "horizontal"}
               onPointerDown={startDrag(i - 1)}
               onDoubleClick={even}
-              className={cn("group/div relative shrink-0", row ? "w-1.5 cursor-col-resize" : "h-1.5 cursor-row-resize")}
+              title="Drag to resize · double-click to even out"
+              className={cn("group/div relative z-10 grid shrink-0 touch-none place-items-center", row ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize")}
             >
-              <span className={cn("absolute rounded-full bg-fill-4 opacity-0 transition-opacity group-hover/div:opacity-100", row ? "inset-y-2 left-1/2 w-px" : "inset-x-2 top-1/2 h-px")} />
+              {/* A grabber that appears on hover and turns accent while dragging. */}
+              <span
+                className={cn(
+                  "rounded-full transition-all duration-150",
+                  row ? "h-8 w-1" : "h-1 w-8",
+                  dragging === i - 1 ? "bg-accent opacity-100" : "bg-fill-4 opacity-0 group-hover/div:opacity-100",
+                )}
+              />
             </div>
           )}
           <div className="flex min-h-0 min-w-0" style={{ flex: `${sizes[i] ?? 1} 1 0` }}>

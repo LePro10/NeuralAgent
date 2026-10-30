@@ -112,7 +112,7 @@ export function Toaster({ channel = 'main', position = 'bottom' }: { channel?: s
   return (
     <div role="status" aria-live="polite"
       className="pointer-events-none fixed inset-x-0 z-[var(--z-toast)] flex flex-col items-center gap-2 px-4"
-      style={top ? { top: 'calc(var(--safe-top) + 12px)' } : { bottom: 'calc(var(--tabbar-space) + 16px)' }}>
+      style={top ? { top: 'calc(var(--safe-top) + 12px)' } : { bottom: 'max(calc(var(--tabbar-space) + 12px), calc(var(--safe-bottom) + 12px))' }}>
       <AnimatePresence initial={false}>
         {list.map((t) => {
           const I = t.Icon ?? TONE_ICON[t.tone ?? 'neutral'];
@@ -125,15 +125,15 @@ export function Toaster({ channel = 'main', position = 'bottom' }: { channel?: s
               exit={{ opacity: 0, scale: 0.94, filter: 'blur(4px)', transition: { duration: 0.16 } }}
               transition={{ ...SPRING.goo, damping: 26 }}
               // Long messages wrap instead of running off screen; one line stays a pill.
-              className="pointer-events-auto flex min-h-9 max-w-[min(100%,460px)] items-center gap-2 glass rim rounded-card py-1.5 pr-1.5 pl-3.5 text-chip leading-snug text-bright"
+              className="material pointer-events-auto flex min-h-11 max-w-[min(100%,460px)] items-center gap-2.5 rounded-full py-1.5 pr-2 pl-4 text-subhead leading-snug text-bright"
             >
               {t.tone === 'loading'
                 ? <i className="spinner shrink-0" style={{ ['--size' as string]: '13px' }} />
-                : I && <I size={14} strokeWidth={1.8} className={cn('shrink-0', t.tone === 'success' && 'text-mint', t.tone === 'danger' && 'text-danger')} />}
+                : I && <I size={14} strokeWidth={1.8} className={cn('size-icon-sm shrink-0', t.tone === 'success' && 'text-mint', t.tone === 'danger' && 'text-danger')} />}
               <span className={cn('min-w-0 break-words py-0.5', !t.undo && 'pr-2')}>{t.text}</span>
               {t.undo && (
                 <button type="button" onClick={() => { t.undo?.(); remove(t.id); }}
-                  className="relative shrink-0 rounded-full px-2.5 py-1 text-chip font-medium text-accent transition-colors hover:bg-white/[.08] after:absolute after:-inset-2 after:content-['']">
+                  className="relative shrink-0 rounded-full px-2.5 py-1 text-subhead font-medium text-accent transition-colors hover:bg-lens after:absolute after:-inset-2 after:content-['']">
                   {t.actionLabel ?? 'Undo'}
                 </button>
               )}

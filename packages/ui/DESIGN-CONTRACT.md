@@ -82,7 +82,7 @@ import '@fontsource/ibm-plex-mono/500.css';
 - `h-dvh`, never `vh`. Safe areas only via `var(--safe-top/bottom)`, never `env()` in components.
 - Touch targets ≥ 44×44 (small visuals extend their hit area, see `IconButton size="sm"`).
 - Inputs: 16px text on phones (`text-input` / `inputClass`), so the browser never zooms.
-- **No native `<select>`** — use `Menu` (a small translucent pull-down anchored to its trigger, on phone and desktop). **No bottom sheet for a choice** — that is a `Menu` or an inline picker.
+- **No native `<select>`** — use `Menu`: a pull-down anchored to its trigger on desktop; on phones it becomes an action sheet by itself (NeuralAgent D45, see `docs/notes/design-system.md`). Do not build your own bottom sheet for a choice — that is a `Menu` or an inline picker.
 - Horizontal drags inside a swipeable area carry `data-no-swipe`.
 - Desktop and phone can do the same things. Building a feature on one = checking the other.
 

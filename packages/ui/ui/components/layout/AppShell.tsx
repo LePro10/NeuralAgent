@@ -16,6 +16,7 @@
 import { MotionConfig } from 'motion/react';
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
+import { useKeyboardOpen } from '../../lib/hooks';
 import { ShellProvider, Surface, useWidthMode, type LayoutMode } from '../../lib/surface';
 import { AuroraField } from '../effects/AuroraField';
 import { Sidebar, type SidebarItem } from './Sidebar';
@@ -59,6 +60,9 @@ export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mod
   const measured = useWidthMode(ref);
   const mode = forced ?? measured ?? 'phone';
   const phone = mode === 'phone';
+  // While the on-screen keyboard is up the tab bar slides away (TabBar) and gives its space
+  // back, so composers and key bars sit right above the keyboard.
+  const keyboard = useKeyboardOpen();
   const [space, setSpace] = useState(0);
   const shell = useMemo(() => ({ setSidebarSpace: setSpace }), []);
 
@@ -75,7 +79,7 @@ export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mod
       data-mode={mode}
       className={cn('relative flex h-dvh w-full overflow-hidden bg-bg [transform:translateZ(0)]', className)}
       style={{
-        ['--tabbar-space' as string]: phone && bar ? 'calc(88px + var(--safe-bottom))' : '0px',
+        ['--tabbar-space' as string]: phone && bar && !keyboard ? 'calc(74px + max(10px, var(--safe-bottom)))' : '0px',
         ['--sidebar-space' as string]: !phone && side ? `${space}px` : '0px',
         ...style,
       }}

@@ -1,6 +1,6 @@
 /**
  * Switch and Check.
- * Switch: 42 × 25, the thumb springs across and widens while pressed (iOS feel).
+ * Switch: 51 × 31 on phones (iOS), 42 × 25 on desktop; the thumb springs across and widens while pressed (iOS feel).
  * Check: a 20px circle (or rounded square) that fills, then draws its tick;
  * a short scale pop confirms. `indeterminate` shows a bar for "some".
  */
@@ -8,10 +8,12 @@ import { motion } from 'motion/react';
 import { cn } from '../../lib/cn';
 import { haptic } from '../../lib/haptics';
 import { SPRING } from '../../lib/motion';
+import { useLayoutMode } from '../../lib/surface';
 
 export function Switch({ checked, onChange, label, size = 'md', disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; size?: 'sm' | 'md'; disabled?: boolean }) {
   const sm = size === 'sm';
-  const w = sm ? 34 : 42, h = sm ? 20 : 25, t = h - 4;
+  const phone = useLayoutMode() === 'phone';
+  const w = sm ? 34 : phone ? 51 : 42, h = sm ? 20 : phone ? 31 : 25, t = h - 4;
   return (
     <button
       type="button"
@@ -20,12 +22,12 @@ export function Switch({ checked, onChange, label, size = 'md', disabled }: { ch
       aria-label={label}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); haptic('select'); onChange(!checked); }}
-      // 44px tall hit area around a 25px track
-      className="group relative shrink-0 py-2.5 disabled:opacity-40"
+      // 44px tall hit area around the track
+      className={cn('group relative shrink-0 disabled:opacity-40', phone && !sm ? 'py-1.5' : 'py-2.5')}
     >
       <span className={cn('relative flex items-center rounded-full p-[2px] transition-colors duration-300 ease-out-soft', checked ? 'bg-accent-deep shadow-[inset_0_1px_1.5px_rgb(0_0_0/.25)]' : 'bg-fill-4 shadow-well')} style={{ width: w, height: h }}>
         <motion.span
-          className="block rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/.35),0_0_0_var(--hair)_rgb(0_0_0/.12)]"
+          className="block rounded-full bg-knob shadow-[0_2px_4px_rgb(0_0_0/.22),0_0_0_var(--hair)_rgb(0_0_0/.1)]"
           style={{ height: t, originX: checked ? 1 : 0 }}
           initial={false}
           animate={{ x: checked ? w - t - 4 : 0, width: t }}
@@ -66,7 +68,7 @@ export function Check({ checked, onChange, label, color, square, indeterminate, 
         animate={{ scale: on ? [0.86, 1] : 1 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
       >
-        <span className={cn('absolute inset-0 border-[1.25px] transition-colors duration-200', square ? 'rounded-xs' : 'rounded-full', on ? 'border-transparent' : 'border-white/25')} />
+        <span className={cn('absolute inset-0 border-[1.25px] transition-colors duration-200', square ? 'rounded-xs' : 'rounded-full', on ? 'border-transparent' : 'border-[rgb(var(--fg-rgb)/.3)]')} />
         <motion.span
           className={cn('absolute inset-0', square ? 'rounded-xs' : 'rounded-full')}
           style={{ background: color ?? 'var(--color-bright)' }}

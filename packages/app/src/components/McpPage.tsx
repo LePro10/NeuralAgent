@@ -1,9 +1,10 @@
 import type { McpServer } from "@neuralagent/protocol";
-import { Button, ConfirmButton, Empty, Field, Input, List, Page, Row, Segmented, Sheet, Switch, toast } from "@neuralagent/ui";
-import { Download, Pencil, Plug, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { Button, ConfirmSheet, Empty, Field, IconButton, IconTile, Input, List, Page, Row, Segmented, Sheet, Spinner, Switch, toast, useLayoutMode } from "@neuralagent/ui";
+import { Download, Plug, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { joinArgs, splitArgs } from "../lib/profiles";
 import { useClient, useDaemon } from "../lib/store";
+import { Glow } from "./Glow";
 
 const NAME = /^[A-Za-z0-9_-]{1,48}$/;
 
@@ -17,9 +18,11 @@ interface Secret {
 /** MCP servers every agent started here gets; secret values live in the daemon and never come back. */
 export function McpPage() {
   const client = useClient();
+  const phone = useLayoutMode() === "phone";
   const servers = useDaemon((c) => c.state?.mcp ?? []);
   const [editing, setEditing] = useState<McpServer | "new" | null>(null);
   const [importing, setImporting] = useState(false);
+  const [save, setSave] = useState<Submit>(IDLE);
 
   const toggle = async (s: McpServer, enabled: boolean) => {
     try {
@@ -30,6 +33,7 @@ export function McpPage() {
   };
 
   const importAll = async () => {
+    if (importing) return;
     setImporting(true);
     try {
       const n = (await client.req({ m: "mcp_import" })) as number;
@@ -41,47 +45,89 @@ export function McpPage() {
     }
   };
 
+  const add = phone ? (
+    <IconButton label="Add server" variant="ghost" onClick={() => setEditing("new")}>
+      <Plus />
+    </IconButton>
+  ) : (
+    <Button size="sm" variant="accent" Icon={Plus} onClick={() => setEditing("new")} className="rounded-full">
+      Add server
+    </Button>
+  );
+  const importRow = (
+    <Row Icon={Download} tile="blue" title="Import from Claude Code & Codex" detail="Copies the servers you already use there" onClick={() => void importAll()} trailing={importing ? <Spinner size={16} /> : undefined} chevron={!importing} />
+  );
+
   return (
-    <Page title="MCP servers" eyebrow="Tools">
-      <div className="flex flex-col gap-4 pb-8">
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" Icon={Plus} onClick={() => setEditing("new")}>
-            Add server
-          </Button>
-          <Button size="sm" variant="quiet" Icon={Download} busy={importing} onClick={() => void importAll()}>
-            Import from Claude Code &amp; Codex
-          </Button>
-        </div>
-        {servers.length === 0 ? (
-          <Empty Icon={Plug} title="No MCP servers" detail="Add one, or import the ones you already use in Claude Code and Codex." />
-        ) : (
-          <List footer="Every Claude Code, Codex and OpenCode agent started here gets these servers. Secret values stay on this computer and reach agents only through their environment.">
-            {servers.map((s) => (
-              <Row
-                key={s.id}
+    <div className="relative h-full">
+      <Glow tint="mcp" />
+      <Page title="MCP servers" eyebrow="Tools" actions={add}>
+        <div className="flex flex-col gap-7 pb-8">
+          {servers.length === 0 ? (
+            <>
+              <Empty
                 Icon={Plug}
-                title={s.id}
-                detail={<span className="block truncate">{s.transport.type === "stdio" ? `${s.transport.command} ${joinArgs(s.transport.args)}`.trim() : s.transport.url}</span>}
-                trailing={
-                  // A clickable row is a button itself, so editing gets its own button next to the switch.
-                  <div className="flex items-center gap-1">
-                    <Button size="xs" variant="ghost" Icon={Pencil} aria-label={`Edit ${s.id}`} onClick={() => setEditing(s)} />
-                    <Switch checked={s.enabled} onChange={(v) => void toggle(s, v)} label={`${s.id} enabled`} size="sm" />
-                  </div>
+                title="No MCP servers"
+                detail="Servers give your agents tools: GitHub, a browser, your issue tracker. Add one, or import the ones you already use."
+                action={
+                  <Button variant="accent" Icon={Plus} onClick={() => setEditing("new")} className="rounded-full">
+                    Add server
+                  </Button>
                 }
               />
-            ))}
-          </List>
-        )}
-      </div>
-      <Sheet open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add server" : (editing?.id ?? "")} size="lg">
-        {editing && <McpEditor key={editing === "new" ? "new" : editing.id} server={editing === "new" ? null : editing} onDone={() => setEditing(null)} />}
+              <List>{importRow}</List>
+            </>
+          ) : (
+            <>
+              <List label="Servers" footer="Every Claude Code, Codex and OpenCode agent started here gets the servers that are on. Secret values stay on this computer and reach agents only through their environment.">
+                {servers.map((s) => (
+                  <div key={s.id} data-lead="" className="flex items-center">
+                    <button type="button" onClick={() => setEditing(s)} className="press-row flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 text-left hover:bg-fill-1" aria-label={`Edit ${s.id}`}>
+                      <IconTile Icon={Plug} color={s.enabled ? "teal" : "gray"} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-body text-bright">{s.id}</span>
+                        <span className="block truncate text-footnote text-dim">
+                          {s.transport.type === "stdio" ? `${s.transport.command} ${joinArgs(s.transport.args)}`.trim() : s.transport.url}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="shrink-0 pr-4 pl-3">
+                      <Switch checked={s.enabled} onChange={(v) => void toggle(s, v)} label={`${s.id} on`} />
+                    </div>
+                  </div>
+                ))}
+              </List>
+              <List>{importRow}</List>
+            </>
+          )}
+        </div>
+      </Page>
+      <Sheet
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing === "new" ? "Add server" : (editing?.id ?? "")}
+        size="lg"
+        action={
+          <Button size="sm" variant="accent" busy={save.busy} disabled={!save.valid} onClick={save.run} className="rounded-full">
+            Save
+          </Button>
+        }
+      >
+        {editing && <McpEditor key={editing === "new" ? "new" : editing.id} server={editing === "new" ? null : editing} onDone={() => setEditing(null)} expose={setSave} />}
       </Sheet>
-    </Page>
+    </div>
   );
 }
 
-function McpEditor({ server, onDone }: { server: McpServer | null; onDone: () => void }) {
+/** The editor's save state, shown by the sheet's Save button. */
+interface Submit {
+  run: () => void;
+  valid: boolean;
+  busy: boolean;
+}
+const IDLE: Submit = { run: () => {}, valid: false, busy: false };
+
+function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDone: () => void; expose: (s: Submit) => void }) {
   const client = useClient();
   const all = useDaemon((c) => c.state?.mcp);
   const existing = server !== null;
@@ -120,6 +166,11 @@ function McpEditor({ server, onDone }: { server: McpServer | null; onDone: () =>
     }
   };
 
+  const run = useRef(save);
+  run.current = save;
+  useEffect(() => expose({ run: () => void run.current(), valid: valid && !busy, busy }), [valid, busy, expose]);
+  const [confirm, setConfirm] = useState(false);
+
   const remove = async () => {
     try {
       await client.req({ m: "mcp_delete", p: { id } });
@@ -130,12 +181,13 @@ function McpEditor({ server, onDone }: { server: McpServer | null; onDone: () =>
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <div className="flex flex-col gap-5 pt-1 pb-4">
       <Field label="Name" error={clash ? "A server with this name exists." : id !== "" && !nameOk ? "Letters, digits, - and _ only, up to 48." : undefined}>
         <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="github" readOnly={existing} autoFocus={!existing} invalid={id !== "" && !nameOk} />
       </Field>
       <Field label="Type">
         <Segmented
+          className="w-full"
           value={type}
           onChange={setType}
           options={[
@@ -164,7 +216,9 @@ function McpEditor({ server, onDone }: { server: McpServer | null; onDone: () =>
             <div key={i} className="flex items-center gap-2">
               <Input className="flex-1" value={s.name} onChange={(e) => patch(i, { name: e.target.value })} placeholder={type === "stdio" ? "GITHUB_TOKEN" : "Authorization"} readOnly={s.kept} aria-label="Name" />
               <Input className="flex-1" type="password" value={s.value} onChange={(e) => patch(i, { value: e.target.value })} placeholder={s.kept ? "unchanged" : "Value"} autoComplete="off" aria-label="Value" />
-              <Button size="xs" variant="ghost" Icon={X} aria-label="Remove" onClick={() => setSecrets((all) => all.filter((_, j) => j !== i))} />
+              <IconButton label="Remove" variant="ghost" size="sm" onClick={() => setSecrets((all) => all.filter((_, j) => j !== i))}>
+                <X />
+              </IconButton>
             </div>
           ))}
           <div>
@@ -174,12 +228,21 @@ function McpEditor({ server, onDone }: { server: McpServer | null; onDone: () =>
           </div>
         </div>
       </Field>
-      <div className="flex items-center justify-between gap-2 pt-2">
-        {existing ? <ConfirmButton label="Delete" onConfirm={remove} /> : <span />}
-        <Button busy={busy} disabled={!valid} onClick={() => void save()}>
-          Save
-        </Button>
-      </div>
+      {existing && (
+        <List className="mt-2">
+          <Row Icon={Trash2} tile="red" title={<span className="text-danger">Delete server</span>} onClick={() => setConfirm(true)} chevron={false} />
+        </List>
+      )}
+      <ConfirmSheet
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        title={`Delete “${id}”?`}
+        message="Agents started from now on no longer get this server. Its stored secrets are deleted too."
+        confirmLabel="Delete"
+        destructive
+        Icon={Trash2}
+        onConfirm={remove}
+      />
     </div>
   );
 }

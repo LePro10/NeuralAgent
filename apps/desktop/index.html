@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Appearance before first paint (lib/theme.ts takes over). -->
+    <script>try{var t=(JSON.parse(localStorage.getItem("neuralagent.theme")||"{}").state)||{},a=t.appearance||"system",h=document.documentElement;h.dataset.appearance=a==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):a;if(t.scheme)h.dataset.scheme=t.scheme}catch(e){}</script>
     <title>NeuralAgent</title>
   </head>
   <body>

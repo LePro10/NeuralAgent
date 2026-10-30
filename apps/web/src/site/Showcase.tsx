@@ -77,7 +77,7 @@ function UsageScene({ go }: { go: boolean }) {
     <div className={`s-mini ${go ? "go" : ""}`} style={{ gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span className="eyebrow">Tokens, last 14 days · sample</span>
-        <span className="display tabular" style={{ fontSize: "var(--text-headline)" }}>Cost per day</span>
+        <span className="display tabular" style={{ fontSize: "var(--text-title-2)" }}>Cost per day</span>
       </div>
       <div className="s-bars">
         {v.map((h, i) => <i key={i} className={i === 8 ? "hi" : ""} style={{ ["--h" as never]: h / 100, ["--i" as never]: i }} />)}

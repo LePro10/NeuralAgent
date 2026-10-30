@@ -40,7 +40,7 @@
     transition: box-shadow .2s var(--ease-out-soft), background-color .2s var(--ease-out-soft);
   }
   .well:is(:focus, :focus-within) { background: var(--color-fill-2); box-shadow: var(--shadow-well-focus); }
-  .well[aria-invalid="true"] { box-shadow: inset 0 1px 1.5px rgb(0 0 0 / .32), inset 0 0 0 var(--hair) color-mix(in oklab, var(--color-danger) 55%, transparent); }
+  .well[aria-invalid="true"] { box-shadow: inset 0 0 0 var(--hair) color-mix(in oklab, var(--color-danger) 55%, transparent); }
   /* Glass for things that float over content (tab bar, toolbars, toasts). */
   .glass {
     background: var(--glass-bg);
@@ -49,9 +49,23 @@
     border: var(--hair) solid var(--glass-rim);
     box-shadow: var(--shadow-float), inset 0 1px 0 var(--glass-hi);
   }
+  /* Material: the opaque-enough card of menus, action sheets and context menus — text on it
+     must read over anything. A touch of blur keeps it from looking pasted on. */
+  .material {
+    background: color-mix(in srgb, var(--color-material) 95%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%);
+    border: var(--hair) solid var(--color-line);
+    box-shadow: var(--shadow-menu);
+  }
+  /* Launch: the accent light that blooms behind the mark. */
+  .launch-bloom {
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--color-accent-deep) 36%, transparent), color-mix(in srgb, var(--aurora-3) 12%, transparent) 60%, transparent);
+    filter: blur(24px);
+  }
   /* The same material, thicker: for surfaces that carry reading (sheets, dialogs, the palette).
-     Same blur, rim and shadow — only the fill is mixed toward the sheet colour. */
-  .glass-thick { background: color-mix(in oklab, var(--glass-bg) 30%, var(--color-sheet)); }
+     Same blur, rim and shadow — only the fill is nearly the sheet colour, so nothing behind shows
+     through sharply even where the backdrop blur is lost (e.g. under a transformed ancestor). */
+  .glass-thick { background: color-mix(in oklab, var(--glass-bg) 6%, var(--color-sheet)); }
   /* Liquid-glass body (the tab-bar lens): faint fill + specular rim + inner bevel.
      Light comes from the top-left, so the rim is brightest there. */
   .glass-lens {
@@ -81,7 +95,7 @@
   }
   /* Canvas dot grid (whiteboards, empty boards). Shift with --grid-x/--grid-y. */
   .dot-grid {
-    background-image: radial-gradient(circle, rgb(255 255 255 / .09) 1px, transparent 1.2px);
+    background-image: radial-gradient(circle, rgb(var(--fg-rgb) / .09) 1px, transparent 1.2px);
     background-size: 22px 22px;
     background-position: var(--grid-x, 0) var(--grid-y, 0);
   }
@@ -89,7 +103,19 @@
   /* ── Interaction ────────────────────────────────────────────────────── */
   /* Liquid press: squashes wider than tall under the finger (like a drop), springs back with a small overshoot. */
   .pressable { transition: transform .55s var(--ease-spring), background-color .2s, border-color .2s, opacity .2s, color .2s; }
-  .pressable:active { transform: scale(1.02, .94); transition-duration: .1s; transition-timing-function: var(--ease-out-soft); }
+  /* iOS press: shrink a touch and dim instantly; spring back on release. */
+  .pressable:active { transform: scale(.965); opacity: .8; transition-duration: .08s; transition-timing-function: var(--ease-out-soft); }
+  /* Rows and tiles: the iOS grey wash while held (no scale — rows are wide). */
+  .press-row { transition: background-color .35s var(--ease-out-soft); }
+  .press-row:active { background-color: var(--color-press); transition-duration: 0s; }
+  /* A coloured icon tile (iOS Settings): saturated square, white glyph, lit from the top. */
+  .icon-tile {
+    display: grid; place-items: center; flex-shrink: 0; color: var(--color-on-color);
+    width: var(--spacing-icon-tile); height: var(--spacing-icon-tile); border-radius: calc(var(--spacing-icon-tile) * .26 * var(--rk));
+    background: linear-gradient(180deg, color-mix(in oklab, var(--tile, var(--color-sys-blue)) 82%, white), var(--tile, var(--color-sys-blue)) 70%);
+    box-shadow: inset 0 var(--hair) 0 rgb(255 255 255 / .28), 0 1px 2px -1px rgb(0 0 0 / .3);
+  }
+  .icon-tile > svg { width: 62%; height: 62%; }
   @media (hover: hover) and (pointer: fine) {
     .hoverable:hover { background-color: var(--color-fill-1); }
   }
@@ -138,9 +164,9 @@
   }
   .scroller::-webkit-scrollbar, .rail::-webkit-scrollbar, .scroll-x::-webkit-scrollbar { display: none; }
   /* Small windows you should notice are scrollable (logs, thoughts): a quiet bar. */
-  .scroller-subtle { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .14) transparent; }
+  .scroller-subtle { scrollbar-width: thin; scrollbar-color: rgb(var(--fg-rgb) / .14) transparent; }
   .scroller-subtle::-webkit-scrollbar { display: block; width: 6px; }
-  .scroller-subtle::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .14); border-radius: 99px; }
+  .scroller-subtle::-webkit-scrollbar-thumb { background: rgb(var(--fg-rgb) / .14); border-radius: 99px; }
   /* Pages only claim vertical pans, so horizontal swipes reach a pager. */
   .page-scroll { touch-action: pan-y; }
   /* Horizontal rail with snap (chips, cards). Bleeds to the screen edge on phones. */
@@ -155,10 +181,10 @@
   /* Top edge while scrolled: content sinks into black under a frosted, tapering blur. */
   .top-fade {
     position: absolute; inset: 0 0 -28px 0; pointer-events: none;
-    background: linear-gradient(180deg, rgb(8 9 9 / .88) 0%, rgb(8 9 9 / .6) 55%, rgb(8 9 9 / 0) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 88%, transparent) 0%, color-mix(in srgb, var(--color-bg) 60%, transparent) 55%, transparent 100%);
   }
   .top-fade-solid {
-    background: linear-gradient(180deg, rgb(8 9 9 / .98) 0%, rgb(8 9 9 / .97) 60%, rgb(8 9 9 / .7) 76%, rgb(8 9 9 / .28) 89%, rgb(8 9 9 / 0) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 98%, transparent) 0%, color-mix(in srgb, var(--color-bg) 97%, transparent) 60%, color-mix(in srgb, var(--color-bg) 70%, transparent) 76%, color-mix(in srgb, var(--color-bg) 28%, transparent) 89%, transparent 100%);
   }
   .top-fade::before, .top-fade-solid::before {
     content: ''; position: absolute; inset: 0;
@@ -203,12 +229,12 @@
   .skeleton { position: relative; overflow: hidden; background: var(--color-fill-1); border-radius: var(--radius-chip); isolation: isolate; }
   .skeleton::after {
     content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / .045), transparent);
+    background: linear-gradient(90deg, transparent, rgb(var(--fg-rgb) / .055), transparent);
     animation: skeleton-sweep 1.6s var(--ease-in-out-draw) infinite;
   }
   .spinner {
     display: inline-block; width: var(--size, 16px); height: var(--size, 16px); border-radius: 99px;
-    border: 1.5px solid rgb(255 255 255 / .12); border-top-color: var(--color-bright);
+    border: 1.5px solid rgb(var(--fg-rgb) / .12); border-top-color: var(--color-bright);
     animation: spin .7s linear infinite;
   }
 
@@ -260,8 +286,25 @@
   .light-border-content {
     position: relative; margin: var(--lb-width, 1px); overflow: hidden;
     border-radius: calc(var(--lb-radius, 18px) - var(--lb-width, 1px));
-    background: radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--ring-a) 10%, transparent), transparent 62%), #0f1211;
+    background: radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--ring-a) 10%, transparent), transparent 62%), var(--color-card);
   }
+
+  /* ── Activity marks (core/Activity.tsx) ─────────────────────────── */
+  /* Working: a light runs around the icon. Only the inner layer rotates (transform). */
+  .activity-ring {
+    position: absolute; inset: -5px; border-radius: 999px; overflow: hidden; pointer-events: none;
+    padding: 2px; background: color-mix(in srgb, var(--color-accent) 26%, transparent);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  .activity-ring[data-shape="tile"] { inset: -3.5px; border-radius: calc(10px * var(--rk, 1)); }
+  .activity-ring > i {
+    position: absolute; inset: -60%;
+    background: conic-gradient(from 0deg, transparent 0 50%, color-mix(in srgb, var(--color-accent) 40%, transparent) 70%, var(--color-accent) 90%, color-mix(in srgb, var(--color-accent) 40%, white) 97%, transparent 100%);
+    animation: lb-spin 1.5s linear infinite;
+  }
+  /* Waiting: the dot sends out a soft wave. */
+  .activity-pulse::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: inherit; animation: ping 1.6s var(--ease-out-soft) infinite; }
 
   /* ── Spotlight ──────────────────────────────────────────────────────── */
   /* Pointer-following light on a card and its border; --mx/--my set by <Spotlight>. */
@@ -301,6 +344,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .light-border-ring > i, .light-border-glow, .voice-orb > i, .ping::after, .skeleton::after { animation: none; }
+  .activity-ring > i, .activity-pulse::after { animation: none; }
+  .activity-ring > i { opacity: 0; }
+  .activity-ring { background: color-mix(in srgb, var(--color-accent) 75%, transparent); }
 }
 
 /* Hairline borders (1px, 0.5px on retina). Use instead of `border` / `divide-y`. */
@@ -321,10 +367,10 @@
      marks itself data-lead — also when it sits inside a wrapper (a menu trigger, a swipe row). */
   .list-rows > * { position: relative; }
   .list-rows > * + *::before {
-    content: ''; position: absolute; top: 0; right: 0; left: 14px; pointer-events: none; z-index: 1;
+    content: ''; position: absolute; top: 0; right: 0; left: 16px; pointer-events: none; z-index: 1;
     border-top: var(--hair) solid var(--color-line);
   }
-  .list-rows > * + *:is([data-lead], :has(> [data-lead], > * > [data-lead]))::before { left: 52px; }
+  .list-rows > * + *:is([data-lead], :has(> [data-lead], > * > [data-lead]))::before { left: calc(28px + var(--spacing-icon-tile)); }
 }
 
 /* LogoLoader: a light runs along the mark, the dot breathes. */

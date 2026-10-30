@@ -37,7 +37,7 @@ export function ConfirmSheet({ open, onClose, onConfirm, title, message, confirm
   const cancel = <Button block={phone} size={phone ? 'lg' : 'md'} variant="ghost" onClick={onClose}>{cancelLabel}</Button>;
   return (
     <Sheet open={open} onClose={onClose} title={title} size="sm" desktop="dialog" hideClose>
-      {message && <div className="text-body leading-relaxed text-dim">{message}</div>}
+      {message && <div className="text-callout leading-relaxed text-dim">{message}</div>}
       <div className={phone ? 'mt-5 flex flex-col gap-2' : 'mt-5 flex justify-end gap-2'}>
         {phone ? <>{ok}{cancel}</> : <>{cancel}{ok}</>}
       </div>

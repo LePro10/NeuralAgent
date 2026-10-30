@@ -7,14 +7,21 @@ import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { TONE, type Tone } from './Chips';
 
-/** Empty state: a round icon, one line, one detail, one action. */
+/**
+ * Empty state (iOS ContentUnavailable): a large soft icon, a title, one line of
+ * detail, one action. `bare` drops the card (inside a List or a full page).
+ */
 export function Empty({ Icon, title, detail, action, bare, className }: { Icon?: LucideIcon; title: string; detail?: ReactNode; action?: ReactNode; bare?: boolean; className?: string }) {
   return (
-    <div className={cn('grid place-items-center px-6 py-10 text-center', !bare && 'card', className)}>
-      {Icon && <span className="grid h-9 w-9 place-items-center rounded-full bg-fill-3 text-dim shadow-edge"><Icon size={16} strokeWidth={1.6} /></span>}
-      <p className="mt-3 text-body text-bright">{title}</p>
-      {detail && <p className="mt-1 max-w-[300px] text-small text-dim">{detail}</p>}
-      {action && <div className="mt-4">{action}</div>}
+    <div className={cn('grid place-items-center px-6 py-12 text-center', !bare && 'card', className)}>
+      {Icon && (
+        <span className="grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] text-accent">
+          <Icon size={26} strokeWidth={1.6} />
+        </span>
+      )}
+      <p className="mt-4 text-title-3 text-bright">{title}</p>
+      {detail && <p className="mt-1.5 max-w-[320px] text-subhead text-dim">{detail}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -27,8 +34,8 @@ export function Callout({ tone = 'neutral', title, children, action, Icon, class
   const I = Icon ?? CALLOUT_ICON[tone] ?? Info;
   return (
     <div role={tone === 'danger' ? 'alert' : 'status'} className={cn('flex items-start gap-2.5 rounded-field px-3 py-2.5', t.bg, className)}>
-      <I size={15} strokeWidth={1.75} className={cn('mt-[2px]', t.text)} />
-      <div className="min-w-0 flex-1 text-small leading-relaxed text-ink">
+      <I size={15} strokeWidth={1.75} className={cn('mt-[3px] size-icon-sm', t.text)} />
+      <div className="min-w-0 flex-1 text-subhead leading-relaxed text-ink">
         {title && <p className="font-medium text-bright">{title}</p>}
         {children}
       </div>
@@ -63,12 +70,24 @@ export function SkeletonText({ lines = 3, className }: { lines?: number; classNa
   );
 }
 
-/** A list row in waiting: tile + two lines. */
-export function SkeletonRow() {
+/** A list row in waiting: tile + two lines (same height as a Row with detail). */
+export function SkeletonRow({ lead = true }: { lead?: boolean } = {}) {
   return (
-    <div className="flex items-center gap-3 px-3.5 py-2.5" aria-hidden="true">
-      <Skeleton className="h-[26px] w-[26px] !rounded-tile" />
-      <div className="flex-1 space-y-2"><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-1/3" /></div>
+    <div className="flex min-h-row-2 items-center gap-3 px-4 py-2" aria-hidden="true">
+      {lead && <Skeleton className="size-icon-tile !rounded-tile" />}
+      <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-2/3" /><Skeleton className="h-3 w-1/3" /></div>
+    </div>
+  );
+}
+
+/** A grouped list in waiting: use instead of a spinner wherever a List will appear. */
+export function SkeletonList({ rows = 5, lead = true, label, className }: { rows?: number; lead?: boolean; label?: boolean; className?: string }) {
+  return (
+    <div className={className} aria-busy="true" aria-label="Loading">
+      {label && <Skeleton className="mb-2.5 ml-4 h-3 w-24" />}
+      <div className="surface list-rows overflow-hidden rounded-list">
+        {Array.from({ length: rows }, (_, i) => <SkeletonRow key={i} lead={lead} />)}
+      </div>
     </div>
   );
 }

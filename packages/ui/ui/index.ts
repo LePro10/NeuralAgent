@@ -15,4 +15,5 @@ export * from './lib/hooks';
 export * from './lib/layers';
 export * from './lib/focus-trap';
 export * from './lib/surface';
+export * from './lib/navigation';
 export * from './lib/tokens';

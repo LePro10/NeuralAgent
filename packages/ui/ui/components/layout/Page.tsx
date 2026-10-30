@@ -1,10 +1,12 @@
 /**
- * A scrollable screen with a large, light title — and the one owner of page spacing.
+ * A scrollable screen with a large title — and the one owner of page spacing.
  *
- * Phones: the title block scrolls up with the content until it sits 16px from
- * the top, then it stays, and a frosted black fade eases in behind it as the
- * content slides underneath (no second, smaller title). Actions sit in the
- * top bar, in thumb reach. Desktop: actions move onto the title line.
+ * Phones (iOS anatomy): a 44px nav bar under the status bar holds back (left)
+ * and actions (right). The large title (34px) sits in the content and scrolls
+ * away; as it passes under the bar, a small centred title fades in and the bar
+ * turns into frosted material with a hairline. Back comes from `onBack`, or
+ * from the shell's NavPage (useNavBack) for pushed pages.
+ * Desktop: the title line carries the actions; a soft fade appears on scroll.
  *
  * A page belongs to a place: `place="plan"` gives it the place's light
  * (ambient SVG) and its signal colour (`--color-tab`, used by text-tab,
@@ -15,7 +17,6 @@
  *   sides   16px phone / 32px desktop
  *   width   920px max (`wide` 1200px)
  *   bottom  var(--tabbar-space) + 24px, so the end is never under a tab bar
- *
  *   left    var(--sidebar-space): the light runs under a floating sidebar,
  *           the content stays clear of it
  *
@@ -27,6 +28,7 @@ import { ChevronLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cn } from '../../lib/cn';
 import { EASE } from '../../lib/motion';
+import { useNavBack } from '../../lib/navigation';
 import { PLACES, type AmbientName, type Place, type Signal } from '../../lib/tokens';
 import { Ambient, type AmbientMotion } from '../effects/Ambient';
 
@@ -59,18 +61,32 @@ export interface PageProps {
   className?: string;
 }
 
-/** The title starts 44px down; lifted 36px it sits at 8px (+8px padding = 16px, the side gutter). */
-const LIFT = 36;
+/** Scroll distance over which the large title hands over to the inline one. */
+const HANDOFF: [number, number] = [26, 46];
+
+/** iOS back button: accent chevron + the previous level's title. */
+/** iOS back: accent chevron + previous title. `compact` shows the chevron only (crowded bars). */
+export function BackButton({ label, onBack, compact }: { label: string; onBack: () => void; compact?: boolean }) {
+  return (
+    <button type="button" onClick={onBack} aria-label={`Back to ${label}`}
+      className={cn('pressable flex h-tap min-w-tap items-center gap-0.5 rounded-full text-body text-accent', compact ? 'justify-center' : '-ml-2 pr-2')}>
+      <ChevronLeft className="size-icon-lg" strokeWidth={2} />
+      {!compact && <span className="max-w-[34vw] truncate">{label}</span>}
+    </button>
+  );
+}
 
 export function Page({ title, eyebrow, actions, backLabel, onBack, header, children, wide, heading, place, signal, ambient, ambientMotion, reveal = true, scrollRef, scrollTopKey, className }: PageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: ref });
-  const lift = backLabel ? 0 : LIFT;
-  // The fade eases in (smoothstep) as content reaches the title, with a long soft tail — a shadow, not a bar.
-  const fade = useTransform(scrollY, [lift - 2, lift + 56], [0, 1], { ease: (t) => t * t * (3 - 2 * t) });
+  const ctx = useNavBack();
+  const back = onBack ? { label: backLabel ?? 'Back', onBack } : ctx;
+  // Inline title and bar material arrive together as the large title slides under the bar.
+  const inline = useTransform(scrollY, HANDOFF, [0, 1]);
+  const inlineY = useTransform(scrollY, HANDOFF, [6, 0]);
   // Only a boolean crosses into React; scrolling itself never re-renders the page.
   const [scrolled, setScrolled] = useState(false);
-  useMotionValueEvent(scrollY, 'change', (v) => setScrolled(v > Math.max(2, lift - 6)));
+  useMotionValueEvent(scrollY, 'change', (v) => setScrolled(v > 2));
 
   const first = useRef(true);
   useEffect(() => {
@@ -82,53 +98,46 @@ export function Page({ title, eyebrow, actions, backLabel, onBack, header, child
   const light = ambient === false ? null : ambient ?? (place ? PLACES[place].ambient : undefined);
   const width = wide ? 'max-w-[1200px]' : 'max-w-[920px]';
 
-  const titleNode = heading ?? <h1 className="display text-display @min-[900px]:text-display-lg">{title}</h1>;
+  const titleNode = heading ?? <h1 className="text-large-title text-bright @min-[900px]:display @min-[900px]:text-display-lg">{title}</h1>;
 
   return (
     <div data-signal={sig} className={cn('@container relative h-full', className)}>
-      {/* Top bar: back button + phone actions. */}
+      {/* Nav bar: back, inline title, actions. Material fades in with the inline title (phones). */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20" style={{ paddingTop: 'var(--safe-top)', paddingLeft: 'var(--sidebar-space, 0px)' }}>
-        {/* Mounted only while scrolled: an invisible backdrop blur still costs every frame. */}
-        {scrolled && <div className="top-fade fade-in @max-[899px]:hidden" />}
-        <div className={cn('relative mx-auto flex h-[52px] w-full items-center justify-between gap-2 px-4 @min-[900px]:mt-3 @min-[900px]:px-8', width)}>
-          <div className="pointer-events-auto flex min-w-0 flex-1">
-            {backLabel && (
-              <button type="button" onClick={onBack} aria-label={`Back to ${backLabel}`}
-                className="pressable -ml-1.5 flex h-9 items-center gap-0.5 rounded-full pr-2.5 pl-1 text-body text-ink hover:text-bright">
-                <ChevronLeft size={20} strokeWidth={1.75} />
-                <span className="max-w-[40vw] truncate">{backLabel}</span>
-              </button>
-            )}
-          </div>
-          <div className={cn('pointer-events-auto flex flex-1 items-center justify-end gap-1.5', !backLabel && '@min-[900px]:hidden')}>{actions}</div>
+        {scrolled && (
+          <>
+            <motion.div aria-hidden="true" className="absolute inset-0 border-b-hair border-line bg-navbar backdrop-blur-xl backdrop-saturate-150 @min-[900px]:hidden" style={{ opacity: inline }} />
+            <div className="top-fade fade-in @max-[899px]:hidden" />
+          </>
+        )}
+        <div className={cn('relative mx-auto grid h-navbar w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 @min-[900px]:mt-3 @min-[900px]:h-[52px] @min-[900px]:px-8', width)}>
+          <div className="pointer-events-auto flex min-w-0">{back && <BackButton label={back.label} onBack={back.onBack} />}</div>
+          <motion.div aria-hidden="true" className="max-w-[52vw] truncate text-headline text-bright @min-[900px]:hidden" style={{ opacity: inline, y: inlineY }}>{title}</motion.div>
+          <div className={cn('pointer-events-auto flex min-w-0 items-center justify-end gap-1', !back && '@min-[900px]:hidden')}>{actions}</div>
         </div>
       </div>
 
       <div ref={(n) => { ref.current = n; if (scrollRef) scrollRef.current = n; }} className="scroller page-scroll relative h-full"
-        style={{ paddingTop: 'calc(var(--safe-top) + 44px)', paddingBottom: 'calc(var(--tabbar-space) + 24px)' }}>
+        style={{ paddingTop: 'calc(var(--safe-top) + var(--spacing-navbar))', paddingBottom: 'calc(var(--tabbar-space) + 24px)' }}>
         {light && (typeof light === 'string'
           ? <Ambient name={light as AmbientName} scrollY={scrollY} motion={ambientMotion} />
           : <Ambient colors={light} scrollY={scrollY} motion={ambientMotion} />)}
         <div className="relative transition-[padding] duration-300 ease-out-soft" style={{ paddingLeft: 'var(--sidebar-space, 0px)' }}>
         <div className={cn('relative mx-auto w-full px-4 @min-[900px]:px-8', width)}>
-          <header className="z-[15] pt-2 pb-5 @max-[899px]:sticky @min-[900px]:pt-6 @min-[900px]:pb-7" style={{ top: -lift }}>
-            {scrolled && (
-              <motion.div aria-hidden="true" className="top-fade-solid pointer-events-none absolute -inset-x-4 -bottom-14 @min-[900px]:hidden"
-                style={{ top: `calc(${lift - 44}px - var(--safe-top))`, opacity: fade }} />
-            )}
+          <header className="pt-0.5 pb-4 @min-[900px]:pt-6 @min-[900px]:pb-7">
             <div className="relative flex items-end justify-between gap-6">
               <div className="min-w-0 flex-1">
                 {eyebrow && (
-                  <motion.div className="eyebrow mb-2" initial={reveal ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.12 }}>{eyebrow}</motion.div>
+                  <motion.div className="eyebrow mb-1.5" initial={reveal ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.12 }}>{eyebrow}</motion.div>
                 )}
                 {/* The title rises out of a mask, once, as the page opens. */}
                 <div className="-mb-1 overflow-hidden pb-1">
-                  <motion.div initial={reveal ? { y: '105%' } : false} animate={{ y: 0 }} transition={{ duration: 0.62, ease: EASE.outSoft }}>
+                  <motion.div initial={reveal ? { y: '105%' } : false} animate={{ y: 0 }} transition={{ duration: 0.55, ease: EASE.outSoft }}>
                     {titleNode}
                   </motion.div>
                 </div>
               </div>
-              {actions && !backLabel && <div className="mb-1 hidden shrink-0 items-center gap-1.5 @min-[900px]:flex">{actions}</div>}
+              {actions && !back && <div className="mb-1 hidden shrink-0 items-center gap-1.5 @min-[900px]:flex">{actions}</div>}
             </div>
           </header>
           <div className="@container">
@@ -146,8 +155,8 @@ export function Page({ title, eyebrow, actions, backLabel, onBack, header, child
 export function Section({ label, action, children, className }: { label: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('mt-7 @min-[700px]:mt-9', className)}>
-      <div className="mb-2 flex items-end justify-between px-1">
-        <h2 className="eyebrow">{label}</h2>
+      <div className="mb-2 flex items-end justify-between px-4 @min-[900px]:px-1">
+        <h2 className="text-footnote text-dim uppercase tracking-[.04em] @min-[900px]:eyebrow">{label}</h2>
         {action}
       </div>
       {children}

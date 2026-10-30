@@ -2,13 +2,42 @@
 <html lang="en" data-accent="ice">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#080909" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- Link previews (Discord) read the first theme-color: the brand accent. Browsers run the script and keep the dark one(s) below. -->
+    <meta name="theme-color" content="#b9d3ff" id="embed-color" />
+    <script>document.getElementById("embed-color").remove()</script>
+    <meta name="theme-color" content="#131a3d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#131a3d" media="(prefers-color-scheme: light)" />
+    <!-- Appearance before first paint (lib/theme.ts takes over). -->
+    <script>try{var t=(JSON.parse(localStorage.getItem("neuralagent.theme")||"{}").state)||{},a=t.appearance||"system",h=document.documentElement;h.dataset.appearance=a==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):a;if(t.scheme)h.dataset.scheme=t.scheme}catch(e){}</script>
     <meta name="robots" content="noindex" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <link rel="manifest" href="/app/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NeuralAgent" />
     <title>Web remote · NeuralAgent</title>
+    <meta name="description" content="Approve, reply and watch your AI coding agents live from any browser. End-to-end encrypted." />
+    <link rel="canonical" href="https://agent.neuralhub.dev/app/" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/app/manifest.webmanifest" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NeuralAgent" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="NeuralAgent web remote" />
+    <meta property="og:description" content="Approve, reply and watch your AI coding agents live from any browser. End-to-end encrypted." />
+    <meta property="og:url" content="https://agent.neuralhub.dev/app/" />
+    <meta property="og:image" content="https://agent.neuralhub.dev/og/app.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="NeuralAgent app icon next to the line: Your agents, from any screen." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NeuralAgent web remote" />
+    <meta name="twitter:description" content="Approve, reply and watch your AI coding agents live from any browser. End-to-end encrypted." />
+    <meta name="twitter:image" content="https://agent.neuralhub.dev/og/app.png" />
+    <meta name="twitter:image:alt" content="NeuralAgent app icon next to the line: Your agents, from any screen." />
   </head>
   <body data-page="app">
     <div id="root"></div>

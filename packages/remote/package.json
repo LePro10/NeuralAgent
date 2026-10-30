@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
   },
   "dependencies": {
     "@neuralagent/crypto": "workspace:*",

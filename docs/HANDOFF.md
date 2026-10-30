@@ -1,6 +1,6 @@
 # Handoff
 
-Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.md`;
+Current state for a fresh session. Rules and repo map: `../AGENTS.md`. Detailed progress: `STATUS.md`; plan: `PLAN.md`;
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
@@ -66,6 +66,12 @@ decisions: `DECISIONS.md`.
     PushService, AgentWidget, AgentTile, Status); web side `apps/web/src/remote/native.ts`.
     `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
     password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
+- Updates/changelog round (D44): `CHANGELOG.md` + `scripts/changelog.mjs` (release notes,
+  `/changelog` page, `/changelog.json`, `/version.json`), version label and Update pill above
+  the account (`packages/app/src/components/UpdateBadge.tsx`), update dialog, Settings → Updates
+  (`UpdateSettings.tsx`), store `packages/app/src/lib/updates.ts`. Entry point for all docs is now
+  `AGENTS.md` (+ `docs/README.md`, `docs/RELEASING.md`, skill `.claude/skills/release`). Needs a
+  relay deploy for the website/changelog.json to go live.
 - Next: M10.
 - Open small things: "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.

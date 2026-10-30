@@ -2,7 +2,7 @@
 // connection, and an end-to-end sealed transport to a computer that `DaemonClient` uses like
 // the local WebSocket. Shared by the web remote (/app) and the Android app.
 import { b64, clientStart, exportPublic, fingerprint, generateStaticKey, importPrivateRaw, unb64, type Session } from "@neuralagent/crypto";
-import type { Transport } from "@neuralagent/protocol";
+import { drainedBy, SEND_STALL, type Transport } from "@neuralagent/protocol";
 
 // ───────────── storage ─────────────
 
@@ -345,6 +345,15 @@ interface Envelope {
   [k: string]: unknown;
 }
 
+/** Relay heartbeat: a ping after this much silence (the relay answers `pong`)… */
+export const RELAY_PING_EVERY = 15_000;
+/** …and a socket silent this long after a ping is dead. */
+export const RELAY_PING_TIMEOUT = 8_000;
+/** After the app comes back (or the network changes) the check is quicker. */
+export const RELAY_WAKE_TIMEOUT = 3_000;
+/** A computer that does not finish the handshake in this time is not answering. */
+export const HANDSHAKE_TIMEOUT = 10_000;
+
 interface Pending {
   host: string;
   onEnv: (e: Envelope) => void;
@@ -369,13 +378,25 @@ export class RelayLink {
   private visible = true;
   /** Another tab of this browser took the connection over; wait until this one is looked at. */
   private elsewhere = false;
-  private ready: Promise<void> = Promise.resolve();
+  /** Resolves while the socket is up and the account may route; sessions wait for it. */
+  private ready: Promise<void> | null = null;
+  private isReady = false;
   private markReady: () => void = () => {};
+  /** Heartbeat: last frame in, deadline of an unanswered ping, whether this relay answers pings. */
+  private lastIn = 0;
+  private deadline = 0;
+  private pongs = false;
+  private lastTick = 0;
+  private lastOut = 0;
+  private outMoved = 0;
+  private drained = 0;
+  private beat: ReturnType<typeof setInterval> | undefined;
 
   readonly account: RemoteAccount;
 
   constructor(account: RemoteAccount) {
     this.account = account;
+    this.unready();
     account.onChange(() => {
       if (!account.signedIn && this.ws) this.ws.close();
     });
@@ -409,10 +430,89 @@ export class RelayLink {
   stop() {
     this.stopped = true;
     clearTimeout(this.timer);
+    clearInterval(this.beat);
     this.ws?.close();
   }
 
-  private retry(why: string) {
+  /**
+   * The app came back to the foreground or the network changed: reconnect now if the socket is
+   * down (no waiting out the backoff), or check quickly that an open one still answers.
+   */
+  wake() {
+    if (this.stopped || !this.account.signedIn || this.elsewhere) return;
+    const ws = this.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if (this.pongs) this.ping(RELAY_WAKE_TIMEOUT);
+      return;
+    }
+    if (this.opening || ws?.readyState === WebSocket.CONNECTING) return;
+    clearTimeout(this.timer);
+    this.backoff = 250;
+    void this.connect();
+  }
+
+  private ping(timeout: number) {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    const until = Date.now() + timeout;
+    if (!this.deadline || until < this.deadline) this.deadline = until;
+    this.ws.send(JSON.stringify({ t: "ping" }));
+    // Judge right at the deadline, not on the next tick.
+    setTimeout(this.tick, timeout + 50);
+  }
+
+  private tick = () => {
+    const now = Date.now();
+    const slept = this.lastTick && now - this.lastTick > RELAY_PING_EVERY * 2;
+    this.lastTick = now;
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Background: timers are throttled, no verdicts; coming back calls `wake`.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.deadline = 0;
+      return;
+    }
+    // An upload still draining on a slow uplink: the pong waits behind it. Wait while it moves.
+    const out = ws.bufferedAmount ?? 0;
+    if (!out || out < this.lastOut) this.outMoved = now;
+    this.lastOut = out;
+    // Only a relay that answers pings can be judged by them (older relays ignore them).
+    if (this.pongs && this.deadline && now > this.deadline) {
+      const busy = (out > 0 && now - this.outMoved < SEND_STALL) || now < this.drained;
+      if (busy) this.deadline = now + 1000;
+      else return this.dead(ws);
+    }
+    if (slept) this.ping(RELAY_WAKE_TIMEOUT);
+    else if (!this.deadline && now - this.lastIn >= RELAY_PING_EVERY) this.ping(RELAY_PING_TIMEOUT);
+  };
+
+  /** The socket stopped answering: drop it now (a dead socket's own close can take minutes). */
+  private dead(ws: WebSocket) {
+    ws.onclose = null;
+    ws.onmessage = null;
+    try {
+      ws.close();
+    } catch {}
+    if (this.ws === ws) this.ws = null;
+    this.backoff = 250;
+    this.retry("The relay stopped answering", 0);
+  }
+
+  private unready() {
+    if (this.ready && !this.isReady) return;
+    this.isReady = false;
+    this.ready = new Promise((r) => {
+      this.markReady = () => {
+        this.isReady = true;
+        r();
+      };
+    });
+  }
+
+  private retry(why: string, delay = this.backoff) {
+    clearInterval(this.beat);
+    this.deadline = 0;
+    // Sessions opened from now on wait for the next connection.
+    this.unready();
     for (const [sid, s] of this.sessions) {
       this.sessions.delete(sid);
       s.onGone(why);
@@ -422,7 +522,7 @@ export class RelayLink {
     if (this.elsewhere) return this.set("offline", "NeuralAgent is open in another tab or window.");
     if (this.status !== "waiting" && this.status !== "blocked") this.set("offline", why);
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.connect(), this.backoff);
+    this.timer = setTimeout(() => void this.connect(), delay);
     this.backoff = Math.min(this.backoff * 2, 30000);
   }
 
@@ -430,7 +530,6 @@ export class RelayLink {
     if (this.stopped) return;
     if (!this.account.signedIn) return this.set("signed_out");
     if (this.status !== "waiting" && this.status !== "blocked") this.set("connecting");
-    this.ready = new Promise((r) => (this.markReady = r));
     let token: string;
     this.opening = true;
     try {
@@ -448,12 +547,18 @@ export class RelayLink {
     ws.onopen = () => {
       ws.send(JSON.stringify({ t: "auth", token }));
       if (!this.visible) ws.send(JSON.stringify({ t: "visible", v: false }));
+      this.lastIn = this.lastTick = Date.now();
+      this.deadline = 0;
+      clearInterval(this.beat);
+      this.beat = setInterval(this.tick, 2_000);
     };
     ws.onclose = () => {
       if (this.ws === ws) this.ws = null;
       this.retry("Connection to the relay lost");
     };
     ws.onmessage = (e) => {
+      this.lastIn = Date.now();
+      this.deadline = 0;
       let m: any;
       try {
         m = JSON.parse(String(e.data));
@@ -467,7 +572,7 @@ export class RelayLink {
   private onUser(user: RelayUser) {
     void this.account.setUser(user);
     if (user.status === "approved" && user.remote) {
-      this.backoff = 1000;
+      this.backoff = 250;
       this.set("online");
       this.markReady();
     } else if (user.status === "blocked" || user.status === "denied") {
@@ -479,9 +584,14 @@ export class RelayLink {
 
   private onFrame(m: any) {
     switch (m.t) {
+      case "pong":
+        this.pongs = true;
+        break;
       case "ready":
       case "account":
         this.onUser(m.user as RelayUser);
+        // Learn whether this relay answers pings (older ones do not).
+        if (m.t === "ready" && !this.pongs) this.ping(RELAY_PING_TIMEOUT);
         break;
       case "presence": {
         this.devices = m.devices as RelayDevice[];
@@ -531,14 +641,20 @@ export class RelayLink {
     this.visible = v;
     if (v && this.elsewhere) {
       this.elsewhere = false;
-      this.backoff = 1000;
+      this.backoff = 250;
       this.start();
     }
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ t: "visible", v }));
   }
 
-  private route(to: string, env: Envelope) {
-    this.ws?.send(JSON.stringify({ t: "route", to, env: JSON.stringify(env) }));
+  /** False when the socket is not open: the envelope was not sent. */
+  private route(to: string, env: Envelope): boolean {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    const text = JSON.stringify({ t: "route", to, env: JSON.stringify(env) });
+    this.drained = drainedBy(this.drained, text.length);
+    ws.send(text);
+    return true;
   }
 
   /**
@@ -548,7 +664,10 @@ export class RelayLink {
    */
   transport(hostId: string): () => Promise<Transport> {
     return async () => {
-      await Promise.race([this.ready, new Promise((_, rej) => setTimeout(() => rej(new Error("Relay not connected")), 15000))]);
+      let wait: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([this.ready!, new Promise((_, rej) => (wait = setTimeout(() => rej(new Error("Relay not connected")), 15000)))]).finally(() =>
+        clearTimeout(wait),
+      );
       const host = this.devices.find((d) => d.id === hostId);
       if (!host?.online || !host.pubkey) throw new Error("This computer is offline");
       const pinned = this.account.trustedKey(hostId);
@@ -564,7 +683,10 @@ export class RelayLink {
         const t: Transport = {
           send: (text) => {
             if (closed || !session) return;
-            void session.seal(enc.encode(text)).then((ct) => !closed && this.route(hostId, { k: "d", sid, ct: b64(ct) }));
+            void session.seal(enc.encode(text)).then((ct) => {
+              // The relay socket went away under this session: end it now, not on a timeout.
+              if (!closed && !this.route(hostId, { k: "d", sid, ct: b64(ct) })) gone("Connection to the relay lost");
+            });
           },
           close: () => {
             if (closed) return;
@@ -572,10 +694,12 @@ export class RelayLink {
             this.sessions.delete(sid);
             this.route(hostId, { k: "bye", sid });
           },
+          stale: () => this.wake(),
+          sending: () => this.ws?.bufferedAmount ?? 0,
           onmessage: null,
           onclose: null,
         };
-        const timeout = setTimeout(() => gone("The computer did not answer"), 15000);
+        const timeout = setTimeout(() => gone("The computer did not answer"), HANDSHAKE_TIMEOUT);
         const gone = (why: string) => {
           clearTimeout(timeout);
           if (closed) return;
@@ -607,7 +731,7 @@ export class RelayLink {
             }
           },
         });
-        this.route(hostId, { k: "hs1", sid, e: b64(hs.e), c: b64(hs.c) });
+        if (!this.route(hostId, { k: "hs1", sid, e: b64(hs.e), c: b64(hs.c) })) gone("Relay not connected");
       });
     };
   }

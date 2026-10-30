@@ -69,6 +69,10 @@ pub struct CvMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub model: Option<String>,
+    /// Reasoning effort: `low`, `medium`, `high`, `xhigh` or `max` (what `/effort <level>` takes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub effort: Option<String>,
     /// `default`, `acceptEdits`, `plan`, `bypassPermissions`, …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

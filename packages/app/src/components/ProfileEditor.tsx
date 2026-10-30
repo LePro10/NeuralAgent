@@ -1,5 +1,6 @@
 import type { Profile } from "@neuralagent/protocol";
-import { Button, ConfirmButton, Field, InlinePicker, Input, toast } from "@neuralagent/ui";
+import { Button, ConfirmSheet, Field, InlinePicker, Input, toast } from "@neuralagent/ui";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { joinArgs, splitArgs } from "../lib/profiles";
 import { useClient, useDaemon } from "../lib/store";
@@ -12,6 +13,7 @@ export function ProfileEditor({ profile, onDone }: { profile: Profile | null; on
   const catalog = useDaemon((c) => c.state?.catalog);
   const installed = (catalog ?? []).filter((c) => c.installed);
   const [name, setName] = useState(profile?.name ?? "");
+  const [asking, setAsking] = useState(false);
   const [engine, setEngine] = useState(profile?.engine ?? installed[0]?.id ?? CUSTOM);
   const [command, setCommand] = useState(profile?.engine === CUSTOM ? profile.command : "");
   const [args, setArgs] = useState(joinArgs(profile?.args ?? []));
@@ -53,7 +55,7 @@ export function ProfileEditor({ profile, onDone }: { profile: Profile | null; on
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <div className="flex flex-col gap-5 pb-4">
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Claude (Haiku)" autoFocus />
       </Field>
@@ -75,17 +77,31 @@ export function ProfileEditor({ profile, onDone }: { profile: Profile | null; on
       <Field label="Extra arguments" hint={'Added after our own flags. Quote values with spaces: --name "two words".'}>
         <Input value={args} onChange={(e) => setArgs(e.target.value)} placeholder="--model haiku" spellCheck={false} className="font-mono" />
       </Field>
-      <div className="flex items-center justify-between gap-2">
-        {profile ? <ConfirmButton label="Delete profile" size="sm" onConfirm={remove} /> : <span />}
-        <span className="flex gap-2">
-          <Button size="sm" variant="quiet" onClick={onDone}>
-            Cancel
-          </Button>
-          <Button size="sm" busy={busy} disabled={!valid} onClick={save}>
-            Save
-          </Button>
-        </span>
+      <div className="flex gap-2 pt-2">
+        <Button size="lg" variant="quiet" onClick={onDone} className="flex-1">
+          Cancel
+        </Button>
+        <Button size="lg" variant="primary" busy={busy} disabled={!valid} onClick={save} className="flex-1">
+          Save
+        </Button>
       </div>
+      {profile && (
+        <>
+          <Button size="lg" variant="danger" Icon={Trash2} onClick={() => setAsking(true)} className="w-full">
+            Delete profile
+          </Button>
+          <ConfirmSheet
+            open={asking}
+            onClose={() => setAsking(false)}
+            onConfirm={remove}
+            title={`Delete ${profile.name}?`}
+            message="Running agents keep running; you can no longer start new ones with it."
+            confirmLabel="Delete"
+            destructive
+            Icon={Trash2}
+          />
+        </>
+      )}
     </div>
   );
 }

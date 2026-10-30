@@ -8,8 +8,8 @@
  * wrap it in <AnimatePresence> to fade in/out. The orb swells with `level`.
  */
 import { motion, useMotionValue, type MotionValue } from 'motion/react';
-import { Mic, MicOff, RotateCw, X } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { Mic, MicOff, PhoneOff, RotateCw, X } from 'lucide-react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { haptic } from '../../lib/haptics';
 import { SPRING } from '../../lib/motion';
@@ -27,7 +27,7 @@ function phrases(text: string) {
   return parts.map((p) => { const n = p.trim().split(/\s+/).filter(Boolean).length; const start = w; w += n; return { text: p, start, end: w }; });
 }
 
-export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, muted, onMute, onEnd, onInterrupt, onRetry, level, label = 'Voice', className }: {
+export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, muted, onMute, onEnd, onInterrupt, onRetry, level, label = 'Voice', subtitle, controls, call, className }: {
   state: VoiceState;
   /** What the assistant says (full text of the current answer). */
   transcript?: string;
@@ -43,6 +43,12 @@ export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, m
   onRetry?: () => void;
   level?: MotionValue<number>;
   label?: string;
+  /** Under the label, e.g. the call's running time. */
+  subtitle?: ReactNode;
+  /** Extra round controls between mute and end (`VoiceControl`, e.g. speaker). */
+  controls?: ReactNode;
+  /** A phone call: hang-up glyph and captions under the controls. */
+  call?: boolean;
   className?: string;
 }) {
   const fallback = useMotionValue(0);
@@ -61,11 +67,18 @@ export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, m
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} transition={{ duration: 0.3 }}
       className={cn('absolute inset-0 z-30 flex flex-col items-center bg-bg', className)}
       style={{ paddingTop: 'calc(var(--safe-top) + 14px)', paddingBottom: 'calc(var(--safe-bottom) + 24px)' }}>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_40%_at_50%_40%,color-mix(in_oklab,var(--orb-1)_12%,transparent),transparent_70%)]" />
-      <div className="relative flex w-full max-w-[760px] items-center justify-between px-5">
-        <span className="eyebrow">{label}</span>
-        {state !== 'connecting' && state !== 'error' && <span className="text-meta text-faint">{speaking ? 'Talk or tap to interrupt' : 'Just talk'}</span>}
-      </div>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_42%_at_50%_38%,color-mix(in_oklab,var(--orb-1)_22%,transparent),transparent_72%),radial-gradient(70%_45%_at_15%_0%,color-mix(in_oklab,var(--color-sys-purple)_14%,transparent),transparent_70%),radial-gradient(60%_40%_at_90%_100%,color-mix(in_oklab,var(--color-sys-teal)_12%,transparent),transparent_70%)]" />
+      {call ? (
+        <div className="relative flex w-full max-w-[760px] flex-col items-center gap-0.5 px-5 pt-6 text-center">
+          <span className="text-title-2 text-bright">{label}</span>
+          <span className="tabular text-subhead text-dim">{subtitle}</span>
+        </div>
+      ) : (
+        <div className="relative flex w-full max-w-[760px] items-center justify-between px-5">
+          <span className="eyebrow">{label}</span>
+          {state !== 'connecting' && state !== 'error' && <span className="text-meta text-faint">{speaking ? 'Talk or tap to interrupt' : 'Just talk'}</span>}
+        </div>
+      )}
 
       <div className="relative flex min-h-0 w-full max-w-[640px] flex-1 flex-col items-center justify-center px-6">
         <motion.button type="button" aria-label={speaking || state === 'thinking' ? 'Interrupt' : 'Assistant'}
@@ -79,7 +92,7 @@ export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, m
             ? <Shimmer className="eyebrow">{STATUS[state]}</Shimmer>
             : <span className={cn('eyebrow', state === 'error' && '!text-danger')}>{muted && state === 'listening' ? 'Muted' : STATUS[state]}</span>}
           {speaking ? (
-            <div ref={box} className="fade-y scroller relative mt-2.5 w-full flex-1 text-title leading-[1.45] font-light @min-[700px]:text-headline">
+            <div ref={box} className="fade-y scroller relative mt-2.5 w-full flex-1 text-title leading-[1.45] font-light @min-[700px]:text-title-2">
               <p className="py-[1.2em]">
                 {list.map((p, i) => (
                   <span key={i} ref={i === current ? lit : undefined}
@@ -100,23 +113,33 @@ export function VoiceOverlay({ state, transcript = '', spokenWords = 0, heard, m
         </div>
       </div>
 
-      <div className="relative flex items-center gap-3.5">
+      <div className={cn('relative flex items-start', call ? 'gap-6' : 'gap-3.5')}>
         {state === 'error'
-          ? <Round label="Try again" onClick={() => onRetry?.()}><RotateCw size={19} strokeWidth={1.6} /></Round>
-          : onMute && <Round label={muted ? 'Unmute' : 'Mute'} active={muted} disabled={state === 'connecting'} onClick={onMute}>{muted ? <MicOff size={19} strokeWidth={1.6} /> : <Mic size={19} strokeWidth={1.6} />}</Round>}
-        <button type="button" aria-label="End voice mode" onClick={() => { haptic('heavy'); onEnd(); }} className="pressable grid h-[52px] w-[52px] place-items-center rounded-full bg-danger text-white hover:brightness-110">
-          <X size={21} strokeWidth={1.7} />
-        </button>
+          ? <VoiceControl label="Try again" caption={call ? 'Retry' : undefined} onClick={() => onRetry?.()}><RotateCw size={21} strokeWidth={1.7} /></VoiceControl>
+          : onMute && <VoiceControl label={muted ? 'Unmute' : 'Mute'} caption={call ? 'Mute' : undefined} active={muted} disabled={state === 'connecting'} onClick={onMute}>{muted ? <MicOff size={21} strokeWidth={1.7} /> : <Mic size={21} strokeWidth={1.7} />}</VoiceControl>}
+        {controls}
+        <span className="flex flex-col items-center gap-1.5">
+          <button type="button" aria-label={call ? 'End call' : 'End voice mode'} onClick={() => { haptic('heavy'); onEnd(); }}
+            className={cn('pressable grid place-items-center rounded-full bg-danger text-on-color shadow-[0_6px_20px_-6px_var(--color-danger)] hover:brightness-110', call ? 'h-[64px] w-[64px]' : 'h-[52px] w-[52px]')}>
+            {call ? <PhoneOff size={24} strokeWidth={1.8} /> : <X size={21} strokeWidth={1.7} />}
+          </button>
+          {call && <span className="text-caption text-dim">End</span>}
+        </span>
       </div>
+      {call && state !== 'connecting' && state !== 'error' && <span className="relative mt-4 text-caption text-faint">{speaking ? 'Talk or tap the orb to interrupt' : 'Just talk'}</span>}
     </motion.div>
   );
 }
 
-function Round({ label, active, disabled, onClick, children }: { label: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+/** A round call control (52px, 64px in calls) with an optional caption under it. */
+export function VoiceControl({ label, caption, active, disabled, onClick, children }: { label: string; caption?: string; active?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" aria-label={label} aria-pressed={active} disabled={disabled} onClick={() => { haptic('select'); onClick(); }}
-      className={cn('pressable grid h-[52px] w-[52px] place-items-center rounded-full transition-colors disabled:opacity-40', active ? 'bg-bright text-bg' : 'bg-fill-3 text-bright hover:bg-fill-4')}>
-      {children}
-    </button>
+    <span className="flex flex-col items-center gap-1.5">
+      <button type="button" aria-label={label} aria-pressed={active} disabled={disabled} onClick={() => { haptic('select'); onClick(); }}
+        className={cn('pressable grid place-items-center rounded-full transition-colors disabled:opacity-40', caption ? 'h-[64px] w-[64px]' : 'h-[52px] w-[52px]', active ? 'bg-bright text-on-bright' : 'bg-fill-3 text-bright shadow-edge backdrop-blur-xl hover:bg-fill-4')}>
+        {children}
+      </button>
+      {caption && <span className="text-caption text-dim">{caption}</span>}
+    </span>
   );
 }

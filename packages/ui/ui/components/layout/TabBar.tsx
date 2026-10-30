@@ -1,5 +1,7 @@
 /**
  * Floating liquid-glass tab bar (phones), with the rest of the app inside it.
+ * iOS sizes: 64px bar, 24px icons, 11px labels; the selected tab is tinted
+ * with the accent (or its place's signal) and sits under the lens.
  *
  * The lens is a glass capsule you can grab and slide across the tabs; it
  * snaps on release with the finger's velocity. Under the lens the icons are
@@ -31,23 +33,29 @@ import { useKeyboardOpen } from '../../lib/hooks';
 import { useLayer } from '../../lib/layers';
 import { SPRING } from '../../lib/motion';
 import { usePortalTarget } from '../../lib/surface';
+import { ACTIVITY_LABEL, ActivityMark, topActivity, type Activity } from '../core/Activity';
 import { PLACES, type Place, type Signal } from '../../lib/tokens';
 
 export interface TabItem<T extends string = string> {
   id: T;
   label: string;
   Icon: LucideIcon;
-  /** Quiet "needs you" dot; a string becomes its accessible description. */
+  /** Generic red dot (prefer `activity`); a string becomes its accessible description. */
   badge?: boolean | string;
+  /** What the agents behind this tab are doing: ring (working) or dot (waiting/done/error). See core/Activity. */
+  activity?: Activity;
   /** The place: gives the signal colour (and, on a Page, the light). */
   place?: Place;
   /** Signal colour, if not taken from `place`. */
   signal?: Signal;
 }
 
+/** Accessible text for a tab's mark. */
+const describe = (t: { activity?: Activity; badge?: boolean | string }) => (t.activity ? ACTIVITY_LABEL[t.activity] : typeof t.badge === 'string' ? t.badge : undefined);
+
 export const signalOf = (t: { signal?: Signal; place?: Place }): Signal | undefined => t.signal ?? (t.place ? PLACES[t.place].signal : undefined);
 
-const BAR = 58;
+const BAR = 64;
 // The More grid: 4 columns of 68px tiles. Its height is known from the count,
 // so a pull can open it before it is ever measured.
 const COLS = 4, TILE = 68, GAP = 2, PAD_T = 12, PAD_B = 2;
@@ -73,7 +81,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
   const inMore = extra?.find((t) => t.id === value);
   // The last cell stands in for the whole overflow — and wears the place you are in.
   const cells: TabItem<string>[] = extra
-    ? [...items, { id: MORE, label: inMore?.label ?? moreLabel, Icon: inMore?.Icon ?? LayoutGrid, signal: inMore ? signalOf(inMore) : undefined, badge: inMore?.badge ?? extra.some((t) => t.badge) }]
+    ? [...items, { id: MORE, label: inMore?.label ?? moreLabel, Icon: inMore?.Icon ?? LayoutGrid, signal: inMore ? signalOf(inMore) : undefined, badge: inMore?.badge ?? extra.some((t) => t.badge), activity: inMore?.activity ?? topActivity(extra.map((t) => t.activity)) }]
     : items;
   const n = cells.length;
   const index = inMore ? n - 1 : Math.max(0, items.findIndex((t) => t.id === value));
@@ -214,11 +222,13 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
       initial={false}
       animate={{ y: keyboard ? 120 : 0, opacity: keyboard ? 0 : 1 }}
       transition={SPRING.snap}
+      aria-hidden={keyboard || undefined}
+      inert={keyboard || undefined}
     >
       {/* Content scrolling past fades to black instead of peeking out below the bar. */}
-      {floating && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(100%+28px)] bg-[linear-gradient(180deg,rgb(8_9_9/0),rgb(8_9_9/.72)_45%,rgb(8_9_9/.94))]" />}
+      {floating && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[calc(100%+28px)] bg-[linear-gradient(180deg,transparent,color-mix(in_srgb,var(--color-bg)_72%,transparent)_45%,color-mix(in_srgb,var(--color-bg)_94%,transparent))]" />}
       {shown && createPortal(
-        <motion.div aria-hidden="true" className={cn('fixed inset-0 bg-black/45', !open && 'pointer-events-none')}
+        <motion.div aria-hidden="true" className={cn('fixed inset-0 bg-scrim', !open && 'pointer-events-none')}
           style={{ opacity: scrimOpacity, zIndex: 'calc(var(--z-tabbar) - 1)' }} onClick={() => setMore(false)} />,
         portal,
       )}
@@ -227,7 +237,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
         data-signal={activeSignal}
         role={open ? 'dialog' : undefined}
         aria-label={open ? moreLabel : undefined}
-        className="glass rim relative mx-auto max-w-[400px] overflow-hidden outline-none"
+        className="glass rim relative mx-auto max-w-[440px] overflow-hidden outline-none"
         style={{ height, borderRadius: radius }}
       >
         {/* Open, the glass thickens a little, so the grid reads over busy content. */}
@@ -289,8 +299,8 @@ function Cell({ item, i, active, bright, cell, lens, more }: { item: TabItem; i:
   const opacity = useTransform(lens, (p) => (bright || !cell ? 1 : Math.min(1, Math.max(0, Math.abs(p - i) * 2.4 - 0.35))));
   const { Icon, label, badge } = item;
   const signal = signalOf(item);
-  // Under the lens the active icon wears its place's colour; the rest are bright white.
-  const brightColor = signal && active ? `var(--color-signal-${signal})` : '#fff';
+  // Under the lens the active tab wears its place's colour (else the accent); the rest are bright.
+  const brightColor = active ? (signal ? `var(--color-signal-${signal})` : 'var(--color-accent)') : 'var(--color-bright)';
   const isMore = item.id === MORE;
   // The More cell turns its icon into a chevron as the grid opens.
   const iconOut = useTransform(more ?? lens, (p) => (more ? 1 - Math.min(1, Math.max(0, p * 2.2)) : 1));
@@ -302,17 +312,19 @@ function Cell({ item, i, active, bright, cell, lens, more }: { item: TabItem; i:
       aria-selected={bright ? undefined : active}
       aria-haspopup={!bright && isMore ? 'dialog' : undefined}
       aria-label={bright ? undefined : label}
-      aria-description={bright || typeof badge !== 'string' ? undefined : badge}
+      aria-description={bright ? undefined : describe(item)}
       tabIndex={bright ? -1 : active ? 0 : -1}
-      className="flex h-full shrink-0 flex-col items-center justify-center gap-[3px] rounded-full outline-offset-[-4px] transition-colors duration-300"
-      style={{ width: cell || undefined, flex: cell ? undefined : 1, color: bright ? brightColor : active ? 'var(--color-bright)' : 'var(--color-dim)', opacity }}
+      className="flex h-full shrink-0 flex-col items-center justify-center gap-1 rounded-full outline-offset-[-4px] transition-colors duration-300"
+      style={{ width: cell || undefined, flex: cell ? undefined : 1, color: bright ? brightColor : active ? 'var(--color-accent)' : 'var(--color-dim)', opacity }}
     >
       <span className="relative" style={bright ? { transform: 'scale(1.06)' } : undefined}>
-        <motion.span className="block" style={{ opacity: iconOut }}><Icon size={20} strokeWidth={bright ? 1.9 : 1.6} /></motion.span>
-        {more && <motion.span className="absolute inset-0 grid place-items-center" style={{ opacity: chevIn, rotate: chevRot }}><ChevronDown size={20} strokeWidth={bright ? 1.9 : 1.6} /></motion.span>}
-        {badge && <motion.i aria-hidden="true" className="absolute -top-px -right-0.5 h-1.5 w-1.5 rounded-full bg-ember ring-[1.5px] ring-popover" style={{ opacity: iconOut }} />}
+        <motion.span className="block" style={{ opacity: iconOut }}><Icon size={24} strokeWidth={bright ? 1.9 : 1.65} /></motion.span>
+        {more && <motion.span className="absolute inset-0 grid place-items-center" style={{ opacity: chevIn, rotate: chevRot }}><ChevronDown size={24} strokeWidth={bright ? 1.9 : 1.65} /></motion.span>}
+        <motion.span className="absolute inset-0" style={{ opacity: iconOut }}>
+          {item.activity ? <ActivityMark activity={item.activity} edge="ring-popover" /> : badge && <i aria-hidden="true" className="absolute -top-0.5 -right-1 h-2 w-2 rounded-full bg-sys-red ring-2 ring-popover" />}
+        </motion.span>
       </span>
-      <span className="max-w-full truncate px-0.5 text-[9.5px] leading-none tracking-[.01em]" style={bright ? { transform: 'scale(1.04)' } : undefined}>{label}</span>
+      <span className="max-w-full truncate px-px text-caption-2 leading-none tracking-[-0.02em]" style={bright ? { transform: 'scale(1.04)' } : undefined}>{label}</span>
     </motion.div>
   );
 }
@@ -330,7 +342,7 @@ function MoreTile({ item, i, active, prog, onPick }: { item: TabItem; i: number;
       type="button"
       onClick={onPick}
       aria-current={active ? 'page' : undefined}
-      aria-description={typeof item.badge === 'string' ? item.badge : undefined}
+      aria-description={describe(item)}
       className="pressable group flex flex-col items-center justify-center gap-1.5 rounded-field outline-offset-[-2px]"
       style={{ opacity, y, scale, height: TILE }}
     >
@@ -339,7 +351,7 @@ function MoreTile({ item, i, active, prog, onPick }: { item: TabItem; i: number;
         style={active ? { background: `color-mix(in oklab, var(--color-signal-${signal ?? 'silver'}) 18%, transparent)`, color: `var(--color-signal-${signal ?? 'silver'})` } : undefined}
       >
         <item.Icon size={18} strokeWidth={1.6} />
-        {item.badge && <i aria-hidden="true" className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-ember ring-[1.5px] ring-popover" />}
+        {item.activity ? <ActivityMark activity={item.activity} edge="ring-popover" size={7} corner="top-0.5 right-0.5" /> : item.badge && <i aria-hidden="true" className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-sys-red ring-[1.5px] ring-popover" />}
       </span>
       <span className={cn('max-w-full truncate px-1 text-tiny leading-none', active ? 'text-bright' : 'text-dim')}>{item.label}</span>
     </motion.button>

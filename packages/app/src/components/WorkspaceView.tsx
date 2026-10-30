@@ -1,6 +1,6 @@
 import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent/protocol";
-import { ConfirmSheet, Menu, StatusDot, cn, toast, useLayoutMode, type MenuEntry } from "@neuralagent/ui";
-import { Download, GitBranch, GitCompare, LayoutGrid, Plus, X } from "lucide-react";
+import { Button, ConfirmSheet, Menu, StatusDot, cn, toast, useLayoutMode, type MenuEntry } from "@neuralagent/ui";
+import { Download, GitBranch, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeTab, gridOf, newTab, order, panes, removePane, setContent, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
 import { STATUS, mostUrgent } from "../lib/status";
@@ -11,6 +11,7 @@ import { AgentGlyph } from "./AgentGlyph";
 import type { PaneActions } from "./Pane";
 import { PaneTree, type TreeCtx } from "./PaneTree";
 import { isAppShortcut } from "./TerminalView";
+import { PhoneWorkspace } from "./workspace/PhoneWorkspace";
 
 /** WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. */
 const WEBGL_MAX = 12;
@@ -20,17 +21,17 @@ function sessionsOf(n: LayoutNode): string[] {
   return panes(n).flatMap((p) => (p.content.kind === "terminal" ? [p.content.session] : []));
 }
 
+/** One pane of a workspace with the tab it lives in (phones list every agent of every tab). */
+export interface PaneRef {
+  tab: Tab;
+  id: string;
+  content: PaneContent;
+}
+
 export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const client = useClient();
   const layout = useDaemon((c) => c.state?.layouts[workspaceId]);
   const sessions = useDaemon((c) => c.state?.sessions);
-  const profiles = useDaemon((c) => c.state?.profiles);
-  const catalog = useDaemon((c) => c.state?.catalog);
-  const openCatalog = useCatalogSheet((c) => c.setOpen);
-  const git = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId)?.git);
-  const showChanges = useChanges((c) => c.show);
-  const { worktrees, setWorktrees } = useUi();
-  const worktree = useWorktreeStart(workspaceId);
   const tab = layout ? activeTab(layout) : undefined;
   const phone = useLayoutMode() === "phone";
   const [closing, setClosing] = useState<{ tab: Tab; live: number } | null>(null);
@@ -52,37 +53,51 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
     save({ tabs: [...layout.tabs, t], active_tab: t.id });
   };
 
+  /** Pane actions for a pane in any tab (phones act on agents outside the shown tab too). */
+  const actionsIn = useCallback(
+    (t: Tab, paneId: string): PaneActions => {
+      const edit = (f: (x: Tab) => Tab) => layout && save(updateTab(layout, t.id, f));
+      return {
+        focus: () => {
+          if (!layout) return;
+          if (layout.active_tab === t.id && t.focused === paneId) return;
+          save({ ...updateTab(layout, t.id, (x) => ({ ...x, focused: paneId })), active_tab: t.id });
+        },
+        split: (dir) => edit((x) => splitPane(x, paneId, dir)),
+        zoom: () => edit((x) => ({ ...x, zoomed: x.zoomed === paneId ? undefined : paneId, focused: paneId })),
+        swapWith: (other) => edit((x) => swapPanes(x, other, paneId)),
+        setContent: (content) => edit((x) => setContent(x, paneId, content)),
+        preview: (url) =>
+          edit((x) => {
+            const browser = panes(x.root).find((p) => p.content.kind === "browser");
+            if (browser) return { ...setContent(x, browser.id, { kind: "browser", url }), zoomed: undefined, focused: phone ? browser.id : x.focused };
+            const next = splitPane(x, paneId, "row", { kind: "browser", url });
+            return phone ? { ...next, focused: panes(next.root).find((p) => p.content.kind === "browser")?.id ?? next.focused } : next;
+          }),
+        close: async () => {
+          if (!layout) return;
+          const pane = panes(t.root).find((p) => p.id === paneId);
+          await save(updateTab(layout, t.id, (x) => removePane(x, paneId)));
+          if (pane?.content.kind === "terminal") await client.req({ m: "session_close", p: { id: pane.content.session } }).catch(() => {});
+        },
+      };
+    },
+    [layout, save, client, phone],
+  );
+
   const ctx = useMemo<TreeCtx | null>(() => {
     if (!layout || !tab) return null;
     const visible = tab.zoomed ? 1 : sessionsOf(tab.root).length;
-    const actions = (paneId: string): PaneActions => ({
-      focus: () => tab.focused !== paneId && editTab((t) => ({ ...t, focused: paneId })),
-      split: (dir) => editTab((t) => splitPane(t, paneId, dir)),
-      zoom: () => editTab((t) => ({ ...t, zoomed: t.zoomed === paneId ? undefined : paneId, focused: paneId })),
-      swapWith: (other) => editTab((t) => swapPanes(t, other, paneId)),
-      setContent: (content) => editTab((t) => setContent(t, paneId, content)),
-      preview: (url) =>
-        editTab((t) => {
-          const browser = panes(t.root).find((p) => p.content.kind === "browser");
-          if (browser) return { ...setContent(t, browser.id, { kind: "browser", url }), zoomed: undefined };
-          return splitPane(t, paneId, "row", { kind: "browser", url });
-        }),
-      close: async () => {
-        const pane = panes(tab.root).find((p) => p.id === paneId);
-        await save(updateTab(layout, tab.id, (t) => removePane(t, paneId)));
-        if (pane?.content.kind === "terminal") await client.req({ m: "session_close", p: { id: pane.content.session } }).catch(() => {});
-      },
-    });
     return {
       workspaceId,
       focused: tab.focused,
-      // Phones show one pane at a time, the focused one; chips above switch.
+      // Phones show one pane at a time, the focused one; the agent strip above switches.
       zoomed: phone ? (panes(tab.root).find((p) => p.id === tab.focused) ?? panes(tab.root)[0])?.id : tab.zoomed,
       webgl: phone || visible <= WEBGL_MAX,
-      actions,
+      actions: (paneId) => actionsIn(tab, paneId),
       onSizes: (splitId, sizes) => editTab((t) => setSizes(t, splitId, sizes)),
     };
-  }, [layout, tab, editTab, save, client, workspaceId, phone]);
+  }, [layout, tab, editTab, actionsIn, workspaceId, phone]);
 
   // Keyboard: ⌘T tab, ⌘W close pane, ⌘D split right, ⌘\ split down, ⌘↩ zoom, ⌘1–9 pane, ⌘[ ⌘] tabs.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
@@ -132,6 +147,72 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
     await save({ tabs, active_tab: active });
     for (const s of sids) await client.req({ m: "session_close", p: { id: s } }).catch(() => {});
   };
+
+  const tree = <PaneTree key={tab.id} node={tab.root} ctx={ctx} />;
+
+  if (phone) {
+    // Every agent of every tab, in tab order then reading order: phones show one at a time.
+    const all: PaneRef[] = layout.tabs.flatMap((t) =>
+      order(t).flatMap((id) => {
+        const content = panes(t.root).find((p) => p.id === id)?.content;
+        return content && content.kind !== "empty" ? [{ tab: t, id, content }] : [];
+      }),
+    );
+    const focused = panes(tab.root).find((p) => p.id === ctx.zoomed);
+    return (
+      <PhoneWorkspace
+        workspaceId={workspaceId}
+        panes={all}
+        current={focused ? { tab, id: focused.id, content: focused.content } : undefined}
+        actionsIn={actionsIn}
+      >
+        {tree}
+      </PhoneWorkspace>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col" style={{ paddingTop: "var(--safe-top)", paddingLeft: "var(--sidebar-space)", paddingBottom: "var(--tabbar-space)" }}>
+      <DesktopBar workspaceId={workspaceId} layout={layout} tab={tab} save={save} addTab={addTab} closeTab={closeTab} editTab={editTab} />
+      <div className="relative min-h-0 flex-1 px-2 pb-2">
+        <div className="relative h-full w-full">{tree}</div>
+      </div>
+      <ConfirmSheet
+        open={closing !== null}
+        onClose={() => setClosing(null)}
+        onConfirm={async () => {
+          if (closing) await reallyCloseTab(closing.tab);
+          setClosing(null);
+        }}
+        title={`Close ${closing?.tab.title ?? "tab"}?`}
+        message={closing ? `${closing.live} running ${closing.live === 1 ? "agent stops" : "agents stop"}.` : undefined}
+        confirmLabel="Stop and close"
+        destructive
+      />
+    </div>
+  );
+}
+
+/** Desktop: tabs on the left; branch, layout and New agent on the right. The empty strip drags the window. */
+function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab }: {
+  workspaceId: string;
+  layout: WorkspaceLayout;
+  tab: Tab;
+  save: (l: WorkspaceLayout) => void;
+  addTab: () => void;
+  closeTab: (t: Tab) => void;
+  editTab: (f: (t: Tab) => Tab) => void;
+}) {
+  const client = useClient();
+  const sessions = useDaemon((c) => c.state?.sessions);
+  const profiles = useDaemon((c) => c.state?.profiles);
+  const catalog = useDaemon((c) => c.state?.catalog);
+  const git = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId)?.git);
+  const openCatalog = useCatalogSheet((c) => c.setOpen);
+  const showChanges = useChanges((c) => c.show);
+  const { worktrees, setWorktrees } = useUi();
+  const worktree = useWorktreeStart(workspaceId);
+
   const arrange = (n: number) => {
     const byId = new Map(panes(tab.root).map((p) => [p.id, p.content]));
     const contents: PaneContent[] = order(tab).map((id) => byId.get(id)!);
@@ -157,115 +238,77 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
       glyph: <AgentGlyph engine={p.engine} className="text-dim" />,
       onSelect: () => start(p.id, p.engine),
     })),
-    ...(git ? [{ label: "Own worktree per agent", Icon: GitBranch, checked: worktrees, divider: true, onSelect: () => setWorktrees(!worktrees) }] : []),
+    ...(git ? [{ label: "Own worktree per agent", Icon: GitBranch, kind: "check" as const, checked: worktrees, divider: true, onSelect: () => setWorktrees(!worktrees) }] : []),
     { label: "Install agents…", Icon: Download, divider: !git, onSelect: () => openCatalog(true) },
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col" style={{ paddingLeft: "var(--sidebar-space)", paddingBottom: "var(--tabbar-space)" }}>
-      <div data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-1">
-        <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto" data-tauri-drag-region>
-          {layout.tabs.map((t) => {
-            const urgent = mostUrgent(sessionsOf(t.root).flatMap((s) => (sessions?.[s] ? [sessions[s].status] : [])));
-            const active = t.id === tab.id;
-            return (
-              <div
-                key={t.id}
+    <div data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-1 pr-2.5 pl-2">
+      <div role="tablist" aria-label="Tabs" className="scroll-x flex min-w-0 items-center gap-1" data-tauri-drag-region>
+        {layout.tabs.map((t) => {
+          const urgent = mostUrgent(sessionsOf(t.root).flatMap((s) => (sessions?.[s] ? [sessions[s].status] : [])));
+          const active = t.id === tab.id;
+          return (
+            <div
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              className={cn(
+                "group relative flex h-8 max-w-52 shrink-0 items-center gap-2 rounded-full pr-1 pl-3.5 text-chip transition-colors",
+                active ? "bg-fill-3 text-bright shadow-edge" : "text-dim hover:bg-fill-2 hover:text-ink",
+              )}
+            >
+              <button type="button" className="flex min-w-0 items-center gap-2 after:absolute after:inset-0" onClick={() => !active && save({ ...layout, active_tab: t.id })}>
+                {urgent && urgent !== "idle" && urgent !== "exited" && <StatusDot tone={STATUS[urgent].tone} pulse={STATUS[urgent].pulse} size={7} label={STATUS[urgent].label} />}
+                <span className="truncate">{t.title}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Close ${t.title}`}
+                title={`Close ${t.title}`}
+                onClick={() => closeTab(t)}
                 className={cn(
-                  "group flex h-7 max-w-48 shrink-0 items-center gap-2 rounded-item pr-1 pl-3 text-chip transition-colors",
-                  active ? "bg-fill-2 text-bright" : "text-dim hover:bg-fill-1 hover:text-ink",
+                  "relative z-10 grid size-6 shrink-0 place-items-center rounded-full text-faint transition-opacity hover:bg-fill-3 hover:text-ink",
+                  active ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
                 )}
               >
-                <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => !active && save({ ...layout, active_tab: t.id })}>
-                  {urgent && <StatusDot tone={STATUS[urgent].tone} pulse={STATUS[urgent].pulse} size={6} label={STATUS[urgent].label} />}
-                  <span className="truncate">{t.title}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Close ${t.title}`}
-                  onClick={() => closeTab(t)}
-                  className="grid size-5 place-items-center rounded-xs text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink"
-                >
-                  <X size={12} strokeWidth={1.6} />
-                </button>
-              </div>
-            );
-          })}
-          <button type="button" aria-label="New tab" title="New tab" onClick={addTab} className="hoverable grid size-7 shrink-0 place-items-center rounded-item text-dim hover:text-ink">
-            <Plus size={14} strokeWidth={1.6} />
-          </button>
-        </div>
-        <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
-        {git && (
-          <button
-            type="button"
-            title={`${git.branch}: ${git.changed === 1 ? "1 changed file" : `${git.changed} changed files`}`}
-            onClick={() => showChanges(workspaceId)}
-            className="hoverable flex h-7 max-w-56 items-center gap-1.5 rounded-item px-2.5 text-chip text-dim hover:text-ink"
-          >
-            <GitCompare size={14} strokeWidth={1.6} aria-hidden />
-            <span className="truncate">{git.branch}</span>
-            {git.changed > 0 && <span className="text-warning tabular-nums">{git.changed}</span>}
+                <X size={13} strokeWidth={1.8} />
+              </button>
+            </div>
+          );
+        })}
+        <button type="button" aria-label="New tab" title="New tab (⌘T)" onClick={addTab} className="hoverable grid size-8 shrink-0 place-items-center rounded-full text-dim hover:text-ink">
+          <Plus size={16} strokeWidth={1.7} />
+        </button>
+      </div>
+      <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
+      {git && (
+        <button
+          type="button"
+          title={`${git.branch}: ${git.changed === 1 ? "1 changed file" : `${git.changed} changed files`}. Show changes`}
+          onClick={() => showChanges(workspaceId)}
+          className="pressable flex h-8 max-w-56 shrink-0 items-center gap-1.5 rounded-full bg-fill-2 pr-1.5 pl-3 text-chip text-ink shadow-edge hover:bg-fill-3"
+        >
+          <GitBranch size={14} strokeWidth={1.7} className="shrink-0 text-dim" aria-hidden />
+          <span className="truncate">{git.branch}</span>
+          {git.changed > 0 ? (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-warning/15 px-1.5 text-meta text-warning tabular-nums">{git.changed}</span>
+          ) : (
+            <span className="pr-1.5" />
+          )}
+        </button>
+      )}
+      <Menu
+        title="Layout"
+        items={presetItems}
+        width={180}
+        trigger={(open) => (
+          <button type="button" aria-label="Layout" title="Layout" onClick={open} className="hoverable grid size-8 shrink-0 place-items-center rounded-full text-dim hover:text-ink">
+            <LayoutGrid size={16} strokeWidth={1.7} />
           </button>
         )}
-        <Menu
-          title="Layout"
-          items={presetItems}
-          width={180}
-          trigger={(open) => (
-            <button type="button" aria-label="Layout" title="Layout" onClick={open} className="hoverable grid size-7 place-items-center rounded-item text-dim hover:text-ink">
-              <LayoutGrid size={14} strokeWidth={1.6} />
-            </button>
-          )}
-        />
-        <Menu
-          title="New agent"
-          items={agentItems}
-          trigger={(open) => (
-            <button type="button" onClick={open} className="hoverable flex h-7 items-center gap-1.5 rounded-item px-2.5 text-chip text-ink">
-              <Plus size={14} strokeWidth={1.6} />
-              New agent
-            </button>
-          )}
-        />
-      </div>
-      {phone && ctx && tab && panes(tab.root).length > 1 && (
-        <div className="flex shrink-0 gap-1 overflow-x-auto px-2 pb-1.5">
-          {order(tab).map((id, i) => {
-            const c = panes(tab.root).find((p) => p.id === id)?.content;
-            const s = c?.kind === "terminal" ? sessions?.[c.session] : undefined;
-            const label = s?.title ?? (c?.kind === "browser" ? "Browser" : `Pane ${i + 1}`);
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => ctx.actions(id).focus()}
-                className={cn("flex h-7 shrink-0 items-center gap-1.5 rounded-item px-2.5 text-chip", ctx.zoomed === id ? "bg-fill-3 text-bright" : "text-dim")}
-              >
-                {s && <StatusDot tone={STATUS[s.status].tone} pulse={STATUS[s.status].pulse} size={6} label={STATUS[s.status].label} />}
-                <span className="max-w-32 truncate">{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      <div className="relative min-h-0 flex-1 px-2 pb-2">
-        <div className="relative h-full w-full">
-          <PaneTree key={tab.id} node={tab.root} ctx={ctx} />
-        </div>
-      </div>
-      <ConfirmSheet
-        open={closing !== null}
-        onClose={() => setClosing(null)}
-        onConfirm={async () => {
-          if (closing) await reallyCloseTab(closing.tab);
-          setClosing(null);
-        }}
-        title={`Close ${closing?.tab.title ?? "tab"}?`}
-        message={closing ? `${closing.live} running ${closing.live === 1 ? "agent stops" : "agents stop"}.` : undefined}
-        confirmLabel="Stop & close"
-        destructive
       />
+      <Menu title="New agent" items={agentItems} trigger={(open) => <Button size="sm" variant="primary" Icon={Plus} onClick={open}>New agent</Button>} />
     </div>
   );
 }

@@ -9,9 +9,11 @@
  * The header is compact: close on the left, a small centred title, the
  * primary action (`action`) on the right — no big title, no heavy footer.
  *
- * Not for small choices: a choice is a pull-down `Menu`, a value is an
- * `InlinePicker`, a confirmation is a `ConfirmButton`. Half-height snaps
- * still work (`snaps={SNAPS.half}`), but the default is the full panel.
+ * Detents: no `snaps` = fits its content (iOS "custom" detent), capped under
+ * the status bar; `SNAPS.half` / `SNAPS.tall` / `SNAPS.full` for medium/large.
+ * Keyboard: the card lifts above it and shrinks to the visible area (any
+ * portal target), and a focused field is scrolled into view.
+ * A small choice on a phone is a `Menu` (it becomes an action sheet itself).
  *
  * Gestures adapted from 21st.dev "Magnetic Drawer" (animbits): snap maths,
  * plus back gesture, Escape, focus return, keyboard awareness, and short
@@ -35,7 +37,7 @@ import { useFocusTrap } from '../../lib/focus-trap';
 import { haptic } from '../../lib/haptics';
 import { useLayer } from '../../lib/layers';
 import { SPRING, TICK, pointAt, prefersReducedMotion, springPoints } from '../../lib/motion';
-import { surfaceHeight, useLayoutMode, usePortalTarget } from '../../lib/surface';
+import { useKeyboardInset, useLayoutMode, usePortalTarget, useSurfaceHeight } from '../../lib/surface';
 import { SNAPS } from '../../lib/tokens';
 
 export interface SheetProps {
@@ -92,8 +94,8 @@ function Header({ title, eyebrow, onClose, hideClose, action }: { title?: string
   if (!title && !eyebrow && hideClose && !action) return null;
   const close = !hideClose && (
     <button type="button" onClick={onClose} onPointerDown={(e) => e.stopPropagation()} aria-label="Close"
-      className="pressable relative grid h-8 w-8 shrink-0 place-items-center rounded-full bg-fill-3 text-ink shadow-edge hover:bg-fill-4 hover:text-bright after:absolute after:-inset-1.5 after:content-['']">
-      <X size={15} strokeWidth={1.75} />
+      className="pressable relative grid size-control-sm shrink-0 place-items-center rounded-full bg-fill-3 text-ink hover:bg-fill-4 hover:text-bright after:absolute after:-inset-1.5 after:content-['']">
+      <X strokeWidth={2} className="size-icon-sm" />
     </button>
   );
   return (
@@ -101,8 +103,8 @@ function Header({ title, eyebrow, onClose, hideClose, action }: { title?: string
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 pb-2">
       <div className="flex justify-start">{close}</div>
       <div className="min-w-0 max-w-[60vw] text-center">
-        {eyebrow && <div className="truncate text-tiny text-faint">{eyebrow}</div>}
-        {title && <h2 className="truncate text-body font-medium tracking-[-.01em] text-bright">{title}</h2>}
+        {eyebrow && <div className="truncate text-caption text-dim">{eyebrow}</div>}
+        {title && <h2 className="truncate text-headline text-bright">{title}</h2>}
       </div>
       <div className="flex justify-end" onPointerDown={(e) => e.stopPropagation()}>{action}</div>
     </div>
@@ -118,12 +120,13 @@ const surfaceCls = (glass?: boolean) => glass
 const GAP = 8;
 
 function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, action, boxRef, target, glass, hideClose, bodyClassName }: Inner) {
-  const vh = surfaceHeight(target);
-  // No snaps: the card fits its content (measured), up to nearly the full surface.
+  // Live: rotation, a resizing keyboard or a window resize re-cap the card.
+  const vh = useSurfaceHeight(target);
+  // No snaps: the card fits its content (measured), up to just under the status bar.
   const fit = !snapProp;
   const snaps = snapProp ?? SNAPS.full;
-  const cap = Math.round(vh * 0.94) - GAP;
-  const [fitH, setFitH] = useState(cap);
+  const cap = `calc(100% - var(--safe-top) - ${GAP * 2}px)`;
+  const [fitH, setFitH] = useState(vh);
   const height = fit ? fitH : Math.round(vh * snaps[snaps.length - 1]);
   const hRef = useRef(height);
   hRef.current = height;
@@ -212,24 +215,27 @@ function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, ac
    * exactly the area above it, fully pulled up — otherwise its title and
    * first field would slide out of view at the top.
    */
-  const [kb, setKb] = useState<{ h: number; bottom: number } | null>(null);
+  const kb = useKeyboardInset(target);
+  // A focused field scrolls into the visible part of the card (only the card's own scroller moves).
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv || target !== document.body) return;
-    const check = () => {
-      const bottom = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      const open = vv.height < vh * 0.8;
-      setKb((old) => {
-        if (!open) return old ? null : old;
-        const next = { h: Math.round(vv.height), bottom };
-        return old && old.h === next.h && old.bottom === next.bottom ? old : next;
-      });
+    const el = sheetRef.current;
+    if (!el) return;
+    let t = 0;
+    const onFocus = (e: FocusEvent) => {
+      const f = e.target as HTMLElement;
+      if (!f.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const sc = scrollRef.current;
+        if (!sc || !sc.contains(f)) return;
+        const a = f.getBoundingClientRect(), b = sc.getBoundingClientRect();
+        if (a.bottom > b.bottom - 12) sc.scrollBy({ top: a.bottom - b.bottom + 24, behavior: 'smooth' });
+        else if (a.top < b.top + 8) sc.scrollBy({ top: a.top - b.top - 16, behavior: 'smooth' });
+      }, 320);
     };
-    check();
-    vv.addEventListener('resize', check);
-    vv.addEventListener('scroll', check);
-    return () => { vv.removeEventListener('resize', check); vv.removeEventListener('scroll', check); };
-  }, [vh, target]);
+    el.addEventListener('focusin', onFocus);
+    return () => { el.removeEventListener('focusin', onFocus); window.clearTimeout(t); };
+  }, []);
 
   // A field under the sheet would otherwise keep focus and the keyboard open.
   useEffect(() => {
@@ -299,7 +305,7 @@ function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, ac
 
   return (
     <>
-      <motion.div ref={backRef} className="fixed inset-0 z-[var(--z-sheet)] bg-black/50 will-change-[opacity]" style={{ opacity: backdrop }} onClick={onClose} />
+      <motion.div ref={backRef} className="fixed inset-0 z-[var(--z-sheet)] bg-scrim will-change-[opacity]" style={{ opacity: backdrop }} onClick={onClose} />
       <motion.div
         role="dialog"
         aria-modal="true"
@@ -312,12 +318,13 @@ function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, ac
           transformOrigin: '50% 100%',
           bottom: `max(${GAP}px, calc(var(--safe-bottom) - 12px))`,
           ...(kb ? { bottom: kb.bottom + GAP } : {}),
-          ...(fit ? { maxHeight: kb ? Math.min(cap, kb.h - GAP * 2) : cap } : { height: kb ? Math.min(height, kb.h - GAP * 2) : height }),
+          ...(fit ? { maxHeight: kb ? `min(${cap}, ${kb.h - GAP * 2}px)` : cap } : { height: kb ? Math.min(height, kb.h - GAP * 2) : height, maxHeight: cap }),
           paddingBottom: hidden,
         }}
       >
-        <div className="shrink-0 cursor-grab touch-none pt-1.5 select-none active:cursor-grabbing" {...handlers}>
-          <div className="mx-auto mb-1.5 h-[3px] w-8 rounded-full bg-white/[.16]" />
+        <div className="shrink-0 cursor-grab touch-none pt-[5px] select-none active:cursor-grabbing" {...handlers}>
+          {/* iOS grabber: 36 × 5. */}
+          <div className="mx-auto mb-2 h-[5px] w-9 rounded-full bg-grabber" />
           <Header title={title} eyebrow={eyebrow} onClose={onClose} hideClose={hideClose} action={action} />
         </div>
         <div
@@ -365,7 +372,7 @@ const DIALOG_W = { sm: 'max-w-[380px]', md: 'max-w-[500px]', lg: 'max-w-[1000px]
 function Dialog({ onClose, title, eyebrow, children, footer, action, size = 'md', boxRef, glass, hideClose, bodyClassName }: Inner) {
   return (
     <div className="fixed inset-0 z-[var(--z-sheet)] flex items-center justify-center p-6">
-      <motion.div className="absolute inset-0 bg-black/45 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
+      <motion.div className="absolute inset-0 bg-scrim backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
       <motion.div
         ref={boxRef}
         role="dialog"

@@ -117,6 +117,29 @@ public class NativePlugin extends Plugin {
         });
     }
 
+    /** Text onto the system clipboard (the WebView may refuse navigator.clipboard.writeText). */
+    @PluginMethod
+    public void copyText(PluginCall call) {
+        String text = call.getString("text");
+        if (text == null) {
+            call.reject("No text");
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm == null) {
+                    call.reject("No clipboard");
+                    return;
+                }
+                cm.setPrimaryClip(ClipData.newPlainText("Terminal", text));
+                call.resolve();
+            } catch (Exception e) {
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
     /** An image the keyboard inserted (Gboard clipboard chip, stickers, GIFs) into the page. */
     static void pasted(JSObject image) {
         if (instance != null && image != null) instance.notifyListeners("paste", image, true);
