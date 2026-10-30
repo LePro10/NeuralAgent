@@ -3,7 +3,7 @@ import type { Session } from "@neuralagent/protocol";
 import { Button, Empty, IconButton, List, Page, Row, StatusDot, toast } from "@neuralagent/ui";
 import { ArrowUpRight, Bot, Download, RotateCw, Square } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { panes } from "../lib/layout";
+import { frontTabFor } from "../lib/layout";
 import { STATUS, since } from "../lib/status";
 import { useCatalogSheet, useClient, useDaemon, useUi } from "../lib/store";
 import { GlyphTile } from "./AgentGlyph";
@@ -38,11 +38,8 @@ export function AgentsDashboard() {
 
   /** Switch to the session's workspace and bring its tab to the front. */
   const open = (s: Session) => {
-    const layout = state?.layouts[s.workspace_id];
-    const tab = layout?.tabs.find((t) => panes(t.root).some((p) => p.content.kind === "terminal" && p.content.session === s.id));
-    if (layout && tab && layout.active_tab !== tab.id) {
-      client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout: { ...layout, active_tab: tab.id } } }).catch(() => {});
-    }
+    const layout = frontTabFor(state?.layouts[s.workspace_id], s.id);
+    if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
     setWorkspace(s.workspace_id);
   };
   const act = (r: Parameters<typeof client.req>[0]) => client.req(r).catch((e) => toast((e as Error).message, { tone: "danger" }));

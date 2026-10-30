@@ -2,10 +2,14 @@ import { App as AgentApp, DaemonProvider, useClient, useDaemon, type Platform } 
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
 import { Avatar, Button, Callout, ConfirmButton, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
-import { Code, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Bell, Code, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Brand } from "../brand";
+import { disablePush, doneOpening, enablePush, onOpenRequest, pushState, rememberNames, startWorker, syncPush, takeLaunchRequest, type PushState } from "./push";
 import { account, deviceName, lastHost, link, REDIRECT, useLink } from "./session";
+
+startWorker();
+const launch = takeLaunchRequest();
 
 /** Centered column for everything before a computer is open. */
 function Screen({ children }: { children: React.ReactNode }) {
@@ -24,7 +28,7 @@ export function Remote() {
   const [pair, setPair] = useState(() => (location.pathname.startsWith("/app/pair") ? parsePairLink(location.hash) : null));
   const [signInError, setSignInError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(() => new URLSearchParams(location.search).has("state"));
-  const [host, setHost] = useState<string | null>(() => lastHost.get());
+  const [host, setHost] = useState<string | null>(() => launch?.host ?? lastHost.get());
 
   // Back from Google/GitHub with ?code&state.
   useEffect(() => {
@@ -41,6 +45,20 @@ export function Remote() {
     link.start();
     return () => link.stop();
   }, []);
+
+  // The relay pushes only to devices nobody is looking at.
+  useEffect(() => {
+    const seen = () => link.setVisible(document.visibilityState === "visible");
+    seen();
+    document.addEventListener("visibilitychange", seen);
+    return () => document.removeEventListener("visibilitychange", seen);
+  }, []);
+  useEffect(() => {
+    if (l.status === "online") void syncPush();
+  }, [l.status]);
+
+  // A notification for another computer switches to it; Connected then opens the agent.
+  useEffect(() => onOpenRequest((o) => o.host && choose(o.host)), []);
 
   const choose = (id: string | null) => {
     lastHost.set(id);
@@ -274,6 +292,16 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
     return () => document.removeEventListener("visibilitychange", wake);
   }, [client]);
 
+  // Agent names for notification titles, kept on this device only.
+  useEffect(() => {
+    let last = "";
+    const off = client.subscribe(() => {
+      const names = JSON.stringify(Object.fromEntries(Object.values(client.state?.sessions ?? {}).map((s) => [s.id, s.title])));
+      if (names !== last) rememberNames((last = names));
+    });
+    return () => void off();
+  }, [client]);
+
   const platform = useMemo<Platform>(
     () => ({
       kind: "web",
@@ -285,6 +313,12 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
         if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "/logo.png" });
       },
       account: { label: "This device", render: () => <DevicePage host={host} onSwitch={onSwitch} /> },
+      onOpenSession: (cb) =>
+        onOpenRequest((o) => {
+          if (o.host && o.host !== host.id) return;
+          cb(o.sid);
+          doneOpening(o.sid);
+        }),
     }),
     [host, onSwitch, connect],
   );
@@ -327,6 +361,7 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
           />
           <Row Icon={RefreshCw} title="Switch computer" onClick={onSwitch} />
         </List>
+        <Notifications />
         <List label="Emergency" footer="Cuts every phone and browser off this computer. Turn it back on at the computer.">
           <Row
             Icon={PlugZap}
@@ -350,5 +385,41 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
         </List>
       </div>
     </Page>
+  );
+}
+
+const PUSH_NOTE: Record<PushState, string> = {
+  on: "A notification when an agent finishes, fails or needs your input while this page is closed.",
+  off: "Get a notification when an agent finishes, fails or needs your input while this page is closed.",
+  denied: "Notifications are blocked for this site. Allow them in the browser's site settings.",
+  install: "On iPhone and iPad, notifications only work after Share → Add to Home Screen. Open NeuralAgent from the Home Screen, then turn them on here.",
+  unsupported: "This browser cannot show notifications from a closed page.",
+};
+
+function Notifications() {
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => void pushState().then(setState), []);
+  if (!state) return null;
+  const change = (f: () => Promise<PushState>) => {
+    setBusy(true);
+    f().then(setState, fail).finally(() => setBusy(false));
+  };
+  return (
+    <List label="Notifications" footer={PUSH_NOTE[state]}>
+      <Row
+        Icon={Bell}
+        title="Agent notifications"
+        trailing={
+          state === "on" ? (
+            <Button size="sm" variant="glass" busy={busy} onClick={() => change(disablePush)}>Turn off</Button>
+          ) : state === "off" ? (
+            <Button size="sm" variant="tint" busy={busy} onClick={() => change(enablePush)}>Turn on</Button>
+          ) : (
+            <Pill tone="warning">{state === "install" ? "Add to Home Screen" : state === "denied" ? "Blocked" : "Not available"}</Pill>
+          )
+        }
+      />
+    </List>
   );
 }

@@ -1,7 +1,7 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
 import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
@@ -12,6 +12,7 @@ import { McpPage } from "./components/McpPage";
 import { RemotePage } from "./components/RemotePage";
 import { SettingsPage } from "./components/SettingsPage";
 import { WorkspaceView } from "./components/WorkspaceView";
+import { frontTabFor } from "./lib/layout";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 
@@ -51,6 +52,18 @@ export function App() {
     });
     return () => void off();
   }, [client, platform]);
+
+  // A tapped notification (web push, Android) opens its agent once the state knows it.
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => platform.onOpenSession?.(setOpening), [platform]);
+  useEffect(() => {
+    const s = opening ? state?.sessions[opening] : undefined;
+    if (!s) return;
+    setOpening(null);
+    const layout = frontTabFor(state?.layouts[s.workspace_id], s.id);
+    if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
+    setWorkspace(s.workspace_id);
+  }, [opening, state, client, setWorkspace]);
 
   // Menu bar / tray: how many agents run, work, and wait for you.
   const agentStatuses = useMemo(() => {

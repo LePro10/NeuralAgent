@@ -24,6 +24,8 @@ export interface Platform {
   onTrayRemote?: (cb: () => void) => () => void;
   /** Remote clients: their own account page (which computer, devices, sign out) in place of the desktop's Remote page. */
   account?: { label: string; render: () => ReactNode };
+  /** A notification was tapped: show this agent. Requests may arrive before the state has loaded. */
+  onOpenSession?: (cb: (sid: string) => void) => () => void;
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
 }

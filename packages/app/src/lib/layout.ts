@@ -128,3 +128,9 @@ export function gridOf(contents: PaneContent[]): LayoutNode {
   }
   return rowNodes.length === 1 ? rowNodes[0]! : { type: "split", id: newId(), dir: "column", sizes: rowNodes.map(() => 1 / rowNodes.length), children: rowNodes };
 }
+
+/** The layout with the tab that shows `sid` in front, or null when it is already in front (or not shown). */
+export function frontTabFor(l: WorkspaceLayout | undefined, sid: string): WorkspaceLayout | null {
+  const tab = l?.tabs.find((t) => panes(t.root).some((p) => p.content.kind === "terminal" && p.content.session === sid));
+  return l && tab && l.active_tab !== tab.id ? { ...l, active_tab: tab.id } : null;
+}

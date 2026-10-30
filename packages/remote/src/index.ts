@@ -367,6 +367,8 @@ export class RelayLink {
   private stopped = false;
   private opening = false;
   private visible = true;
+  /** Another tab of this browser took the connection over; wait until this one is looked at. */
+  private elsewhere = false;
   private ready: Promise<void> = Promise.resolve();
   private markReady: () => void = () => {};
 
@@ -417,6 +419,7 @@ export class RelayLink {
     }
     if (this.stopped) return;
     if (!this.account.signedIn) return this.set("signed_out");
+    if (this.elsewhere) return this.set("offline", "NeuralAgent is open in another tab or window.");
     if (this.status !== "waiting" && this.status !== "blocked") this.set("offline", why);
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.connect(), this.backoff);
@@ -515,6 +518,8 @@ export class RelayLink {
         if (reason === "sign in again") this.account.dropAccess();
         else if (reason.includes("signed out") || reason.includes("deleted")) void this.account.forget();
         else if (reason.includes("blocked")) this.set("blocked", "This account is blocked.");
+        // Tabs share the device: do not fight over the one connection.
+        else if (reason.includes("elsewhere")) this.elsewhere = true;
         break;
       }
     }
@@ -524,6 +529,11 @@ export class RelayLink {
   setVisible(v: boolean) {
     if (this.visible === v) return;
     this.visible = v;
+    if (v && this.elsewhere) {
+      this.elsewhere = false;
+      this.backoff = 1000;
+      this.start();
+    }
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ t: "visible", v }));
   }
 
