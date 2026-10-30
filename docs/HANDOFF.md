@@ -15,14 +15,16 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   deployed with 0.3.0. GitHub Actions minutes for the private repo were used up (macOS = 10×);
   workaround used: repo made public for the release run, then private again (gitleaks scan of
   the full history was clean). The owner's Mac still runs 0.2.1 and tests the auto-update.
-- After 0.3.0, on main, **not released or deployed** (owner wants to say when): desktop sidebar
-  collapses vertically again (owner prefers it), terminal repaints from the daemon's screen after
-  a resize (ghosts of Claude Code's frame), website changelog page redesign. See `[Unreleased]`.
+- **0.3.1** released, published and deployed 2026-10-30 (same public-for-the-run workaround,
+  repo private again): sidebar collapses vertically again, update pill above the account,
+  avatar opens Settings, Remote + MCP inside Settings (D47), quiet agent tiles and one global
+  Chat/Terminal switch (D46), accent/theme "ground" gradients behind every page, terminal
+  repaint after resize, collapsible website changelog.
 - Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
 ## Next
-1. Next release (0.3.1) when the owner says so. Actions minutes reset monthly; for a release
+1. Next release when the owner says so. Actions minutes reset monthly; for a release
    run without minutes, the owner agreed to make the repo public just for the run (scan first).
 2. Owner checks on real devices (STATUS checklist), then M10 final report.
 3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, Android
