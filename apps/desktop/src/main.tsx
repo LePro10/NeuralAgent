@@ -1,4 +1,4 @@
-import { App, DaemonProvider, type ChangelogEntry, type Platform, type ServiceSwitch, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
+import { App, DaemonProvider, storedZoom, type ChangelogEntry, type Platform, type ServiceSwitch, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { getVersion } from "@tauri-apps/api/app";
@@ -75,6 +75,8 @@ const platform: Platform = {
     return new File([bytes], "screenshot.png", { type: "image/png" });
   },
   // Tauri swallows OS file drops; it hands over local paths (the host is this machine).
+  // Interface size (Settings → Appearance, ⌘+/⌘−/⌘0): the web view's own zoom, nothing else scales.
+  zoom: (scale) => getCurrentWebview().setZoom(scale),
   onFileDrop: (cb) => {
     const off = getCurrentWebview().onDragDropEvent((e) => {
       if (e.payload.type !== "drop") return;
@@ -179,10 +181,16 @@ const notice = (topic: string, data: unknown) => void client.req({ m: "host_noti
 void listen<VoiceStatus>("voice", (e) => notice("voice", e.payload));
 void listen<{ done: number; total: number | null }>("update-progress", (e) => notice("update", e.payload));
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <DaemonProvider client={client} platform={platform}>
-      <App />
-    </DaemonProvider>
-  </StrictMode>,
+// The stored interface size goes on before the first render, so the window never jumps (at most 150 ms wait).
+const zoom = storedZoom();
+const zoomed = zoom === 1 ? Promise.resolve() : Promise.race([Promise.resolve(platform.zoom!(zoom)).catch(() => {}), new Promise((r) => setTimeout(r, 150))]);
+
+void zoomed.then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <DaemonProvider client={client} platform={platform}>
+        <App />
+      </DaemonProvider>
+    </StrictMode>,
+  ),
 );

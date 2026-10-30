@@ -15,6 +15,9 @@ const platform: Platform = {
   connect: () => webSocketTransport(`ws://127.0.0.1:${q.get("port")}/ws?token=${q.get("token")}`),
   openExternal: (url) => void window.open(url, "_blank"),
   focused: () => document.hasFocus(),
+  // The real interface size is the native web view's zoom; here the setting and shortcuts only run
+  // (screenshots emulate a size with a smaller viewport at a higher device pixel ratio).
+  zoom: () => {},
 };
 
 const fakeChangelog = async (): Promise<ChangelogEntry[]> => {

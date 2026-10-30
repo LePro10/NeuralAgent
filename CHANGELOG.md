@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### New
+- Interface size on the desktop: make text and controls bigger or smaller in Settings → Appearance (80% to 150%), or with ⌘+ and ⌘− (Ctrl on Windows and Linux), ⌘0 for 100%, ⌘ with the scroll wheel, or a pinch. The app remembers the size and opens with it.
+
 ### Improved
 - Settings looks like the rest of the app: the same large title, background light and widths, with the section list on the left and the chosen section on the right. Remote access and MCP servers now sit inside it in the same style.
 - The closed sidebar opens sooner when you rest the pointer on it, and stays closed when you just move across it.

@@ -51,6 +51,11 @@ export interface Platform {
    * as local paths with the drop position in CSS pixels.
    */
   onFileDrop?: (cb: (drop: { paths: string[]; x: number; y: number }) => void) => () => void;
+  /**
+   * Desktop: scale the whole window's web view (interface size, 1 = 100%). Present only where the
+   * app owns zoom; browsers keep their own page zoom (lib/zoom.ts).
+   */
+  zoom?: (scale: number) => Promise<void> | void;
 }
 
 export interface UpdateInfo {

@@ -19,6 +19,7 @@ import { FolderBrowserSheet, pickHostFolder } from "./components/FolderBrowser";
 import { NeuralPage } from "./components/NeuralPage";
 import { SwarmPage } from "./components/SwarmPage";
 import { WorkspaceView } from "./components/WorkspaceView";
+import { ZoomControl } from "./components/ZoomControl";
 import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
@@ -376,6 +377,7 @@ export function App() {
       {state && <FolderBrowserSheet />}
       <UpdateDialog />
       <Toaster />
+      <ZoomControl />
     </AppShell>
   );
 }

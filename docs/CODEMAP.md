@@ -209,6 +209,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **VoiceHud.tsx** (24) — `VoiceHud()`
 - **WorkspaceView.tsx** (319) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
 - **WorkspacesPage.tsx** (51) — Phones: the "Workspaces" tab — every project folder as a row (status at a glance), and Add workspace. · `WorkspacesPage()`
+- **ZoomControl.tsx** (130) — Desktop interface size: applies the setting to the web view, ⌘/Ctrl +/−/0, ⌘/Ctrl + wheel and pinch, the "110%" display · `ZoomControl()`
 
 ## packages/app/src/components/claude/
 - **ClaudeView.tsx** (251) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
@@ -260,6 +261,8 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **updates.ts** (239) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
 - **voice.ts** (49) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
 - **worktree.ts** (9) — Extra `session_start` fields: agents (not shells) in a git workspace get their own worktree when that is swit… · `useWorktreeStart()`
+- **zoom.test.ts** (35)
+- **zoom.ts** (62) — Interface size (desktop web view zoom), per device · `ZOOM_STEPS, clampZoom(), stepZoom(), zoomLabel(), storedZoom(), useZoom, zoomKey()`
 
 ## packages/crypto/src/
 - **index.test.ts** (107)

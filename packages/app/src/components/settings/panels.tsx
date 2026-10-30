@@ -10,6 +10,7 @@ import { setCallRoute, useBindCallAudio, useCallRoute, useCanPickRoute, type Cal
 import { useClient, useDaemon, usePlatform } from "../../lib/store";
 import { ACCENTS, accentOf, APPEARANCES, resolvedAppearance, SCHEMES, useTheme } from "../../lib/theme";
 import { openUpdateDialog, useUpdates } from "../../lib/updates";
+import { useZoom, zoomLabel, ZOOM_STEPS } from "../../lib/zoom";
 import { BrandMark } from "../BrandMark";
 import { CHANGELOG_URL } from "../ReleaseNotes";
 
@@ -67,6 +68,7 @@ export function AppearancePanel() {
   const { scheme, accent, appearance, setScheme, setAccent, setAppearance } = useTheme();
   const mode = appearance ?? "system";
   const own = accentOf(scheme, null);
+  const zoomable = !!usePlatform().zoom;
   return (
     <div className="flex flex-col gap-7">
       <section>
@@ -175,7 +177,40 @@ export function AppearancePanel() {
         </div>
         <p className="mt-2 px-4 text-footnote text-dim">Saved on this device only.</p>
       </section>
+
+      {zoomable && <InterfaceSize />}
     </div>
+  );
+}
+
+/** Desktop: how big everything is drawn (the window's zoom), with the shortcuts that change it. */
+function InterfaceSize() {
+  const { scale, setScale } = useZoom();
+  const mod = navigator.userAgent.includes("Mac") ? "⌘" : "Ctrl ";
+  return (
+    <section>
+      <div className="mb-2 flex min-h-6 items-center justify-between px-4">
+        <span className="text-footnote text-dim uppercase">Interface size</span>
+        {scale !== 1 && (
+          <Button size="xs" variant="quiet" onClick={() => setScale(1)}>
+            Reset to 100%
+          </Button>
+        )}
+      </div>
+      <div className="surface rounded-list p-3">
+        <Segmented
+          className="w-full"
+          label="Interface size"
+          value={String(scale)}
+          onChange={(v) => setScale(Number(v))}
+          options={ZOOM_STEPS.map((z) => ({ value: String(z), label: zoomLabel(z) }))}
+        />
+      </div>
+      <p className="mt-2 px-4 text-footnote text-dim">
+        Makes text and controls bigger or smaller in this window, on this computer only. Shortcuts: {mod}+ and {mod}−, {mod}0
+        for 100%, {mod.trim()} with the scroll wheel, or a pinch.
+      </p>
+    </section>
   );
 }
 

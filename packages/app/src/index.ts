@@ -6,3 +6,4 @@ export { VoiceHud } from "./components/VoiceHud";
 export { HostUpdateWatcher } from "./components/HostWatcher";
 export { bindCallAudio } from "./lib/callaudio";
 export type { CallAudioApi, CallRoute } from "./lib/callaudio";
+export { storedZoom } from "./lib/zoom";
