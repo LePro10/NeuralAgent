@@ -527,3 +527,21 @@ one click (no menu; sign-out lives in Remote access). The version/Update control
 account block to just above it (`Sidebar` `above` slot): a square update button in the rail that
 widens into an "Update" pill on the sidebar's spring when it opens. Rejected: no icons at all
 (rows get harder to scan) and keeping coloured tiles in a lighter tint (still decoration).
+
+## D48 — Swarm desktop: master–detail in a page header; quiet members; new swarm as a dialog (2026-10-30)
+The desktop Swarm view reused the phone list as a 384 px `Page` column, so its title rendered at
+phone size with "New swarm" floating above it, and the detail had an empty top bar while goal and
+team scrolled away with the conversation. Now the page has the shared desktop header (eyebrow,
+display title, action at the right, width 1200, `--sidebar-space`), the list in a 320 px column and
+the open swarm in one `card`: a fixed header (goal clamped to two lines, status, workspace, started +
+running time, Terminals and Stop/Remove as visible buttons instead of a "…" menu), the feed with
+the composer pinned under it, and the team as a rail on the right (`@3xl` of the card; a sideways
+chip row when narrower). Members are quiet (D46): the agent's `EngineTile` with the activity mark,
+role, "status · agent"; senders in the feed are initials on `fill-3`. The per-member rainbow
+(`MEMBER_COLORS`) is gone: colour means status only, plus the accent for messages to you and your
+own bubbles. The feed groups runs of one sender to one recipient (`lib/swarmFeed.ts`, tested).
+New swarm uses `Sheet desktop="dialog"`: it is a form you fill in once, so a centred, modal
+dialog with Cancel/Start reads better than a side panel over a busy conversation. Phones keep the
+list → pushed detail; the goal is the inline title so it stays visible at the end of the feed.
+Rejected: a colour per member in a softer tint (still decoration), and the team as a second
+scrolling row above the feed on wide windows (costs the feed height on 800 px laptops).

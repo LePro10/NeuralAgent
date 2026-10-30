@@ -29,16 +29,20 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
 - `env.mjs up|status|down [--home dir] [--port n] [--seed] [--llm] [--no-vite]`. State in
   `<home>/dev-env.json`, logs in `<home>/{daemon,vite,fake-llm}.log`. The daemon gets
   `NEURALAGENT_DEV_ORIGIN=http://127.0.0.1:<port>` (debug builds accept that one extra origin).
-- `seed.mjs base|llm|nollm|mcp|ask` (`NEURALAGENT_HOME` set): four workspaces, stand-in
+- `seed.mjs base|swarms|llm|nollm|mcp|ask` (`NEURALAGENT_HOME` set): four workspaces, stand-in
   Claude/Codex/Gemini sessions (`fake-cli.sh`) in done / needs-input / working / error states via
-  real hook events, a fake-agent swarm, MCP servers; `llm` points Neural at `fake-llm.mjs`.
+  real hook events, a fake-agent swarm, MCP servers; `llm` points Neural at `fake-llm.mjs`;
+  `swarms` adds a busy six-member swarm (`chatty-agent.mjs`, a long goal, many messages) and an
+  ended one, for the Swarm page.
 - `shot.mjs [scene] [args] [--devices] [--schemes] [--out] [--dpr] [--inset] [--status-bar]
   [--hash "&update=0.3.0"] [--fake-mic f.wav] [--engine] [--montage]`. Devices: `phone` 390×844,
   `small` 360×780, `kb` 390×450 (keyboard open), `tablet` 820×1180, `laptop` 1280×800,
   `desk` 1440×900. Phones run in Chromium with touch and a simulated 28 px Android status bar
   inset; desktop sizes in WebKit (like the macOS app). Default DPR 1 keeps images small.
 - Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Workspaces, Swarm,
-  History, Usage, MCP, Settings; pass names to limit), `call` (Call Neural with a fake mic).
+  History, Usage, MCP, Settings; pass names to limit), `call` (Call Neural with a fake mic),
+  `swarm` (every swarm state, stop confirm, a member, sending, the new-swarm form, narrow windows;
+  seed `swarms` first).
   A scene is `export default async ({ p, shot, tap, go, more, sleep, phone, light, args, req }) => …`
   where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the More
   page / sidebar / account menu. Write a new scene for a new screen instead of a one-off script.

@@ -2,7 +2,7 @@
 // sessions in different states (done, waiting for permission, working, error), a fake swarm,
 // optional MCP servers and a fake LLM for Neural. No model quota is used.
 //
-//   NEURALAGENT_HOME=/tmp/na-ui node scripts/dev/seed.mjs base|llm|nollm|mcp|ask ["question"]
+//   NEURALAGENT_HOME=/tmp/na-ui node scripts/dev/seed.mjs base|swarms|llm|nollm|mcp|ask ["question"]
 //
 // `base` is idempotent (skips when the demo workspaces exist). Ids land in <home>/seed.json.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -61,6 +61,26 @@ export async function seed(home, step = "base", { llmPort = 11499, question } = 
       });
       writeFileSync(join(home, "seed.json"), JSON.stringify({ W, S, swarm: sw.id ?? sw }, null, 2));
       console.log("seed: demo workspaces, sessions and a swarm created");
+    } else if (step === "swarms") {
+      // More swarms for the Swarm page: a busy one (six talkative members, long goal) and an ended one.
+      const ws = Object.fromEntries((c.state()?.workspaces ?? []).map((w) => [w.name, w.id]));
+      if (!ws["landing-site"]) throw new Error("run seed base first");
+      if ((c.state()?.swarms ?? []).length > 1) return console.log("seed: extra swarms already there");
+      await req("profile_save", { profile: { id: "chatty", name: "Chatty agent", engine: "custom", command: "node", args: [join(DEV, "chatty-agent.mjs")], env: { FAKE_AGENT_DAEMON: D }, icon: "bot", builtin: false } });
+      const old = await req("swarm_start", {
+        workspace_id: ws["product-docs"],
+        goal: "Write the release notes for 0.3",
+        members: ["Coordinator", "Writer"].map((role) => ({ role, profile_id: "fake" })),
+      });
+      await sleep(1500);
+      await req("swarm_stop", { swarm_id: old.id ?? old });
+      await req("swarm_start", {
+        workspace_id: ws["customer-portal-redesign-2026"],
+        goal: "Migrate the checkout form to the new design tokens, rebuild the address and payment steps, keep the old form behind a flag until review, and add regression tests for postcode validation",
+        members: ["Coordinator", "Scout", "Designer", "Builder", "Reviewer", "Tester"].map((role) => ({ role, profile_id: "chatty" })),
+      });
+      await sleep(9000);
+      console.log("seed: a busy swarm and an ended swarm created");
     } else if (step === "llm") {
       const settings = { ...c.state().settings, llm: { provider: "ollama", base_url: `http://127.0.0.1:${llmPort}/v1`, model: "fake", call_model: "" } };
       await req("settings_set", { settings });
@@ -78,7 +98,7 @@ export async function seed(home, step = "base", { llmPort = 11499, question } = 
       await req("mcp_save", { server: { id: "playwright", enabled: true, transport: { type: "stdio", command: "npx", args: ["@playwright/mcp@latest"] }, secrets: [] }, values: {} });
       console.log("seed: three MCP servers");
     } else {
-      throw new Error(`unknown seed step ${step} (base|llm|nollm|mcp|ask)`);
+      throw new Error(`unknown seed step ${step} (base|swarms|llm|nollm|mcp|ask)`);
     }
   } finally {
     c.close();

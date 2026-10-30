@@ -18,6 +18,12 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 - Settings looks like the rest of the app: the same large title, background light and widths, with the section list on the left and the chosen section on the right. Remote access and MCP servers now sit inside it in the same style.
 - The closed sidebar opens sooner when you rest the pointer on it, and stays closed when you just move across it.
 - The update button in the closed sidebar is centred exactly under the other icons and grows smoothly into the "Update" button.
+- Swarm on the desktop is redesigned: the same header as the other pages, your swarms on the left, and the open swarm on the right with its goal, status and running time, Stop and Terminals buttons, the team beside the conversation (each member with its agent and what it is doing; click one to open its terminal) and the message box at the bottom.
+- The swarm conversation is easier to read: a member's name once per run of messages, an arrow to whom it went, times on the right, messages to you highlighted, quiet initials instead of a colour per member, and a button that jumps back to the newest message when you scrolled up.
+- "New swarm" opens as a centred window on the desktop, with Cancel and Start, and each member shows the icon of its agent.
+
+### Fixed
+- Swarm: the goal and the team no longer scroll out of view in a long conversation, the "New swarm" button sits next to the title instead of floating above it, and an ended swarm without messages no longer says the team is getting ready.
 
 ## [0.3.1] - 2026-10-30
 

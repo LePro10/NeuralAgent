@@ -1,11 +1,6 @@
 // Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History):
-// plain-text previews, short relative times, day groups, swarm member colours.
-import type { SysColor } from "@neuralagent/ui";
+// plain-text previews, short relative times, day groups.
 import { useEffect, useState } from "react";
-
-/** Member colours for swarms (avatars), in team order. */
-export const MEMBER_COLORS: SysColor[] = ["blue", "green", "orange", "purple", "pink", "teal", "indigo", "yellow"];
-export const sysVar = (c: SysColor) => `var(--color-sys-${c})`;
 
 /** Markdown and terminal noise → one readable line ("**README.md** now…" → "README.md now…"). */
 export function plainText(s: string | null | undefined): string {
