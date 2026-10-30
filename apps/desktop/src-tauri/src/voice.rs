@@ -333,18 +333,45 @@ fn transcribe(stt: &Stt, samples: &[f32]) -> Result<String> {
 }
 
 /// Types into whatever app has focus (macOS asks once for Accessibility access).
+///
+/// On macOS the text is pasted (clipboard + ⌘V, the previous clipboard text is put back after):
+/// typing it as synthetic key events drops all but the first character in terminals.
 fn type_text(app: &AppHandle, text: &str) -> Result<()> {
-    use enigo::{Enigo, Keyboard, Settings};
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
     let (tx, rx) = std::sync::mpsc::channel();
     let text = text.to_string();
+    let paste = cfg!(target_os = "macos");
+    let mut clip = if paste { arboard::Clipboard::new().ok() } else { None };
+    let previous = clip.as_mut().and_then(|c| c.get_text().ok());
+    if let Some(c) = clip.as_mut() {
+        c.set_text(text.clone()).map_err(|e| anyhow!("clipboard: {e}"))?;
+    }
+    let pasting = clip.is_some();
     // Input events go through the main thread: macOS keyboard APIs require it.
     app.run_on_main_thread(move || {
         let r = Enigo::new(&Settings::default())
             .map_err(|e| anyhow!("Allow NeuralAgent under Privacy & Security → Accessibility to type for you ({e})."))
-            .and_then(|mut e| e.text(&text).map_err(|e| anyhow!("typing failed: {e}")));
+            .and_then(|mut e| {
+                if pasting {
+                    e.key(Key::Meta, Direction::Press)
+                        .and_then(|_| e.key(Key::Unicode('v'), Direction::Click))
+                        .and_then(|_| e.key(Key::Meta, Direction::Release))
+                } else {
+                    e.text(&text)
+                }
+                .map_err(|e| anyhow!("typing failed: {e}"))
+            });
         let _ = tx.send(r);
     })?;
-    rx.recv_timeout(Duration::from_secs(10)).map_err(|_| anyhow!("typing timed out"))?
+    let r = rx.recv_timeout(Duration::from_secs(10)).map_err(|_| anyhow!("typing timed out"))?;
+    if let (Some(mut c), Some(prev)) = (clip, previous) {
+        // Give the target app time to read the clipboard before restoring it.
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            let _ = c.set_text(prev);
+        });
+    }
+    r
 }
 
 /// "Hey Neural, start Claude" → "start Claude"; `None` when the text does not start with it.
