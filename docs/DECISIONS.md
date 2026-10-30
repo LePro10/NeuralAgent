@@ -278,3 +278,14 @@ first use and refused if it changes later.
 The shared app gives AppShell both its hand-made desktop sidebar and a `nav` list; the shell
 picks by its own width. Phones get Agents, the workspaces, then History/Usage/MCP/This device/
 Settings under More. Terminals on phones get a key bar for keys a phone keyboard lacks.
+
+## D34 — Push: minimum payload, only to devices nobody looks at (2026-10-30)
+
+A computer tells the relay only `{kind, sid}` when an agent finishes, fails or waits; the relay
+adds the computer id and pushes `{t:"attention", kind, host, sid}` — no names, no terminal
+text. Devices write the text themselves (the web worker keeps agent names in its own cache).
+Clients report `visible`; the relay skips devices that are connected and on screen. Web Push
+endpoints must be a known push service (Apple, Google, Mozilla, Microsoft), the VAPID key lives
+in the relay database unless set in env, and pushes are limited to 30 per account per minute.
+Android uses FCM data messages so the app builds the notification and the tap opens the agent.
+On iPhone, Web Push needs the PWA on the Home Screen (iOS 16.4+); the settings page says so.

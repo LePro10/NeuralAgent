@@ -79,7 +79,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
 | M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
 | M5 relay, accounts, pairing, E2E, remote in the daemon | done: relay, admin `/admin/`, landing, desktop side; real OAuth + mail on your list |
-| M6 web remote, phone layout, Android | web remote live at `/app` with phone layout; Android (Capacitor, push, widget, tile) next |
+| M6 web remote, phone layout, Android | web remote live at `/app` with phone layout and Web Push; Android (Capacitor, FCM, widget, tile) next |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -210,6 +210,16 @@ Open items first. Everything else keeps going locally until these are done.
   size sign-in → computer list → agent UI with a tab bar and More menu; the terminal key bar
   answers a prompt (`read` → `got-yes`); a second browser paired by QR link at desktop size sees
   the same session; "This device" page (switch computer, Disconnect remote, sign out).
+
+- Push: the remote E2E registers a browser for Web Push with a mock push service, checks no
+  push while on screen, then decrypts the push like a browser (RFC 8291), verifies the VAPID
+  JWT signature and audience, and that the payload is only kind/computer/session; unregistering
+  stops pushes; unknown push services are refused. Found and fixed: VAPID `aud` lacked the port.
+- Web push in Chromium (`/tmp/na-drive/web-push.mjs`): service worker registers, "Turn on" in
+  This device registers with the relay, a failing agent reaches the push service while the page
+  is hidden, the worker titles the notification with the agent's name, a tap (worker message)
+  and a launch URL `/app/?host&sid` both open that agent's workspace. Live relay reports FCM and
+  VAPID ready. Not yet seen: a real push from Apple/Google to a device.
 
 ## Known gaps
 

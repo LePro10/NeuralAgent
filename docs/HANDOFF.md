@@ -15,8 +15,13 @@ decisions: `DECISIONS.md`.
     (`src/remote/`, uses `@neuralagent/remote` + the shared `@neuralagent/app`).
   - `packages/remote`: RemoteAccount / RelayLink / sealed Transport (D27–D29, D32).
   - Phone layout in `packages/app` (D33).
-- Next for M6: Android app (Capacitor around the web remote, FCM push, call, widget, tile),
-  push for the web remote is not planned (iOS = PWA). Then M7 orchestrator.
+  - Push (D34): daemon sends `notify` on attention → relay `push.rs` → FCM (Android) and Web
+    Push/VAPID (browser, installed iPhone PWA). FCM service account on .96 at
+    `/etc/neuralagent/firebase-service-account.json` (uid 10001, 400), mounted by compose.
+    Web remote: `apps/web/public/app/sw.js` + `src/remote/push.ts`; tap → `/app/?host&sid`.
+  - Chromium driver for web push: `/tmp/na-drive/web-push.mjs` (mock push service).
+- Next for M6: Android app (Capacitor around the web remote, FCM, call, widget, tile).
+  Then M7 orchestrator.
 - Open small things: audit log of remote actions (M7); "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 

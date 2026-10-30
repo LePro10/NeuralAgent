@@ -9,6 +9,8 @@ services:
       - "8080:8080"
     volumes:
       - /var/lib/neuralagent:/data
+      # Firebase service account for Android pushes (owned by uid 10001, mode 400; FCM_SERVICE_ACCOUNT in relay.env).
+      - /etc/neuralagent/firebase-service-account.json:/run/secrets/fcm.json:ro
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
