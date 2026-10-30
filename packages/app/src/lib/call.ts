@@ -156,14 +156,7 @@ class Session {
   private play(d: string, rate: number) {
     const ctx = this.ctx;
     if (!ctx) return;
-    const bin = atob(d);
-    const n = bin.length >> 1;
-    const buf = ctx.createBuffer(1, n, rate);
-    const ch = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) {
-      const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
-      ch[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768;
-    }
+    const buf = pcmBuffer(ctx, d, rate);
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
@@ -186,6 +179,28 @@ class Session {
     }, secs * 1000);
     this.timers.add(t);
   }
+}
+
+/** Plays a voice preview (PCM16 base64). */
+export async function playPreview(d: string, rate: number) {
+  const ctx = new AudioContext();
+  const src = ctx.createBufferSource();
+  src.buffer = pcmBuffer(ctx, d, rate);
+  src.connect(ctx.destination);
+  src.onended = () => void ctx.close();
+  src.start();
+}
+
+function pcmBuffer(ctx: AudioContext, d: string, rate: number): AudioBuffer {
+  const bin = atob(d);
+  const n = bin.length >> 1;
+  const buf = ctx.createBuffer(1, n, rate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {
+    const v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    ch[i] = (v >= 0x8000 ? v - 0x10000 : v) / 32768;
+  }
+  return buf;
 }
 
 function b64(buf: ArrayBuffer): string {

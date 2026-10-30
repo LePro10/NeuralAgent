@@ -1,7 +1,8 @@
-import type { DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
+import type { CallPreviewAudio, CallSettings, DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
 import { Button, Callout, Field, Input, List, Meter, Page, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
 import { AudioLines, Download, Ear, Keyboard, Mic } from "lucide-react";
 import { useEffect, useState } from "react";
+import { playPreview } from "../lib/call";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
 import { HOTKEYS, megabytes, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
 
@@ -11,6 +12,7 @@ export function SettingsPage() {
     <Page title="Settings" eyebrow="NeuralAgent">
       <div className="flex flex-col gap-6 pb-8">
         {platform.kind === "desktop" && <NeuralSettings />}
+        {platform.kind === "desktop" && <CallVoice />}
         {platform.voice && <VoiceSettings voice={platform.voice} mac={!!platform.trafficLights} />}
         <GeneralSettings />
       </div>
@@ -193,6 +195,60 @@ const PROVIDERS: { value: LlmProvider; label: string; url: string; models: [stri
 ];
 
 /** Bring your own key: which model Neural uses. Keys go to the daemon and never come back. */
+// Supertonic's voice styles: five higher (0–4) and five lower (5–9), measured by pitch.
+const VOICE_KIND = [
+  { value: "high", label: "Higher" },
+  { value: "low", label: "Lower" },
+] as const;
+const VOICE_NUM = ["1", "2", "3", "4", "5"].map((n) => ({ value: n, label: n }));
+const SPEEDS = [
+  { value: "0.95", label: "Calm" },
+  { value: "1.05", label: "Normal" },
+  { value: "1.15", label: "Brisk" },
+];
+
+/** How Neural sounds in calls, with a preview. */
+function CallVoice() {
+  const client = useClient();
+  const settings = useDaemon((c) => c.state?.settings);
+  const [playing, setPlaying] = useState(false);
+  if (!settings) return null;
+  const call = settings.call;
+  const kind = call.voice < 5 ? "high" : "low";
+  const set = (patch: Partial<CallSettings>) => {
+    const next = { ...call, ...patch };
+    client.req({ m: "settings_set", p: { settings: { ...settings, call: next } } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+    void preview(next);
+  };
+  const preview = async (c: CallSettings) => {
+    setPlaying(true);
+    try {
+      const lang = navigator.language.startsWith("de") ? "de" : "en";
+      const r = (await client.req({ m: "call_preview", p: { voice: c.voice, speed: c.speed, lang } })) as CallPreviewAudio;
+      await playPreview(r.d, r.rate);
+    } catch (e) {
+      toast((e as Error).message, { tone: "danger" });
+    } finally {
+      setPlaying(false);
+    }
+  };
+  return (
+    <List label="Calls" footer="Neural listens and speaks on this computer; phones only send and play the audio.">
+      <Row
+        title="Voice"
+        trailing={
+          <div className="flex gap-2">
+            <Segmented size="sm" label="Voice pitch" value={kind} options={[...VOICE_KIND]} onChange={(k) => set({ voice: (k === "high" ? 0 : 5) + (call.voice % 5) })} />
+            <Segmented size="sm" label="Voice" value={String((call.voice % 5) + 1)} options={VOICE_NUM} onChange={(n) => set({ voice: (kind === "high" ? 0 : 5) + Number(n) - 1 })} />
+          </div>
+        }
+      />
+      <Row title="Pace" trailing={<Segmented size="sm" label="Speaking pace" value={SPEEDS.find((x) => Math.abs(Number(x.value) - call.speed) < 0.01)?.value ?? "1.05"} options={SPEEDS} onChange={(v) => set({ speed: Number(v) })} />} />
+      <Row title="Hear it" trailing={<Button size="sm" variant="tint" busy={playing} onClick={() => void preview(call)}>Play</Button>} />
+    </List>
+  );
+}
+
 function NeuralSettings() {
   const client = useClient();
   const settings = useDaemon((c) => c.state?.settings);
