@@ -11,6 +11,10 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-30
+
+See the images Claude reads, a clean start everywhere, a new Swarm view and calls that work again.
+
 ### New
 - Interface size on the desktop: make text and controls bigger or smaller in Settings → Appearance (80% to 150%), or with ⌘+ and ⌘− (Ctrl on Windows and Linux), ⌘0 for 100%, ⌘ with the scroll wheel, or a pinch. The app remembers the size and opens with it.
 - The Claude view shows the pictures Claude looks at: when it reads an image or a tool takes a screenshot, you see the picture right under the step instead of "[image]", and images you pasted show above your message. Tap one to see it full screen, zoom in (pinch, double tap or scroll wheel), copy or save it; swipe down or press Esc to close. On your phone the pictures load only when you scroll to them and come in a smaller size, so long conversations stay quick.

@@ -1,13 +1,13 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-30 by `node scripts/codemap.mjs` (420 files). Do not edit by hand; regenerate after adding,
+Generated 2026-10-30 by `node scripts/codemap.mjs` (444 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
-Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-protocol` via `cargo test`).
+Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-protocol` via `cargo test`).
 
 ## apps/android/
-- **capacitor.config.ts** (17) — The app is the web remote served by the relay (`/app`), wrapped with native push, sign-in
+- **capacitor.config.ts** (20) — The app is the web remote served by the relay (`/app`), wrapped with native push, sign-in
 
 ## apps/android/android/app/src/main/java/dev/neuralhub/neuralagent/
 - **AgentTile.java** (25) — `class AgentTile, onStartListening(), onClick()`
@@ -15,18 +15,18 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **CallAudio.java** (140) — `class CallAudio`
 - **CallService.java** (71) — `class CallService, onStartCommand(), onDestroy(), onBind()`
 - **CallTile.java** (29) — `class CallTile, onStartListening(), onClick()`
-- **MainActivity.java** (96) — `class MainActivity, onCreate(), onNewIntent(), onResume()`
-- **NativePlugin.java** (251) — `class NativePlugin, load(), callActive(), readClipboardImage(), copyText(), callRoute(), pushState(), pushToken(), dropToken(), setStatus(), pinWidget(), setNames()`
+- **MainActivity.java** (152) — `class MainActivity, onCreate(), onPageStarted(), onPageCommitVisible(), onNewIntent(), onResume()`
+- **NativePlugin.java** (265) — `class NativePlugin, load(), callActive(), readClipboardImage(), copyText(), callRoute(), pushState(), pushToken(), dropToken(), setStatus(), pinWidget(), setNames(), launchTheme()`
 - **PushService.java** (50) — `class PushService, onMessageReceived(), onNewToken()`
 - **Status.java** (92) — `class Status`
 
 ## apps/desktop/
-- **vite.config.ts** (18) — Tauri expects a fixed port and must see Rust-side errors in the terminal.
+- **vite.config.ts** (21) — Tauri expects a fixed port and must see Rust-side errors in the terminal.
 
 ## apps/desktop/src/
-- **dev-browser.tsx** (52) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
+- **dev-browser.tsx** (55) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
 - **hud.tsx** (23)
-- **main.tsx** (189)
+- **main.tsx** (197)
 
 ## apps/desktop/src-tauri/
 - **build.rs** (4)
@@ -34,7 +34,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 ## apps/desktop/src-tauri/src/
 - **daemon.rs** (165) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), ensure(), wait_gone(), stop()`
 - **hud.rs** (50) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
-- **lib.rs** (188) — `run()`
+- **lib.rs** (195) — `run()`
 - **main.rs** (7) — Prevents an extra console window on Windows in release builds.
 - **mic.rs** (129) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `struct Mic, impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
@@ -43,7 +43,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **voice.rs** (464) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/web/
-- **vite.config.ts** (62) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
+- **vite.config.ts** (65) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
 
 ## apps/web/public/
 - **install.sh** (31) — Installs or updates NeuralAgent on macOS:
@@ -72,9 +72,9 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **main.tsx** (13)
 
 ## apps/web/src/remote/
-- **Remote.tsx** (559) — `Remote()`
+- **Remote.tsx** (577) — `Remote()`
 - **main.tsx** (6)
-- **native.ts** (77) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText`
+- **native.ts** (98) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText`
 - **push.ts** (163) — Web Push for the web remote: the service worker, the subscription the relay pushes to, and · `type PushState, startWorker(), pushState(), enablePush(), disablePush(), syncPush(), takeLaunchRequest(), onOpenRequest(), doneOpening(), rememberNames()`
 - **session.ts** (56) — The web remote's account and relay link, shared by every screen. One per tab. · `ios, native, deviceName, account, link, useLink(), lastHost, REDIRECT`
 - **webUpdate.ts** (23) — The web remote (and the Android shell, which loads it from the relay) runs the build that was · `webUpdate`
@@ -99,12 +99,13 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **vectors.rs** (60) — Cross-implementation vectors. Regenerate with NA_WRITE_VECTORS=1 (only when the spec changes).
 
 ## crates/na-daemon/src/
-- **audit.rs** (124) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
+- **audit.rs** (125) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
 - **awake.rs** (109) — Keeps the computer from sleeping while agents work (setting `keep_awake`). The display may · `struct Awake`
 - **call.rs** (579) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
-- **claude_view.rs** (1399) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
-- **core.rs** (1358) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
+- **claude_view.rs** (1452) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
+- **core.rs** (1359) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
+- **cv_image.rs** (269) — Images in a Claude transcript (a `Read` of a picture, pasted images, screenshots from MCP · `const MAX_SEND, images_in(), index_of(), image_ref(), dims(), serve(), fit()`
 - **discord.rs** (200) — Discord Rich Presence (setting `discord_presence`). General shows only that NeuralAgent is in · `struct Presence, presence(), struct Discord`
 - **env.rs** (225) — The environment agents run in. · `const STRIP, struct LoginEnv, default_shell()`
 - **fsbrowse.rs** (109) — Read-only folder browsing for picking workspaces (also from the phone). · `expand(), list(), roots(), mkdir()`
@@ -114,7 +115,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **host.rs** (284) — The host as seen from remote devices (D42): voice models and update checks live in the · `struct Host`
 - **layout.rs** (265) — Split-tree helpers. Clients edit layouts freely (drag, resize, close); the daemon only needs · `const MAX_PANES, new_id(), new_tab(), grid_tab(), default_layout(), count_panes(), place_session(), clear_session(), sessions_in()`
 - **llm.rs** (343) — Chat with tool calls against the user's own model provider (BYOK): NeuralHub and other · `enum Msg, struct Call, struct Tool, struct Turn, struct Llm, impl Default for Llm, default_url(), needs_key(), struct Ask`
-- **main.rs** (208) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
+- **main.rs** (209) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
 - **mcp.rs** (289) — MCP servers managed in one place and handed to every agent at launch. · `type Secrets, secrets_path(), load_secrets(), save_secrets(), valid_id(), struct Extra, for_engine(), import()`
 - **orch.rs** (774) — Neural, the orchestrator: a conversation with the user's own model that starts, prompts, · `struct Orch, type Speech, system_prompt(), watch(), trim()`
 - **paths.rs** (79) — Where the daemon keeps its files. · `const APP_ID, struct Paths, struct DaemonInfo, write_private()`
@@ -129,8 +130,8 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **usage.rs** (634) — Token use and cost from the CLIs' own transcripts, so it covers every conversation on this · `struct Price, price(), struct Usage, claude_limits(), since_day(), today()`
 
 ## crates/na-protocol/src/
-- **claude.rs** (178) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvMessage, struct CvMeta, struct CvOption, struct CvPrompt, enum CvEvent, struct CvAttachResult, struct CvHistoryResult, struct CvCommand, struct UploadResult, struct TranscribeResult`
-- **lib.rs** (1456) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode, struct State, struct Swarm` +57
+- **claude.rs** (220) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption, struct CvPrompt, enum CvEvent, struct CvAttachResult, struct CvHistoryResult, struct CvCommand, struct UploadResult, struct TranscribeResult`
+- **lib.rs** (1465) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode, struct State, struct Swarm` +57
 
 ## crates/na-relay/src/
 - **admin.rs** (125) — Admin API (`/api/admin`): accounts whose email is in `ADMIN_EMAILS`. · `router(), struct Admin`
@@ -168,11 +169,11 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **build-web-icons.mjs** (163) — Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
 
 ## packages/app/src/
-- **App.tsx** (382) — `App()`
-- **index.ts** (9) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio`
+- **App.tsx** (392) — `App()`
+- **index.ts** (12) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote`
 
 ## packages/app/src/components/
-- **AccountRow.tsx** (32) — The user at the foot of the sidebar: photo (Google/GitHub when the relay knows it), name, email, · `AccountRow()`
+- **AccountRow.tsx** (34) — The user at the foot of the sidebar: photo (Google/GitHub when the relay knows it), name, email, · `AccountRow()`
 - **AgentCatalog.tsx** (137) — Every known agent CLI: what is installed, and a one-click install that runs visibly in a pane. · `AgentCatalog()`
 - **AgentGlyph.tsx** (36) — `AgentGlyph(), GlyphTile()`
 - **AgentsDashboard.tsx** (188) — `AgentsDashboard()`
@@ -189,31 +190,32 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **HostSettings.tsx** (307) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings()`
 - **HostWatcher.tsx** (67) — `HostUpdateWatcher()`
 - **KeyBar.tsx** (187) — `KeyBar()`
-- **LaunchScreen.tsx** (88) — Launch motion: the NeuralAgent mark assembles from its panes while the accent light blooms · `LaunchScreen()`
-- **McpPage.tsx** (249) — `McpPage()`
+- **LaunchScreen.tsx** (70) — The app's side of the launch screen (lib/launch.ts): it lifts the moment the daemon state is · `LaunchScreen(), LaunchNote()`
+- **McpPage.tsx** (243) — `McpPanel()`
 - **MorePage.tsx** (51) — Phones: the "More" tab — everything that is not a tab, as a grouped list with quiet icon tiles. · `interface MoreItem, MorePage()`
 - **NeuralPage.tsx** (423) — `NeuralPage(), useOpenSession()`
 - **Pane.tsx** (196) — `interface PaneActions, Pane()`
 - **PaneTree.tsx** (102) — `interface TreeCtx, PaneTree()`
 - **ProfileEditor.tsx** (108) — `ProfileEditor()`
 - **ReleaseNotes.tsx** (81) — Release notes from CHANGELOG.md (lib/changelog.ts): used by the update dialog and Settings → Updates. · `CHANGELOG_URL, ReleaseNotes()`
-- **RemotePage.tsx** (331) — Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePage()`
-- **SettingsPage.tsx** (246) — Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back). · `SettingsPage()`
-- **SwarmPage.tsx** (522) — `SwarmPage()`
+- **RemotePage.tsx** (330) — Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePanel()`
+- **SettingsPage.tsx** (269) — Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back). · `SettingsPage()`
+- **SwarmPage.tsx** (104) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
-- **UpdateBadge.tsx** (93) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
+- **UpdateBadge.tsx** (117) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
 - **VoiceHud.tsx** (24) — `VoiceHud()`
 - **WorkspaceView.tsx** (319) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
 - **WorkspacesPage.tsx** (51) — Phones: the "Workspaces" tab — every project folder as a row (status at a glance), and Add workspace. · `WorkspacesPage()`
-- **ZoomControl.tsx** (130) — Desktop interface size: applies the setting to the web view, ⌘/Ctrl +/−/0, ⌘/Ctrl + wheel and pinch, the "110%" display · `ZoomControl()`
+- **ZoomControl.tsx** (126) — Desktop interface size: applies the chosen size to the window's web view and handles the zoom · `ZoomControl()`
 
 ## packages/app/src/components/claude/
-- **ClaudeView.tsx** (251) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
+- **ClaudeView.tsx** (254) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
 - **Composer.tsx** (608) — The input at the bottom, shaped like Claude's: a rounded card with the text, attachments, · `Composer()`
+- **Images.tsx** (391) — Pictures in the conversation, like Claude Code desktop shows them: a rounded thumbnail under · `ImageSidContext, interface Pic, Thumb(), NoImage(), Pictures()`
 - **Markdown.tsx** (261) — A small Markdown renderer for assistant text in Claude's reading style (no HTML is ever injected). · `parseBlocks(), copyText(), CopyButton(), CodeBlock(), plainText(), Markdown`
 - **Picker.tsx** (134) — Choices in the Claude view (model, effort, permission mode, attachments): a bottom sheet on · `Picker(), PickSection(), PickRow(), PickNote()`
 - **PromptCard.tsx** (212) — A menu the CLI shows right now (permission, question, plan approval), as a card docked above · `asPermission(), parseTitle(), PromptCard()`
@@ -221,13 +223,20 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **Transcript.tsx** (315) — The conversation, laid out like Claude: user messages in a soft bubble on the right, Claude's · `type Entry, toEntries(), time, Transcript()`
 - **files.ts** (122) — Getting images from paste, drop, camera and clipboard buttons to the host's upload folder. · `MAX_SEND, typeOf, isImage, filesOf(), readClipboardFiles(), shrink(), uploadFile(), pathToken`
 - **models.ts** (74) — Claude Code's model aliases (what `/model <alias>` takes), effort levels and permission modes, with Claude's … · `MODELS, modelName(), modelAlias(), EFFORTS, DEFAULT_EFFORT, EFFORT_NOTE, effortName, interface Mode, MODES, modeOf, TERMINAL_COMMANDS, contextLimit`
-- **tools.tsx** (441) — Tool calls the way Claude Code desktop shows them: one quiet row per call — bold verb, · `type Use, type Res, CwdContext, toolTitle(), toolArg(), diffLines(), changeRows(), DiffStat(), Diff(), ToolCall(), isExplore, groupSummary(), ToolGroup()`
+- **tools.tsx** (462) — Tool calls the way Claude Code desktop shows them: one quiet row per call — bold verb, · `type Use, type Res, CwdContext, toolTitle(), toolArg(), diffLines(), changeRows(), DiffStat(), Diff(), picsOf(), ToolCall(), isExplore, groupSummary(), ToolGroup()`
 - **useConversation.ts** (39) — The conversation of a Claude session, live from the daemon (reconnects included). · `useConversation()`
 - **useDictation.ts** (75) — Speech to text: records on this device (16 kHz mono PCM), the host's local model transcribes. · `useDictation()`
 
 ## packages/app/src/components/settings/
 - **nav.ts** (9) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column). · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
-- **panels.tsx** (493) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
+- **panels.tsx** (528) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
+
+## packages/app/src/components/swarm/
+- **NewSwarm.tsx** (188) — New swarm: the form (goal, workspace, team of role + agent) in a dialog on desktop, a sheet on phones. · `NewSwarmSheet()`
+- **SwarmDetail.tsx** (254) — One swarm: header (goal, status, time, actions), conversation with composer, and the team. · `SwarmDetail()`
+- **SwarmFeed.tsx** (133) — The swarm conversation: runs of messages, day labels, your bubbles, jump to the latest. · `SwarmFeed()`
+- **SwarmList.tsx** (63) — The swarms in two groups, running first. · `SwarmGroups()`
+- **members.tsx** (92) — A swarm member as the page shows it: role, its agent, and what it is doing now. · `interface MemberView, useMembers(), MemberButton(), RoleMark()`
 
 ## packages/app/src/components/workspace/
 - **ClaudeViewSwitch.tsx** (45) — Chat or terminal for Claude agents: one app-wide choice, so it is one switch in the workspace · `useClaudeChat(), ClaudeViewSwitch()`
@@ -237,23 +246,30 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 
 ## packages/app/src/lib/
 - **agentui.test.ts** (24)
-- **agentui.ts** (100) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `MEMBER_COLORS, sysVar, plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
+- **agentui.ts** (95) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **call.ts** (220) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), interruptCall(), playPreview()`
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
 - **changelog.ts** (75) — Release notes for the update dialog and Settings → Updates. The data is CHANGELOG.md parsed by · `compareVersions(), notesBetween(), notesFromMarkdown(), type InlinePart, inlineParts()`
 - **clipboard.ts** (73) — Writing text to the clipboard everywhere the app runs: the native shell first when it offers it · `writeClipboard(), copyWithToast(), readClipboardText()`
+- **cvImages.test.ts** (51)
+- **cvImages.ts** (98) — Images in the Claude view (a `Read` of a picture, pasted images, MCP screenshots). The daemon · `REMOTE_EDGE, edgeFor, interface Loaded, b64ToBlob(), fromData, class ImageCache, fitBox(), sourceOf(), withoutSources, saveName(), kb`
 - **format.ts** (26) — 1234 -> "1.2k", 1_200_000 -> "1.2M". · `compact(), totalTokens, money(), duration()`
 - **host.ts** (138) — The host computer as seen from any client (D42). Voice models and update checks are daemon · `onHostNotice(), useHostModels(), interface HostVoice, useHostVoice(), interface HostUpdateView, useHostUpdate, checkHostUpdate(), installHostUpdate(), watchHostUpdate()`
+- **launch.ts** (128) — The launch screen: one element (#na-launch, lib/launchFrame.ts) that is on screen from the first · `type LaunchPhase, MIN_MS, GRACE_MS, launch, useLaunch()`
+- **launchFrame.test.ts** (37)
+- **launchFrame.ts** (55) — The launch screen's first frame, written into every app entry page (desktop index.html and · `MARK_PANES, MARK_PX, SCHEME_ACCENT, THEME_SCRIPT, LAUNCH_MARKUP, LAUNCH_MARKER, launchFrame()`
 - **layout.ts** (142) — Pure layout-tree edits. The client changes the tree and sends `layout_set`; the daemon only · `MAX_PANES, newId, newTab(), panes(), activeTab(), updateTab(), splitPane(), removePane(), setContent(), setSizes(), swapPanes(), order(), gridOf(), frontTabFor()`
 - **mic-worklet.js** (39) — Microphone for calls with Neural: mono, downsampled to 16 kHz, 40 ms PCM16 frames,
-- **platform.ts** (111) — What the shell around the shared app provides (Tauri window, browser/PWA, Android). · `interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
+- **platform.ts** (116) — What the shell around the shared app provides (Tauri window, browser/PWA, Android). · `interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
 - **settingsRoute.test.ts** (17)
 - **settingsRoute.ts** (28) — Which Settings section to show next. Anything can open Settings at a section (the command · `SETTINGS_PAGE, MOVED_TO_SETTINGS, useSettingsRoute, requestSettingsSection(), takeSettingsSection()`
 - **status.ts** (37) — `STATUS, mostUrgent(), since(), activityOf()`
 - **store.tsx** (82) — `DaemonProvider(), useClient(), usePlatform(), useDaemon(), useUi, useCatalogSheet, useChanges`
+- **swarmFeed.test.ts** (36)
+- **swarmFeed.ts** (58) — The swarm conversation as a readable feed: messages in runs (same sender and recipient, close · `interface FeedMessage, type FeedBlock, RUN_GAP_MS, feedBlocks(), toLabel, elapsed()`
 - **termtext.test.ts** (48) — Rows as xterm stores them: fixed width, `+` prefix = soft-wrapped continuation of the row above.
 - **termtext.ts** (71) — Plain text out of an xterm.js buffer, for copying: rows that xterm soft-wrapped are joined back · `interface TextLine, interface TextBuffer, MAX_TEXT, bufferLines(), capLines(), interface TerminalText, terminalText()`
 - **theme.ts** (139) — Themes: a colour scheme (ground, surfaces, ink; data-scheme) plus an accent (data-accent) and an · `type Scheme, type Accent, type Appearance, APPEARANCES, SCHEMES, ACCENTS, useTheme, accentOf, THEME_EVENT, resolvedAppearance(), syncThemeColor(), startTheme()`
@@ -262,7 +278,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **voice.ts** (49) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
 - **worktree.ts** (9) — Extra `session_start` fields: agents (not shells) in a git workspace get their own worktree when that is swit… · `useWorktreeStart()`
 - **zoom.test.ts** (35)
-- **zoom.ts** (62) — Interface size (desktop web view zoom), per device · `ZOOM_STEPS, clampZoom(), stepZoom(), zoomLabel(), storedZoom(), useZoom, zoomKey()`
+- **zoom.ts** (63) — Interface size (desktop): the whole window's web view is scaled (Tauri `setZoom`), like a · `ZOOM_STEPS, ZOOM_MIN, ZOOM_MAX, clampZoom(), stepZoom(), zoomLabel, storedZoom(), useZoom, zoomKey()`
 
 ## packages/crypto/src/
 - **index.test.ts** (107)
@@ -354,7 +370,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 ## packages/ui/ui/components/layout/
 - **AppShell.tsx** (101) — App frame: a floating glass sidebar on desktop, a floating liquid-glass tab · `type NavItem, interface Nav, AppShell()`
 - **Page.tsx** (166) — A scrollable screen with a large title — and the one owner of page spacing. · `interface PageProps, BackButton(), Page(), Section()`
-- **Sidebar.tsx** (214) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
+- **Sidebar.tsx** (226) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
 - **TabBar.tsx** (360) — Floating liquid-glass tab bar (phones), with the rest of the app inside it. · `interface TabItem, signalOf, TabBar()`
 - **index.ts** (5)
 
@@ -405,15 +421,17 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 
 ## scripts/dev/
 - **call-test.mjs** (137) — Synthetic call against the daemon: streams 16 kHz wavs as a microphone would (real time),
+- **chatty-agent.mjs** (79) — A talkative stand-in swarm member for UI checks (seed step `swarms`): on its brief it sends a
 - **conn-repro.mts** (210) — Repro harness for the phone's "Reconnecting to the daemon…": local relay (test login) + throwaway
 - **daemon.mjs** (128) — Talk to a test daemon from the command line (requests, sessions, Neural, usage).
 - **env.mjs** (124) — A throwaway test environment for UI work: a test daemon (own NEURALAGENT_HOME) + the desktop
 - **fake-cli.sh** (5) — Stand-in agent CLI for screenshots: ignores its args and gives a plain shell, so the daemon
 - **fake-llm.mjs** (23) — Fake OpenAI-compatible streaming chat endpoint, so Neural answers without a real model.
 - **install-local.sh** (44) — Installs a locally built NeuralAgent.app over /Applications and restarts app + daemon. · `pid()`
+- **launch.mjs** (177) — Frame series of the launch sequence (a cold start) on each surface, to check that it is one
 - **lib.mjs** (237) — Shared helpers for the dev/test tools in scripts/dev: repo paths, a safe test-daemon home, · `ROOT, DEV, sleep, DEFAULT_HOME, DEFAULT_VITE_PORT, realDataDir(), testHome(), daemonBin, relayBin, daemonInfo, readState, waitForFile(), connect(), redact` +12
 - **montage.mjs** (12) — One labelled contact sheet from many screenshots (cheaper to review than many images).
-- **seed.mjs** (93) — Demo data for screenshots in a test daemon: four workspaces, stand-in Claude/Codex/Gemini · `seed()`
+- **seed.mjs** (113) — Demo data for screenshots in a test daemon: four workspaces, stand-in Claude/Codex/Gemini · `seed()`
 - **shot.mjs** (137) — Screenshot driver for the desktop UI (dev.html) against a test daemon, at standard sizes in
 - **swarm-real.mjs** (65) — A real swarm: four Claude Code (Haiku) members on a tiny task in a throwaway git repo.
 - **web-push.mjs** (132) — Web Push in Chromium: the web remote (/app) against a local relay (test sign-in) + daemon, with
@@ -431,7 +449,10 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 
 ## scripts/dev/scenes/
 - **call.mjs** (22) — Call Neural in the browser with a fake microphone and log the call states.
+- **claude-images.mjs** (91) — Pictures in the Claude view: a Read of an image, an MCP screenshot, two reads folded into a
 - **home.mjs** (6) — The start page after load. Usage: node scripts/dev/shot.mjs home
-- **nav.mjs** (61) — Navigation chrome: the More page, Settings (with Remote access and MCP servers inside), and on
+- **nav.mjs** (66) — Navigation chrome: the More page, Settings (with Remote access and MCP servers inside), and on
 - **pages.mjs** (25) — Tour of the main pages. Seed first (env.mjs up --seed [--llm]).
+- **swarm.mjs** (135) — The Swarm page, clicked through: list, each swarm, the feed scrolled, a member, the actions,
 - **workspace.mjs** (59) — The workspace view: split panes (Gemini + Claude), the focused pane, the Chat/Terminal switch,
+- **zoom.mjs** (33) — Interface size (desktop): the setting in Settings → Appearance and the "120%" that shows while
