@@ -13,6 +13,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ### Improved
 - The desktop sidebar is short again when closed and grows to full height when you point at it.
+- The changelog on the website is easier to scan: the newest release is open, older ones are short rows you can open, and links like `/changelog#v0-3-0` open that release.
 
 ### Fixed
 - Terminals no longer keep broken leftovers of Claude Code's screen after you resize the window or a pane.
