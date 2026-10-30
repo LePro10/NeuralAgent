@@ -103,7 +103,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **awake.rs** (109) — Keeps the computer from sleeping while agents work (setting `keep_awake`). The display may · `struct Awake`
 - **call.rs** (579) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
-- **claude_view.rs** (1385) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
+- **claude_view.rs** (1399) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
 - **core.rs** (1358) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
 - **discord.rs** (200) — Discord Rich Presence (setting `discord_presence`). General shows only that NeuralAgent is in · `struct Presence, presence(), struct Discord`
 - **env.rs** (225) — The environment agents run in. · `const STRIP, struct LoginEnv, default_shell()`

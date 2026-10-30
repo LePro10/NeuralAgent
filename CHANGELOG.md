@@ -11,64 +11,57 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
-The phone round: the Android app and the phone layout should feel made for phones.
+## [0.3.0] - 2026-10-30
+
+The phone round: NeuralAgent now feels made for phones, on the desktop too.
+
+### New
+- **Light mode**: every theme comes in light and dark; Appearance follows the system or your choice.
+- **Launch animation** when the app opens, and a branded loader while it connects.
+- **Update button**: your version shows above your account, and an Update button appears as soon
+  as a new version is out, with what changed. The desktop app also asks once at start.
+- **Changelog** on the website, in the update dialog and in Settings → Updates.
+- The web remote and the Android app notice a newer web version and offer to reload.
+- **Copy from the terminal**: select and press ⌘C / Ctrl+C on computers; on phones a copy button
+  (or a long press) shows the terminal as selectable text with "Copy screen" and "Copy all".
+- **Effort** can be chosen in the Claude view (Low to Max), next to the model.
+- **Status at a glance**: a light runs around a workspace while its agents work, a pulsing dot
+  means one needs you, orange means finished, red means an error.
+- ⌘K opens a command palette on the desktop.
+- Discord shows the NeuralAgent logo and a small status badge; links to the website get proper
+  previews, and the web app has real icons.
 
 ### Improved
-- The phone app stays connected while it is open instead of reconnecting every minute or two.
-- Nothing hides under the Android status bar any more; pages respect the screen's safe areas.
-- Larger, clearer buttons and tabs on phones, with a calmer pane header.
-- The Claude view on phones looks and feels closer to Claude's own apps; menus open fully on screen.
-- The Claude view is rebuilt after Claude's own apps: answers in a reading serif, soft message
+- **Phone navigation**: five clear tabs (Neural, Agents, Workspaces, Swarm, More), large titles,
+  back buttons and swipe-back; menus open as sheets from the bottom and never get cut off.
+- Nothing hides under the status bar or the camera notch any more, also in the installed web app.
+- Bigger buttons, tabs and keys everywhere; the tab bar hides while the keyboard is open.
+- **Claude view** rebuilt after Claude's own apps: answers in a reading serif, soft message
   bubbles, copy on every message, grouped tool calls with diffs, an "Allow once / Always allow /
-  Deny" card above the input, and model, effort and permission-mode pickers (bottom sheets on
-  phones, popovers on the desktop). Effort and mode now follow the CLI reliably.
-- The Neural page has more colour: what your agents did is grouped by day as cards with each
-  agent's icon, status and time; tap one to open that agent. One chip per swarm, and a clear
-  "Set up Neural" card when no model is set.
-- Calling Neural opens a full-screen call with a timer, a mute button and a red end button.
-- Agents: a summary of who needs you, who works and who is done; full titles, plain-text
-  previews, and swipe a row to stop, restart or close an agent.
-- Swarm: a list of your swarms with a detail page per swarm (team, conversation, "send to").
-  The new-swarm sheet works with the keyboard open: pick an agent per member, swipe to remove
-  one, and the Start button stays in reach.
-- History, Usage and MCP servers are tidier: grouped lists, loading placeholders, day sections
-  in History (tap to resume), a cost-per-day chart, a bar per model and workspace, and an MCP
-  editor with Save at the top.
-- Charts, meters and sliders are readable in light mode.
-- Workspaces on phones: one agent at a time under a calm header with the branch and changed
-  files, big agent chips to switch (long-press to close or restart), all pane actions in one
-  "…" sheet, and a "+" sheet with agent tiles. The terminal key bar has bigger keys.
-- Workspaces on the desktop: a cleaner tab strip and pane header with a Chat/Terminal switch,
-  a "…" menu, and split handles you can see while dragging.
-- Settings on phones is a list with coloured icons that opens one page per topic (Appearance,
-  Neural, Calls, Voice, Workspaces, Remote, Updates, Discord, Advanced, About); on the desktop
-  the list sits beside the page. Appearance shows light and dark previews and accent swatches.
-- Removing a workspace, a device, a profile or a voice model, signing out and discarding a
-  worktree now ask in a confirmation sheet.
-- Choosing a folder, the agent catalog and the changes sheet have bigger rows, breadcrumbs,
-  search and clearer merge/discard buttons.
-- The tab bar hides while the on-screen keyboard is open, so text fields sit right above it,
-  and "Workspaces" fits fully in the tab bar.
-- The version you run is shown above your account, and an **Update** button appears there as
-  soon as a new version is out, with the changes since your version.
-- The web remote and the Android app notice a newer web version and offer to reload.
-- A changelog page on the website.
+  Deny" card above the input, and model, effort and permission-mode pickers.
+- **Neural**: colourful home with your agents' activity as cards grouped by day; tap one to open
+  it. Calling Neural opens a full-screen call with timer, mute and a centred call button.
+- **Agents**: who needs you, who works, who is done; full titles, plain-text previews, swipe to
+  stop, restart or close.
+- **Swarm**: a list with a detail page per swarm; the new-swarm sheet works with the keyboard open.
+- **Workspaces on phones**: one agent at a time under a calm header, big agent chips, all pane
+  actions in one "…" sheet, and a "+" sheet with agent tiles. On the desktop: a cleaner tab strip
+  and pane header with a Chat/Terminal switch.
+- **Settings** is a list with coloured icons and one page per topic; on the desktop the list
+  sits beside the page. Removing or signing out asks in a confirmation sheet.
+- History, Usage and MCP servers: grouped lists, loading placeholders, clearer charts.
+- The phone app stays connected while it is open and reconnects within a second or two after
+  it comes back; a small notice only shows when the connection is really gone.
 
 ### Fixed
-- Photos uploaded from a phone to the Claude view no longer fail.
-- The effort level can be chosen in the Claude view.
-- Sheets on phones are no longer cut off at the top when the keyboard opens.
-- The Agents tab says why an agent waits ("Wants to use Bash") instead of showing the raw
-  terminal menu.
-- The Claude view shows the effort the CLI really uses from the start, not a guessed "High".
-- "Scroll to latest" no longer stays up after the permission card closes.
-- The Neural feed only marks an event as waiting while the agent still waits.
+- Photos uploaded from a phone to the Claude view no longer fail; big photos are scaled down and
+  a failed one can be retried with a tap.
+- The Claude view shows the effort and mode the CLI really uses.
+- Sheets on phones are no longer cut off when the keyboard opens.
+- The Agents tab says why an agent waits ("Wants to use Bash") instead of the raw terminal menu.
+- Side panels on the desktop are no longer see-through.
 - Switching terminals often in Safari no longer leaves terminals blank.
-- The desktop sidebar no longer moves its icons when it widens on hover, so a click lands
-  where you aimed; long workspace names end in "…".
-- The update dialog shows what changes right under its heading.
-- Smaller layout fixes: the Neural agent chips line up with the feed, list headers align with
-  their buttons, and the shell tile in the new-agent sheet reads "Shell".
+- The desktop sidebar no longer moves its icons when it widens on hover; long names end in "…".
 
 ## [0.2.1] - 2026-10-30
 
