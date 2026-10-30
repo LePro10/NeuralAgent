@@ -140,6 +140,14 @@ fn spawn_detached(bin: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Waits up to 5 s until a stopped daemon no longer answers.
+pub fn wait_gone(info: &DaemonInfo) {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(5) && healthy(info.port) {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 /// Stops the daemon (and with it every agent). Used by "Quit NeuralAgent and stop agents".
 pub fn stop() -> Result<()> {
     let dir = data_dir()?;

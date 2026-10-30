@@ -4,6 +4,7 @@ import { AudioLines, Check, ChevronDown, Download, Ear, Keyboard, Mic } from "lu
 import { useEffect, useState } from "react";
 import { playPreview } from "../lib/call";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
+import type { UpdateApi, UpdateInfo } from "../lib/platform";
 import { ACCENTS, accentOf, SCHEMES, useTheme } from "../lib/theme";
 import { HOTKEYS, megabytes, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
 
@@ -17,6 +18,7 @@ export function SettingsPage() {
         {platform.kind === "desktop" && <CallVoice />}
         {platform.voice && <VoiceSettings voice={platform.voice} mac={!!platform.trafficLights} />}
         <GeneralSettings />
+        {platform.updates && <Updates api={platform.updates} />}
       </div>
     </Page>
   );
@@ -77,6 +79,70 @@ function Appearance() {
         />
       </List>
     </div>
+  );
+}
+
+/** This app's version, update check and install. Agents keep running through an update. */
+function Updates({ api }: { api: UpdateApi }) {
+  const [versions, setVersions] = useState<{ app: string; service: string } | null>(null);
+  // undefined: not checked yet; null: up to date.
+  const [found, setFound] = useState<UpdateInfo | null | undefined>(undefined);
+  const [checking, setChecking] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  useEffect(() => {
+    void api.versions().then(setVersions);
+    return api.onProgress((p) => setProgress(p.total ? p.done / p.total : 0));
+  }, [api]);
+  const check = async () => {
+    setChecking(true);
+    try {
+      setFound(await api.check());
+    } catch (e) {
+      toast(`Could not check for updates: ${String(e)}`, { tone: "danger" });
+    } finally {
+      setChecking(false);
+    }
+  };
+  const install = async () => {
+    setProgress(0);
+    try {
+      await api.install(); // restarts the app
+    } catch (e) {
+      setProgress(null);
+      toast(`Update failed: ${String(e)}`, { tone: "danger" });
+    }
+  };
+  const behind = versions && versions.service && versions.service !== versions.app;
+  return (
+    <List
+      label="Updates"
+      footer={`Agents keep running while the app updates.${behind ? ` The service still runs ${versions.service} and switches over once no agent runs.` : ""}`}
+    >
+      <Row title="Version" trailing={<span className="text-small text-dim">{versions?.app ?? "…"}</span>} />
+      {found ? (
+        <Row
+          title={`Version ${found.version} is available`}
+          trailing={
+            progress !== null ? (
+              <Meter value={progress} size="sm" variant="mono" className="w-24" label={progress >= 1 ? "Restarting" : `${Math.round(progress * 100)} %`} />
+            ) : (
+              <Button size="sm" variant="tint" onClick={() => void install()}>
+                Install and restart
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <Row
+          title={found === null ? "Up to date" : "Check for updates"}
+          trailing={
+            <Button size="sm" variant="tint" busy={checking} onClick={() => void check()}>
+              Check
+            </Button>
+          }
+        />
+      )}
+    </List>
   );
 }
 

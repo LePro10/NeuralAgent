@@ -1,6 +1,7 @@
-import { App, DaemonProvider, type Platform, type VoiceStatus } from "@neuralagent/app";
+import { App, DaemonProvider, type Platform, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -30,12 +31,16 @@ let canNotify: Promise<boolean> | null = null;
 const notifyAllowed = () =>
   (canNotify ??= isPermissionGranted().then(async (ok) => ok || (await requestPermission()) === "granted").catch(() => false));
 
+/** Version of the service we are connected to; after an app update it is the old one for a while. */
+let serviceVersion = "";
+
 const platform: Platform = {
   kind: "desktop",
   clientName: "Desktop",
   // Asks the shell every time: it restarts the daemon if it is gone and hands out the current port/token.
   connect: async () => {
-    const { url } = await invoke<{ url: string; version: string }>("daemon_connect");
+    const { url, version } = await invoke<{ url: string; version: string }>("daemon_connect");
+    serviceVersion = version;
     return webSocketTransport(url);
   },
   pickFolder: async () => {
@@ -57,6 +62,12 @@ const platform: Platform = {
     onStatus: (cb) => subscribe<VoiceStatus>("voice", cb),
     onCommand: (cb) => subscribe<string>("voice-command", cb),
   },
+  updates: {
+    versions: async () => ({ app: await getVersion(), service: serviceVersion }),
+    check: () => invoke<UpdateInfo | null>("update_check"),
+    install: () => invoke("update_install"),
+    onProgress: (cb) => subscribe<{ done: number; total: number | null }>("update-progress", cb),
+  },
 };
 
 /** `listen` resolves its unsubscribe later; hand back a plain function. */
@@ -66,6 +77,25 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 }
 
 const client = new DaemonClient(platform.connect, { kind: "desktop", name: platform.clientName });
+
+// After an app update the old service keeps the agents running. Once none runs, switch to this
+// version's service (the client reconnects by itself).
+void getVersion().then((app) => {
+  let upgrading = false;
+  client.subscribe(() => {
+    const st = client.state;
+    if (upgrading || !st || !serviceVersion || serviceVersion === app) return;
+    if (Object.values(st.sessions).some((s) => s.alive)) return;
+    upgrading = true;
+    invoke<string>("daemon_upgrade").then(
+      (v) => {
+        serviceVersion = v;
+        upgrading = false;
+      },
+      (e) => console.error("service upgrade (not retried until the app restarts)", e),
+    );
+  });
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

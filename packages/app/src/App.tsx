@@ -32,12 +32,41 @@ const USAGE = "__usage";
 const REMOTE = "__remote";
 const SETTINGS = "__settings";
 
+/** Desktop: looks for an update shortly after start and every six hours; offers each version once. */
+function useUpdateNotice() {
+  const updates = usePlatform().updates;
+  useEffect(() => {
+    if (!updates) return;
+    let offered = "";
+    const look = () =>
+      updates.check().then(
+        (u) => {
+          if (!u || u.version === offered) return;
+          offered = u.version;
+          toast(`NeuralAgent ${u.version} is ready. Agents keep running.`, {
+            actionLabel: "Install",
+            undo: () => void updates.install().catch((e) => toast(`Update failed: ${String(e)}`, { tone: "danger" })),
+            duration: 20000,
+          });
+        },
+        () => {}, // offline or no release yet: try again later
+      );
+    const first = setTimeout(look, 15_000);
+    const every = setInterval(look, 6 * 3600_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [updates]);
+}
+
 export function App() {
   const client = useClient();
   const platform = usePlatform();
   const status = useDaemon((c) => c.status);
   const state = useDaemon((c) => c.state);
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
+  useUpdateNotice();
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
   // Neural is the home screen until something else is picked.

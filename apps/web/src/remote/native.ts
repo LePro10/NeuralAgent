@@ -24,6 +24,12 @@ export const REDIRECT = "neuralagent://auth";
 
 export const signIn = (url: string) => Browser.open({ url, presentationStyle: "popover" });
 
+/** The installed APK's version. The page itself always comes fresh from the relay. */
+export const apkVersion = () => App.getInfo().then((i) => i.version);
+
+/** Outside the app, so Android downloads the file and offers to install it. */
+export const openOutside = (url: string) => Browser.open({ url });
+
 // Links that open the app: the sign-in return and pairing QR codes. Both continue in this page.
 function opened(url: string) {
   const u = new URL(url);

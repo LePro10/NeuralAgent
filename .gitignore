@@ -34,3 +34,6 @@ local.properties
 !.vscode/extensions.json
 *.log
 .claude/
+
+# Release sidecar, staged by scripts/stage-daemon.mjs
+apps/desktop/src-tauri/binaries/

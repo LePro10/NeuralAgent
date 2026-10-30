@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NeuralAgent",
-  "version": "0.1.0",
   "identifier": "dev.neuralhub.neuralagent",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -43,6 +42,14 @@
     "macOS": {
       "entitlements": "Entitlements.plist",
       "minimumSystemVersion": "12.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwMkI0MzU5REFCODU5OTgKUldTWVdiamFXVU1yTUhVVjBGNW5Oall1cTJITHlLaWIzN1pNQjZ1Z1pySlg2VjFHZndYWDhqd2cK",
+      "endpoints": [
+        "https://agent.neuralhub.dev/api/update/{{target}}/{{arch}}/{{current_version}}"
+      ]
     }
   }
 }

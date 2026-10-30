@@ -129,6 +129,11 @@ fn published(root: &Path) -> Vec<Manifest> {
     v
 }
 
+/// The newest published release that is not a pre-release (what the public downloads offer).
+fn newest_stable(root: &Path) -> ApiResult<Manifest> {
+    published(root).into_iter().find(|m| !m.version.contains('-')).ok_or_else(ApiError::not_found)
+}
+
 async fn upload(
     State(relay): State<Arc<Relay>>,
     UrlPath((version, name)): UrlPath<(String, String)>,
@@ -209,7 +214,7 @@ fn file_url(relay: &Relay, version: &str, file: &str) -> String {
 
 /// The newest release for the landing page and the phone app.
 async fn latest(State(relay): State<Arc<Relay>>) -> ApiResult<Json<serde_json::Value>> {
-    let m = published(dir(&relay)?).into_iter().next().ok_or_else(ApiError::not_found)?;
+    let m = newest_stable(dir(&relay)?)?;
     let downloads: BTreeMap<&String, String> = m.downloads.iter().map(|(k, f)| (k, file_url(&relay, &m.version, f))).collect();
     Ok(Json(serde_json::json!({ "version": m.version, "notes": m.notes, "pub_date": m.pub_date, "downloads": downloads })))
 }
@@ -241,7 +246,7 @@ async fn update(
 async fn download(State(relay): State<Arc<Relay>>, UrlPath((version, name)): UrlPath<(String, String)>) -> ApiResult<Response> {
     let root = dir(&relay)?;
     if version == "latest" {
-        let m = published(root).into_iter().next().ok_or_else(ApiError::not_found)?;
+        let m = newest_stable(root)?;
         let file = m.downloads.get(&name).ok_or_else(ApiError::not_found)?;
         return Ok(Redirect::temporary(&format!("/download/{}/{file}", m.version)).into_response());
     }
@@ -348,6 +353,8 @@ mod tests {
         let u: serde_json::Value =
             http.get(format!("{base}/api/update/darwin/aarch64/0.5.0-beta.2")).send().await.unwrap().json().await.unwrap();
         assert_eq!(u["version"], "0.6.0-beta.1");
+        let l: serde_json::Value = http.get(format!("{base}/api/releases/latest")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(l["version"], "0.5.0");
         assert_eq!(http.get(format!("{base}/download/0.2.0/app.dmg")).send().await.unwrap().status(), 404);
         std::fs::remove_dir_all(&root).ok();
     }

@@ -23,12 +23,39 @@ function Screen({ children }: { children: React.ReactNode }) {
 
 const fail = (e: unknown) => toast((e as Error).message, { tone: "danger" });
 
+/** "0.10.2" > "0.9.9"; pre-release tags are ignored (only stable APKs are offered). */
+const newer = (a: string, b: string) => {
+  const [x, y] = [a, b].map((v) => v.split("-")[0]!.split(".").map(Number));
+  for (let i = 0; i < 3; i++) if (x![i] !== y![i]) return (x![i] ?? 0) > (y![i] ?? 0);
+  return false;
+};
+
+/** The Android app offers a newer APK once per start (the relay keeps the newest release). */
+function useApkUpdate() {
+  useEffect(() => {
+    if (!native) return;
+    const latest = fetch("/api/releases/latest").then((r) => (r.ok ? (r.json() as Promise<{ version: string; downloads: Record<string, string> }>) : null));
+    void Promise.all([native.apkVersion(), latest])
+      .then(([have, l]) => {
+        const url = l?.downloads.android;
+        if (!url || !newer(l.version, have)) return;
+        toast(`NeuralAgent ${l.version} for Android is available.`, {
+          actionLabel: "Download",
+          undo: () => void native!.openOutside(url),
+          duration: 20000,
+        });
+      })
+      .catch(() => {}); // offline: next start
+  }, []);
+}
+
 export function Remote() {
   const l = useLink();
   const [pair, setPair] = useState(() => (location.pathname.startsWith("/app/pair") ? parsePairLink(location.hash) : null));
   const [signInError, setSignInError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(() => new URLSearchParams(location.search).has("state"));
   const [host, setHost] = useState<string | null>(() => launch?.host ?? lastHost.get());
+  useApkUpdate();
 
   // Back from Google/GitHub with ?code&state.
   useEffect(() => {
