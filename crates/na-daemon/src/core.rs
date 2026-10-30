@@ -52,6 +52,10 @@ struct Persisted {
     /// The conversation with Neural.
     #[serde(default)]
     orchestrator: Vec<OrchMessage>,
+    #[serde(default)]
+    swarms: Vec<Swarm>,
+    #[serde(default)]
+    swarm_messages: Vec<SwarmMessage>,
 }
 
 /// Runtime data of a live session that is not part of the shared state.
@@ -94,6 +98,7 @@ pub struct Core {
     pub audit: crate::audit::Audit,
     pub orch: crate::orch::Orch,
     pub calls: crate::call::Calls,
+    pub outbox: crate::swarm::Outbox,
 }
 
 pub struct Subscription {
@@ -119,6 +124,9 @@ impl Core {
             limits: persisted.limits,
             remote: Default::default(),
             orchestrator: OrchState { messages: persisted.orchestrator, ..Default::default() },
+            // Their agents stopped with the previous daemon.
+            swarms: persisted.swarms.into_iter().map(|w| Swarm { ended: true, ..w }).collect(),
+            swarm_messages: persisted.swarm_messages,
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -133,7 +141,7 @@ impl Core {
         }
         let host = HostInfo {
             host_id: host_id(&paths),
-            name: hostname::get().map(|h| h.to_string_lossy().into_owned()).unwrap_or_else(|_| "Computer".into()),
+            name: host_name(&hostname::get().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default()),
             os: std::env::consts::OS.into(),
             home: env.home.to_string_lossy().into_owned(),
         };
@@ -156,6 +164,7 @@ impl Core {
             audit,
             orch: Default::default(),
             calls: Default::default(),
+            outbox: Default::default(),
         })
     }
 
@@ -231,6 +240,8 @@ impl Core {
                 limits: s.limits.clone(),
                 busy_days: g.busy_days.clone(),
                 orchestrator: s.orchestrator.messages.iter().filter(|m| !m.text.is_empty()).cloned().collect(),
+                swarms: s.swarms.clone(),
+                swarm_messages: s.swarm_messages.clone(),
             })?
         };
         write_private(&self.paths.state(), &data)
@@ -248,7 +259,7 @@ impl Core {
         self.read(|s| s.sessions.get(id).cloned()).ok_or_else(|| err(ErrorCode::NotFound, "no such session"))
     }
 
-    fn update_session(&self, id: &Id, f: impl FnOnce(&mut Session)) {
+    pub(crate) fn update_session(&self, id: &Id, f: impl FnOnce(&mut Session)) {
         let updated = {
             let g = self.inner.lock();
             g.state.sessions.get(id).cloned()
@@ -282,6 +293,19 @@ impl Core {
     async fn handle_checked(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
         crate::policy::check(self, client, &req)?;
         match req {
+            Request::SwarmStart { workspace_id, goal, members } => Ok(json!(self.swarm_start(workspace_id, goal, members)?)),
+            Request::SwarmSend { swarm_id, to, text } => {
+                self.swarm_send(&swarm_id, crate::swarm::YOU, &to, &text)?;
+                Ok(Value::Null)
+            }
+            Request::SwarmStop { swarm_id } => {
+                self.swarm_stop(&swarm_id);
+                Ok(Value::Null)
+            }
+            Request::SwarmRemove { swarm_id } => {
+                self.swarm_remove(&swarm_id);
+                Ok(Value::Null)
+            }
             Request::OrchSend { text } => self.orch_send(text, None, false).map(|_| json!(null)),
             Request::OrchStop => {
                 self.orch_stop();
@@ -348,11 +372,8 @@ impl Core {
             }
             Request::SessionStart(start) => self.session_start(start).map(|s| json!(s)),
             Request::SessionStop { id } => {
-                let pty = self.pty(&id)?;
-                if let Some(l) = self.live.lock().get_mut(&id) {
-                    l.stopped = true;
-                }
-                pty.kill();
+                self.pty(&id)?;
+                self.session_kill(&id);
                 Ok(Value::Null)
             }
             Request::SessionClose { id } => {
@@ -669,7 +690,23 @@ impl Core {
         Ok(json!(ws))
     }
 
+    /// Stops the process; its exit is not an error.
+    pub(crate) fn session_kill(&self, id: &Id) {
+        let pty = {
+            let mut live = self.live.lock();
+            let Some(l) = live.get_mut(id) else { return };
+            l.stopped = true;
+            l.pty.clone()
+        };
+        pty.kill();
+    }
+
     pub fn session_start(self: &Arc<Self>, start: StartSession) -> std::result::Result<Session, ApiError> {
+        self.session_start_as(start, None)
+    }
+
+    /// `id`: chosen by the caller (a swarm knows its members before they start).
+    pub(crate) fn session_start_as(self: &Arc<Self>, start: StartSession, id: Option<Id>) -> std::result::Result<Session, ApiError> {
         let ws = self
             .read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned())
             .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
@@ -679,7 +716,7 @@ impl Core {
             Some(_) => return Err(err(ErrorCode::BadRequest, "that folder is not inside the workspace")),
             None => ws.path.clone(),
         };
-        let id = layout::new_id();
+        let id = id.unwrap_or_else(layout::new_id);
         // Its own branch and folder, so parallel agents do not edit the same files.
         let worktree = match start.worktree {
             Some(true) => {
@@ -737,11 +774,22 @@ impl Core {
         // A dev server from the previous run is gone.
         session.preview_url = None;
         let exe = std::env::current_exe().map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
-        let secrets = crate::mcp::load_secrets(&self.paths.root);
-        let mcp = self.read(|s| crate::mcp::for_engine(&profile.engine, &s.mcp, &secrets));
-        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe, &mcp.args)?;
+        let mut secrets = crate::mcp::load_secrets(&self.paths.root);
         let hook_token = crate::server::random_token();
         let port = *self.port.lock();
+        let mut servers = self.read(|s| s.mcp.clone());
+        let in_swarm = self.swarm_of(&session.id).is_some();
+        if in_swarm {
+            servers.retain(|s| s.id != crate::swarm::SERVER_ID);
+            servers.push(crate::swarm::server(&exe));
+            secrets.insert(crate::swarm::SERVER_ID.into(), crate::swarm::bridge_env(&session.id, &hook_token, port));
+        }
+        let mut mcp = crate::mcp::for_engine(&profile.engine, &servers, &secrets);
+        if in_swarm && profile.engine == "claude" {
+            // Talking to the team needs no permission prompt.
+            mcp.args.extend(["--allowedTools".into(), format!("mcp__{}", crate::swarm::SERVER_ID)]);
+        }
+        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe, &mcp.args)?;
         let mut env: Vec<(String, String)> = self.env.vars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         env.extend(
             [
@@ -932,7 +980,7 @@ impl Core {
     }
 
     /// Moves a session to `next`, keeping busy time and raising attention for done/waiting/error.
-    fn transition(&self, id: &Id, next: AgentStatus, attention: Option<String>, extra: impl FnOnce(&mut Session)) {
+    pub(crate) fn transition(&self, id: &Id, next: AgentStatus, attention: Option<String>, extra: impl FnOnce(&mut Session)) {
         let Some(cur) = self.read(|st| st.sessions.get(id).map(|s| s.status)) else { return };
         let mut busy_add = 0i64;
         if next != cur
@@ -970,6 +1018,8 @@ impl Core {
             AgentStatus::Error => Some(AttentionKind::Error),
             _ => None,
         };
+        // A swarm member's finished turn is part of the team's work; the team reports itself.
+        let kind = kind.filter(|k| *k != AttentionKind::Done || self.swarm_of(id).is_none());
         if let (Some(kind), true) = (kind, next != cur) {
             self.emit(Event::Attention { session_id: id.clone(), kind, text: attention.unwrap_or_default() });
         }
@@ -1178,7 +1228,28 @@ pub fn apply(s: &mut State, ev: &Event) {
             s.orchestrator.busy = *busy;
         }
         Event::OrchCleared => s.orchestrator.messages.clear(),
+        Event::SwarmUpsert { swarm } => match s.swarms.iter_mut().find(|w| w.id == swarm.id) {
+            Some(w) => *w = swarm.clone(),
+            None => s.swarms.push(swarm.clone()),
+        },
+        Event::SwarmRemoved { id } => {
+            s.swarms.retain(|w| &w.id != id);
+            s.swarm_messages.retain(|m| &m.swarm_id != id);
+        }
+        Event::SwarmMessage { message } => {
+            match s.swarm_messages.iter_mut().rev().find(|m| m.id == message.id) {
+                Some(m) => *m = message.clone(),
+                None => s.swarm_messages.push(message.clone()),
+            }
+            crate::swarm::trim(&mut s.swarm_messages, &message.swarm_id);
+        }
     }
+}
+
+/// `Leas-MacBook.local` → `Leas-MacBook`; at most 64 characters (what the relay accepts).
+fn host_name(raw: &str) -> String {
+    let name: String = raw.split('.').next().unwrap_or("").trim().chars().take(64).collect();
+    if name.is_empty() { "Computer".into() } else { name }
 }
 
 fn host_id(paths: &Paths) -> Id {
@@ -1210,4 +1281,14 @@ fn slug(name: &str) -> String {
     let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
     let s = s.split('-').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("-");
     if s.is_empty() { "agent".into() } else { s.chars().take(24).collect() }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn host_names_fit_the_relay() {
+        assert_eq!(super::host_name("Leas-MacBook.local"), "Leas-MacBook");
+        assert_eq!(super::host_name(""), "Computer");
+        assert_eq!(super::host_name(&"a".repeat(80)).len(), 64);
+    }
 }
