@@ -33,13 +33,20 @@ function cleanup() {
 process.on("exit", cleanup);
 process.on("unhandledRejection", (e) => {
   console.error(`FAIL: ${e instanceof Error ? e.message : e}`);
-  if (process.env.E2E_LOGS) console.error(relayLog(), daemonLog());
+  showLogs();
   process.exit(1);
 });
+
+// On failure: the warnings and errors (everything with E2E_LOGS).
+function showLogs() {
+  const pick = (l: string) => (process.env.E2E_LOGS ? l : l.split("\n").filter((x) => /WARN|ERROR|panicked/.test(x)).join("\n"));
+  console.error("relay:\n" + pick(relayLog()) + "\ndaemon:\n" + pick(daemonLog()));
+}
 
 const ok = (cond: unknown, what: string) => {
   if (!cond) {
     console.error(`FAIL: ${what}`);
+    showLogs();
     process.exit(1);
   }
   console.log(`ok - ${what}`);
