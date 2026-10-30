@@ -17,6 +17,11 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 - Agent icons are calm now: one quiet style instead of a colourful tile per agent, in workspaces, the "+" sheet and the agent lists. Colour is left for status: a light runs around an agent while it works, and a dot shows when it needs you, finished or failed.
 - Chat or terminal for Claude is one clear switch in the workspace bar (on phones at the end of the agent strip) instead of a switch hidden in one pane. It applies to every Claude agent and only shows when a Claude agent is in view.
 
+- Settings, the More page and the account look calmer: plain grey icons instead of colourful tiles, and Settings is grouped into clear sections.
+- Remote access and MCP servers now live in Settings instead of having their own places in the sidebar. Old links still open them.
+- Clicking your profile picture in the sidebar opens Settings straight away.
+- The version now sits above your account in the sidebar. When an update is ready, a small update button shows there and turns into an "Update" button when the sidebar opens.
+
 ### Fixed
 - Terminals no longer keep broken leftovers of Claude Code's screen after you resize the window or a pane.
 

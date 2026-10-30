@@ -514,3 +514,16 @@ It is now one `ClaudeViewSwitch` in the workspace bar (desktop, labelled "Claude
 of the agent strip (phones, icons only), shown only while a Claude agent is in view. Rejected: a
 per-pane preference (more state, and the owner asked for one global switch). Defaults unchanged:
 terminal on desktop, chat on phones.
+
+## D47 — Quiet settings rows; Remote access and MCP servers inside Settings (2026-10-30)
+Settings, the More page and Settings sub-pages use the design library's quiet row tile (glyph in
+ink on `fill-3`) instead of iOS system-colour tiles; the owner found the coloured tiles noisy
+("AI slop"). Colour stays for status (activity marks, a green dot for an online device, accent
+for an available update). Remote access and MCP servers moved from top-level sidebar/More entries
+into Settings (groups: Appearance · Neural and voice · Agents and tools · Connections · Updates,
+Advanced, About); old route ids `__remote`/`__mcp` redirect to their section
+(`lib/settingsRoute.ts`), and ⌘K reaches them directly. The account avatar opens Settings with
+one click (no menu; sign-out lives in Remote access). The version/Update control moved out of the
+account block to just above it (`Sidebar` `above` slot): a square update button in the rail that
+widens into an "Update" pill on the sidebar's spring when it opens. Rejected: no icons at all
+(rows get harder to scan) and keeping coloured tiles in a lighter tint (still decoration).

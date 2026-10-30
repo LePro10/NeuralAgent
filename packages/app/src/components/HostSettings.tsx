@@ -248,7 +248,6 @@ export function WorkspaceSettings({ hostName }: { hostName: string | null }) {
           <Row
             key={w.id}
             Icon={w.git ? FolderGit2 : Folder}
-            tile={w.approved ? "teal" : "gray"}
             title={w.name}
             detail={w.path}
             value={running ? `${running} running` : w.approved ? "Approved" : undefined}
@@ -283,9 +282,9 @@ function WorkspaceDetail({ id }: { id: string }) {
         </div>
       </List>
       <List footer="Phones, browsers and Neural may start and control agents here without asking.">
-        <Row Icon={ShieldCheck} tile="green" title="Approved" trailing={<Switch label="Approved" checked={w.approved} onChange={(approved) => void update({ approved })} />} />
-        <Row Icon={w.git ? FolderGit2 : Folder} tile="gray" title="Folder" detail={w.path} wrap />
-        {w.git && <Row Icon={GitBranch} tile="purple" title="Branch" value={w.git.branch} />}
+        <Row Icon={ShieldCheck} title="Approved" trailing={<Switch label="Approved" checked={w.approved} onChange={(approved) => void update({ approved })} />} />
+        <Row Icon={w.git ? FolderGit2 : Folder} title="Folder" detail={w.path} wrap />
+        {w.git && <Row Icon={GitBranch} title="Branch" value={w.git.branch} />}
       </List>
       <Button variant="danger" size="lg" Icon={Trash2} className="w-full" onClick={() => setAsking(true)}>
         Remove workspace

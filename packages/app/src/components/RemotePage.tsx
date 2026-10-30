@@ -10,7 +10,7 @@ export function RemotePage() {
   const remote = useDaemon((c) => c.state?.remote);
   if (!remote) return null;
   return (
-    <Page title="Remote" eyebrow="NeuralAgent">
+    <Page title="Remote access">
       <div className="flex flex-col gap-6 pb-8">{remote.status === "signed_out" ? <SignIn remote={remote} /> : <Account remote={remote} />}</div>
     </Page>
   );
@@ -126,7 +126,6 @@ function Account({ remote }: { remote: RemoteState }) {
         {approved && (
           <Row
             Icon={Smartphone}
-            tile="blue"
             title="Remote access"
             detail={remote.paused ? "Disconnected on this computer" : "Phones and browsers can reach this computer"}
             trailing={<Switch label="Remote access" checked={!remote.paused} onChange={(enabled) => void act({ m: "remote_enable", p: { enabled } })} />}
@@ -156,7 +155,7 @@ function Account({ remote }: { remote: RemoteState }) {
       {approved && <Activity />}
 
       <List label="Security" footer="Compare this code with the one shown when a phone connects for the first time.">
-        {remote.fingerprint && <Row Icon={KeyRound} tile="gray" title="This computer's key" value={<span className="font-mono">{remote.fingerprint}</span>} />}
+        {remote.fingerprint && <Row Icon={KeyRound} title="This computer's key" value={<span className="font-mono">{remote.fingerprint}</span>} />}
       </List>
       <List>
         <Row
@@ -243,9 +242,17 @@ function Devices({ devices }: { devices: RemoteDevice[] }) {
           <Row
             key={d.id}
             Icon={["macos", "windows", "linux"].includes(d.platform) ? Monitor : Smartphone}
-            tile={d.online ? "green" : "gray"}
             title={d.this ? `${d.name} (this computer)` : d.name}
-            detail={seen(d)}
+            detail={
+              d.online ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <i aria-hidden className="size-1.5 rounded-full bg-success" />
+                  Online
+                </span>
+              ) : (
+                seen(d)
+              )
+            }
             chevron={!d.this}
             onClick={
               d.this

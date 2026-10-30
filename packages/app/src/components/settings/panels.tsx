@@ -282,7 +282,6 @@ function CallVoice({ hostName }: { hostName: string | null }) {
         </div>
         <Row
           Icon={Play}
-          tile="green"
           title={playing ? "Playing…" : "Hear it"}
           onClick={() => !playing && void preview(call)}
           chevron={false}
@@ -407,7 +406,7 @@ export function NeuralPanel({ hostName }: { hostName: string | null }) {
         </div>
       </List>
       <List>
-        <Row Icon={Shield} tile="green" title={testing ? "Testing…" : "Test the connection"} onClick={() => !testing && void test()} chevron={false} />
+        <Row Icon={Shield} title={testing ? "Testing…" : "Test the connection"} onClick={() => !testing && void test()} chevron={false} />
       </List>
     </div>
   );
@@ -478,9 +477,9 @@ export function AboutPanel({ children }: { children?: ReactNode }) {
         <div className="text-subhead text-dim tabular-nums">Version {u.current || "…"}</div>
       </div>
       <List>
-        <Row Icon={ScrollText} tile="orange" title={`What's new in ${u.current || "this version"}`} onClick={() => openUpdateDialog("current")} />
-        <Row Icon={ExternalLink} tile="gray" title="Full changelog" onClick={() => platform.openExternal(CHANGELOG_URL)} />
-        <Row Icon={Globe} tile="blue" title="Website" onClick={() => platform.openExternal(site)} />
+        <Row Icon={ScrollText} title={`What's new in ${u.current || "this version"}`} onClick={() => openUpdateDialog("current")} />
+        <Row Icon={ExternalLink} title="Full changelog" onClick={() => platform.openExternal(CHANGELOG_URL)} />
+        <Row Icon={Globe} title="Website" onClick={() => platform.openExternal(site)} />
       </List>
       <List>
         <Row title="Privacy" onClick={() => platform.openExternal(`${site}/privacy`)} />

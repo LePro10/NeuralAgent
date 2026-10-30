@@ -1,10 +1,9 @@
 import type { McpServer } from "@neuralagent/protocol";
-import { Button, ConfirmSheet, Empty, Field, IconButton, IconTile, Input, List, Page, Row, Segmented, Sheet, Spinner, Switch, toast, useLayoutMode } from "@neuralagent/ui";
+import { Button, ConfirmSheet, Empty, Field, IconButton, Input, List, Page, Row, Segmented, Sheet, Spinner, Switch, toast, useLayoutMode } from "@neuralagent/ui";
 import { Download, Plug, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { joinArgs, splitArgs } from "../lib/profiles";
 import { useClient, useDaemon } from "../lib/store";
-import { Glow } from "./Glow";
 
 const NAME = /^[A-Za-z0-9_-]{1,48}$/;
 
@@ -55,13 +54,12 @@ export function McpPage() {
     </Button>
   );
   const importRow = (
-    <Row Icon={Download} tile="blue" title="Import from Claude Code & Codex" detail="Copies the servers you already use there" onClick={() => void importAll()} trailing={importing ? <Spinner size={16} /> : undefined} chevron={!importing} />
+    <Row Icon={Download} title="Import from Claude Code & Codex" detail="Copies the servers you already use there" onClick={() => void importAll()} trailing={importing ? <Spinner size={16} /> : undefined} chevron={!importing} />
   );
 
   return (
     <div className="relative h-full">
-      <Glow tint="mcp" />
-      <Page title="MCP servers" eyebrow="Tools" actions={add}>
+      <Page title="MCP servers" actions={add}>
         <div className="flex flex-col gap-7 pb-8">
           {servers.length === 0 ? (
             <>
@@ -83,7 +81,9 @@ export function McpPage() {
                 {servers.map((s) => (
                   <div key={s.id} data-lead="" className="flex items-center">
                     <button type="button" onClick={() => setEditing(s)} className="press-row flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 text-left hover:bg-fill-1" aria-label={`Edit ${s.id}`}>
-                      <IconTile Icon={Plug} color={s.enabled ? "teal" : "gray"} />
+                      <span aria-hidden className={"grid size-icon-tile shrink-0 place-items-center rounded-tile bg-fill-3 " + (s.enabled ? "text-ink" : "text-faint")}>
+                        <Plug strokeWidth={1.75} className="size-icon-sm" />
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body text-bright">{s.id}</span>
                         <span className="block truncate text-footnote text-dim">
@@ -230,7 +230,7 @@ function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDon
       </Field>
       {existing && (
         <List className="mt-2">
-          <Row Icon={Trash2} tile="red" title={<span className="text-danger">Delete server</span>} onClick={() => setConfirm(true)} chevron={false} />
+          <Row Icon={Trash2} danger title="Delete server" onClick={() => setConfirm(true)} chevron={false} />
         </List>
       )}
       <ConfirmSheet

@@ -47,12 +47,14 @@ const RAIL = 60, OPEN = 176, INSET = 8;
 // short enough to feel answered); a click never does. Leaving folds it after 240 ms.
 const INTENT_OUT = 240;
 
-export function Sidebar<T extends string>({ items, value, onChange, brand, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 600, pinned: pinnedProp, onPinnedChange, className }: {
+export function Sidebar<T extends string>({ items, value, onChange, brand, above, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 600, pinned: pinnedProp, onPinnedChange, className }: {
   items: SidebarItem<T>[];
   value: T;
   onChange: (id: T) => void;
   /** Collapsed mark + expanded wordmark: `{ mark, word }`. */
   brand?: { mark: ReactNode; word?: ReactNode; onClick?: () => void };
+  /** Quiet things just above the account block, outside it (version, update). Gets `open`. */
+  above?: (open: boolean) => ReactNode;
   /** Account at the foot (avatar + name). Gets `open` to fade its text. */
   footer?: (open: boolean) => ReactNode;
   /** A settings button beside the account, shown while open. */
@@ -190,6 +192,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
             );
           })}
         </ul>
+        {above && <div className="shrink-0">{above(open)}</div>}
         {/* You: always at the foot, set apart by a hairline and a slightly deeper ground. */}
         {(footer || onSettings) && (
           <div className={cn('-mx-2 -mb-2 mt-2 flex shrink-0 items-center gap-1 border-t-hair p-2 transition-[background-color,border-color] duration-300', open ? 'border-line bg-fill-1' : 'border-transparent')}>

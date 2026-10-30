@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, CommandPalette, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
-import { Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
+import { ArrowUpCircle, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
 import { LaunchScreen } from "./components/LaunchScreen";
@@ -14,8 +14,6 @@ import { BrandMark } from "./components/BrandMark";
 import { ChangesSheet } from "./components/ChangesSheet";
 import { HistoryPage } from "./components/HistoryPage";
 import { UsagePage } from "./components/UsagePage";
-import { McpPage } from "./components/McpPage";
-import { RemotePage } from "./components/RemotePage";
 import { SettingsPage } from "./components/SettingsPage";
 import { FolderBrowserSheet, pickHostFolder } from "./components/FolderBrowser";
 import { NeuralPage } from "./components/NeuralPage";
@@ -26,6 +24,7 @@ import { endCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 import { useUpdateWatch } from "./lib/updates";
+import { MOVED_TO_SETTINGS, SETTINGS_PAGE, requestSettingsSection } from "./lib/settingsRoute";
 import { startTheme } from "./lib/theme";
 
 startTheme();
@@ -35,15 +34,21 @@ const NEURAL = "__neural";
 const AGENTS = "__agents";
 const SWARM = "__swarm";
 const HISTORY = "__history";
-const MCP = "__mcp";
 const USAGE = "__usage";
-const REMOTE = "__remote";
-const SETTINGS = "__settings";
+const SETTINGS = SETTINGS_PAGE;
 // Phone tabs that are pages of their own: the workspace list and everything else ("More").
 const WORKSPACES = "__workspaces";
 const MORE = "__more";
-/** Pages that live under the More tab on phones. */
-const UNDER_MORE = [HISTORY, USAGE, MCP, REMOTE, SETTINGS];
+/** Pages that live under the More tab on phones. Remote access and MCP servers are Settings sections. */
+const UNDER_MORE = [HISTORY, USAGE, SETTINGS];
+
+/** Settings sections the command palette reaches directly (⌘K). */
+const SETTINGS_SHORTCUTS = [
+  { id: "set-remote", section: "remote", label: "Remote access", Icon: Smartphone, keywords: "phone devices pair pairing account sign in" },
+  { id: "set-mcp", section: "mcp", label: "MCP servers", Icon: Plug, keywords: "tools servers mcp" },
+  { id: "set-appearance", section: "appearance", label: "Appearance", Icon: Palette, keywords: "theme dark light colour color" },
+  { id: "set-updates", section: "updates", label: "Updates", Icon: ArrowUpCircle, keywords: "version update changelog" },
+];
 
 /** Height of the strip along the window's top edge that drags the window (macOS: the title bar's place). */
 const DRAG_STRIP = 40;
@@ -110,14 +115,19 @@ export function App() {
   const neural = workspace === NEURAL || workspace === null;
   const dashboard = workspace === AGENTS;
   const swarmPage = workspace === SWARM;
-  const settingsOpen = workspace === SETTINGS;
+  // Old routes of pages that moved into Settings (remembered from an earlier run, links) open their section.
+  const moved = workspace ? MOVED_TO_SETTINGS[workspace] : undefined;
+  useEffect(() => {
+    if (!moved) return;
+    requestSettingsSection(moved);
+    setWorkspace(SETTINGS);
+  }, [moved, setWorkspace]);
+  const settingsOpen = workspace === SETTINGS || !!moved;
   const history = workspace === HISTORY;
-  const mcp = workspace === MCP;
   const usage = workspace === USAGE;
-  const remotePage = workspace === REMOTE;
   const wsList = workspace === WORKSPACES;
   const more = workspace === MORE;
-  const current = neural || dashboard || swarmPage || settingsOpen || history || mcp || usage || remotePage || wsList || more ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const current = neural || dashboard || swarmPage || settingsOpen || history || usage || wsList || more ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural, …": until the orchestrator exists, show what was heard.
   useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
@@ -212,18 +222,14 @@ export function App() {
   const allStatuses = Object.values(state?.sessions ?? {}).map((s) => s.status);
   const waiting = allStatuses.filter((s) => s === "waiting").length;
   const running = (state?.swarms ?? []).filter((w) => !w.ended).length;
+  // Remote sign-in waits for approval: shown on Settings → Remote access, the account and the More tab.
+  const remoteWaiting = platform.kind === "desktop" && state?.remote.status === "pending" ? ("waiting" as const) : undefined;
   const items: NavItem[] = [
     { id: NEURAL, label: "Neural", Icon: Sparkles, activity: state?.orchestrator.busy ? "working" : undefined },
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, activity: waiting > 0 ? "waiting" : undefined },
     { id: SWARM, label: "Swarm", Icon: Users, activity: running > 0 ? "working" : undefined },
     { id: HISTORY, label: "History", Icon: History },
-    { id: MCP, label: "MCP", Icon: Plug },
     { id: USAGE, label: "Usage", Icon: Gauge },
-    ...(platform.account
-      ? [{ id: REMOTE, label: platform.account.label, Icon: Smartphone }]
-      : platform.kind === "desktop"
-        ? [{ id: REMOTE, label: "Remote", Icon: Smartphone, activity: state?.remote.status === "pending" ? ("waiting" as const) : undefined }]
-        : []),
     ...workspaces.map((w) => {
       const statuses = Object.values(state?.sessions ?? {}).filter((s) => s.workspace_id === w.id).map((s) => s.status);
       // "Done" means finished and not looked at yet: the open workspace never shows it.
@@ -239,9 +245,9 @@ export function App() {
     { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
   ];
 
-  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : wsList ? WORKSPACES : more ? MORE : (current?.id ?? "");
+  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : usage ? USAGE : settingsOpen ? SETTINGS : wsList ? WORKSPACES : more ? MORE : (current?.id ?? "");
   // Phones: five tabs — Neural · Agents · Workspaces · Swarm · More. A workspace is pushed from the
-  // Workspaces list, History/Usage/MCP/Remote/Settings from More; back returns to the list.
+  // Workspaces list, History/Usage/Settings from More; back returns to the list.
   const byId = new Map(items.map((i) => [i.id, i]));
   const tabOf = (id: string) => (UNDER_MORE.includes(id) || id === MORE ? MORE : [NEURAL, AGENTS, SWARM].includes(id) ? id : WORKSPACES);
   const tab = tabOf(selected);
@@ -251,14 +257,12 @@ export function App() {
     byId.get(AGENTS)!,
     { id: WORKSPACES, label: "Workspaces", Icon: Folders, activity: wsActivity },
     byId.get(SWARM)!,
-    { id: MORE, label: "More", Icon: Ellipsis, activity: byId.get(REMOTE)?.activity },
+    { id: MORE, label: "More", Icon: Ellipsis, activity: remoteWaiting },
   ];
   const moreItems: MoreItem[] = [
-    { id: HISTORY, label: "History", Icon: History, tile: "indigo" },
-    { id: USAGE, label: "Usage", Icon: Gauge, tile: "green" },
-    { id: MCP, label: "MCP servers", Icon: Plug, tile: "purple" },
-    ...(byId.has(REMOTE) ? [{ id: REMOTE, label: byId.get(REMOTE)!.label, Icon: Smartphone, tile: "blue" as const, activity: byId.get(REMOTE)!.activity, value: byId.get(REMOTE)!.activity ? "Waiting" : undefined }] : []),
-    { id: SETTINGS, label: "Settings", Icon: Settings, tile: "gray", group: " " },
+    { id: HISTORY, label: "History", Icon: History },
+    { id: USAGE, label: "Usage", Icon: Gauge },
+    { id: SETTINGS, label: "Settings", Icon: Settings, group: " ", activity: remoteWaiting, value: remoteWaiting ? "Waiting" : undefined },
   ];
   // Each tab remembers where you were in it (iOS): tapping it again from elsewhere returns there,
   // tapping the active tab pops to its root.
@@ -268,6 +272,10 @@ export function App() {
     setWorkspace(id === tab ? id : (lastIn.current[id] ?? id));
   };
   const go = (id: string) => (id === ADD ? void addWorkspace() : setWorkspace(id));
+  const openSettings = (section: string) => {
+    requestSettingsSection(section);
+    setWorkspace(SETTINGS);
+  };
   // ⌘K (desktop sidebar): jump to any page or workspace, or start something.
   const [palette, setPalette] = useState(false);
   const paletteGroups: CommandGroup[] = [
@@ -279,7 +287,8 @@ export function App() {
       label: "Go to",
       items: [
         ...items.filter((i) => !i.group && i.id !== ADD).map((i) => ({ id: i.id, label: i.label, Icon: i.Icon, onSelect: () => setWorkspace(i.id) })),
-        { id: SETTINGS, label: "Settings", Icon: Settings, keywords: "appearance theme account", onSelect: () => setWorkspace(SETTINGS) },
+        { id: SETTINGS, label: "Settings", Icon: Settings, keywords: "preferences account", onSelect: () => setWorkspace(SETTINGS) },
+        ...SETTINGS_SHORTCUTS.map((s) => ({ ...s, onSelect: () => openSettings(s.section) })),
       ],
     },
     {
@@ -309,12 +318,8 @@ export function App() {
     <AgentsDashboard />
   ) : history ? (
     <HistoryPage />
-  ) : mcp ? (
-    <McpPage />
   ) : usage ? (
     <UsagePage />
-  ) : remotePage ? (
-    platform.account ? platform.account.render() : <RemotePage />
   ) : wsList ? (
     <WorkspacesPage workspaces={workspaces} onOpen={setWorkspace} onAdd={addWorkspace} />
   ) : more ? (
@@ -351,12 +356,8 @@ export function App() {
           onChange={go}
           search={() => setPalette((v) => !v)}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
-          footer={(open) => (
-            <div className="flex flex-col gap-1">
-              <UpdateBadge open={open} />
-              <AccountRow open={open} active={settingsOpen} onSettings={() => setWorkspace(SETTINGS)} onRemote={byId.has(REMOTE) ? () => setWorkspace(REMOTE) : undefined} />
-            </div>
-          )}
+          above={(open) => <UpdateBadge open={open} />}
+          footer={(open) => <AccountRow open={open} active={settingsOpen} activity={remoteWaiting} onSettings={() => setWorkspace(SETTINGS)} />}
           pinned={sidebarPinned}
           onPinnedChange={setSidebarPinned}
           // macOS draws the window buttons over the top-left corner.

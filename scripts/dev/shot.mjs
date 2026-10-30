@@ -98,18 +98,23 @@ for (const dev of devices) {
       else await desk(name).click();
       await sleep(1100);
     };
+    // Settings sections that used to be pages of their own.
+    const IN_SETTINGS = ["MCP servers", "Remote access"];
     const more = async (name) => {
+      const section = IN_SETTINGS.includes(name);
       if (phone) {
         await tap(p.locator('[role=tab][aria-label="More"]').first());
         await sleep(700);
-        await tap(p.getByText(name, { exact: true }).first());
-      } else if (name === "Settings") {
-        // Desktop: Settings sits in the account menu at the foot of the sidebar.
-        await p.locator('[aria-label$="account menu"]').first().click();
-        await sleep(400);
-        await p.getByRole("menuitem", { name: "Settings" }).first().click();
+        await tap(p.getByText(section ? "Settings" : name, { exact: true }).first());
+      } else if (name === "Settings" || section) {
+        // Desktop: the account at the foot of the sidebar opens Settings.
+        await p.locator('[aria-label$=", settings"]').first().click();
       } else {
-        await desk(name === "MCP servers" ? "MCP" : name).click();
+        await desk(name).click();
+      }
+      if (section) {
+        await sleep(900);
+        await tap(p.getByRole("button", { name: new RegExp(`^${name}`) }).first());
       }
       await sleep(1300);
     };

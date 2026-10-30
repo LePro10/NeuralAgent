@@ -34,7 +34,7 @@ is exempt; mark a deliberate exception with `token-ok`.
 
 ## 3. Navigation (phones)
 - Tabs: **Neural · Agents · Workspaces · Swarm · More**. Workspaces lists the projects; one opens
-  pushed. More holds History, Usage, MCP servers, Remote and Settings. Each tab remembers its
+  pushed. More holds History, Usage and Settings (Remote access and MCP servers are Settings sections). Each tab remembers its
   sub-page; tapping the active tab returns to its root.
 - `App.tsx` wraps the body in `<NavPage id depth back>`. A deeper page pushes in from the right,
   a shallower one pops, tab switches cross-fade. Pages with `back` get an edge swipe from the left.
@@ -46,7 +46,7 @@ is exempt; mark a deliberate exception with `token-ok`.
 ## 4. Components to reach for
 | Moment | Component |
 |---|---|
-| Settings-like content | `<List label footer>` + `<Row Icon title detail value tile="blue" chevron onClick activity>`. `IconTile` for a coloured tile anywhere. Swipe actions: `SwipeRow`. |
+| Settings-like content | `<List label footer>` + `<Row Icon title detail value chevron onClick activity>`: the quiet tile (glyph in ink on `fill-3`), as in the design library. No coloured `tile=` in Settings, More or menus (D47). Swipe actions: `SwipeRow`. |
 | Loading | `SkeletonList rows lead` (lists), `Skeleton`, `Spinner` only for small inline waits. |
 | Nothing there | `<Empty Icon title detail action>`. |
 | A choice ("which one?") | `Menu`. It is a pull-down on desktop and turns into an **ActionSheet** on phones by itself. `ActionSheet` directly for "what to do with this". |
