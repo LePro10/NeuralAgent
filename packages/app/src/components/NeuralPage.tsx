@@ -12,13 +12,17 @@ import {
   SuggestionGrid,
   ThinkingIndicator,
   UserBubble,
+  VoiceOverlay,
   cn,
   toast,
   type ComposerHandle,
   type Suggestion,
 } from "@neuralagent/ui";
-import { Activity, Bell, Check, Eraser, Play, X } from "lucide-react";
+import { Activity, Bell, Check, Eraser, Phone, Play, X } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
+import { callLevel, endCall, interruptCall, muteCall, startCall, useCall } from "../lib/call";
 import { frontTabFor } from "../lib/layout";
 import { STATUS } from "../lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "../lib/store";
@@ -33,7 +37,7 @@ const SUGGESTIONS: Suggestion[] = [
  * Neural, the orchestrator: one conversation shared by the desktop, the browser and the phone.
  * On phones this is the home screen: the conversation, the running agents below it.
  */
-export function NeuralPage({ onSettings, call }: { onSettings?: () => void; call?: React.ReactNode }) {
+export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   const client = useClient();
   const platform = usePlatform();
   const orch = useDaemon((c) => c.state?.orchestrator);
@@ -51,7 +55,13 @@ export function NeuralPage({ onSettings, call }: { onSettings?: () => void; call
     client.req({ m: "orch_send", p: { text } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
   };
   const composer = useRef<ComposerHandle>(null);
+  const call = useCall();
+  // A call that ended on its own (models missing, connection lost) says why.
+  useEffect(() => {
+    if (call.error) toast(call.error, { tone: "danger" });
+  }, [call.error]);
   if (!orch) return null;
+  const dial = () => void startCall(client);
 
   const empty = messages.length === 0;
   const waitingForWords = orch.busy && (!last || last.role !== "assistant" || last.text === "");
@@ -67,13 +77,25 @@ export function NeuralPage({ onSettings, call }: { onSettings?: () => void; call
           <div className="text-button text-bright">Neural</div>
           <div className="truncate text-meta text-dim">{orch.busy ? "Working…" : orch.ready ? "Your agents’ orchestrator" : "Needs a model"}</div>
         </div>
-        {call}
+        {orch.ready && (
+          <IconButton label="Call Neural" variant="tint" onClick={dial} className="hidden md:flex">
+            <Phone size={16} />
+          </IconButton>
+        )}
         {!empty && (
           <IconButton label="Clear conversation" variant="ghost" onClick={() => client.req({ m: "orch_clear" }).catch(() => {})}>
             <Eraser size={16} />
           </IconButton>
         )}
       </header>
+
+      {orch.ready && (
+        <div className="shrink-0 px-4 pb-2 md:hidden">
+          <Button size="lg" block Icon={Phone} onClick={dial}>
+            Call Neural
+          </Button>
+        </div>
+      )}
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 py-4">
@@ -133,6 +155,27 @@ export function NeuralPage({ onSettings, call }: { onSettings?: () => void; call
           />
         </div>
       </div>
+
+      {createPortal(
+        <AnimatePresence>
+          {call.on && (
+            <VoiceOverlay
+              className="fixed z-50"
+            label="Neural"
+            state={call.state}
+            heard={call.heard}
+            transcript={call.transcript}
+            spokenWords={call.spokenWords}
+            muted={call.muted}
+            level={callLevel}
+            onMute={() => muteCall(!call.muted)}
+            onInterrupt={interruptCall}
+            onEnd={() => endCall()}
+          />
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

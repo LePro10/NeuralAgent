@@ -1,5 +1,5 @@
 import { apply } from "./apply.ts";
-import type { ApiError, AttachResult, ClientInfo, Event, HostInfo, Request, ServerMsg, State } from "./gen/index.ts";
+import type { ApiError, AttachResult, CallEvent, ClientInfo, Event, HostInfo, Request, ServerMsg, State } from "./gen/index.ts";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -52,6 +52,9 @@ export class DaemonClient {
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private listeners = new Set<Listener>();
   private eventListeners = new Set<(ev: Event) => void>();
+  private callListeners = new Set<(ev: CallEvent) => void>();
+  /** A call is on: started again after a reconnect (the conversation lives in the daemon). */
+  private calling = false;
   private terms = new Map<string, Attached>();
   private retry = 0;
   private closed = false;
@@ -75,6 +78,24 @@ export class DaemonClient {
     this.eventListeners.add(l);
     return () => this.eventListeners.delete(l);
   }
+  onCall(l: (ev: CallEvent) => void) {
+    this.callListeners.add(l);
+    return () => this.callListeners.delete(l);
+  }
+
+  // ── calls with Neural: microphone audio in, speech out (PCM16 base64) ──
+  callStart() {
+    this.calling = true;
+    this.t?.send(JSON.stringify({ t: "call_start" }));
+  }
+  callAudio(d: string) {
+    if (this.calling) this.t?.send(JSON.stringify({ t: "call_audio", d }));
+  }
+  callEnd() {
+    this.calling = false;
+    this.t?.send(JSON.stringify({ t: "call_end" }));
+  }
+
   private notify() {
     for (const l of this.listeners) l();
   }
@@ -126,6 +147,7 @@ export class DaemonClient {
         this.retry = 0;
         // Resume where we were; the daemon answers with replayed events or a snapshot.
         t.send(JSON.stringify(this.state ? { t: "sub", since: this.seq } : { t: "sub" }));
+        if (this.calling) t.send(JSON.stringify({ t: "call_start" }));
         return;
       }
       this.onMsg(m);
@@ -199,6 +221,9 @@ export class DaemonClient {
         for (const s of a.sinks) s.reset(m.snapshot, m.cols, m.rows);
         break;
       }
+      case "call":
+        for (const l of this.callListeners) l(m.ev);
+        break;
       case "hello_ok":
         break;
     }
