@@ -375,3 +375,39 @@ swarm). Remote clients (phone, Neural) may start and steer swarms only in approv
 **StopFailure.** Claude also sends StopFailure for failed side requests (titles, suggestions)
 while the turn goes on. A session is only marked as error when the transcript's last answer is
 an API error (`isApiErrorMessage`).
+
+## D38 — Themes per device; updates and releases through the relay (2026-10-30)
+
+**Themes.** A theme is a colour scheme (`data-scheme`: ground, surfaces, ink, glass) plus an
+accent (`data-accent`, from the design library). Six schemes, each with its own accent unless
+one is picked. Stored per device in localStorage (a phone can stay black while the desktop is
+graphite); other windows (voice HUD) follow through the storage event, xterm re-themes live.
+
+**One version.** The Cargo workspace version is the app, service and relay version (Tauri reads
+it from the crate); the APK uses the same string (`scripts/set-version.mjs`). A tag `v<version>`
+starts `release.yml`.
+
+**Release storage on the relay.** CI uploads each file with a bearer token
+(`RELEASE_UPLOAD_TOKEN`, only in GitHub secrets and `relay.env`) to
+`/api/releases/<v>/files/<name>`, then publishes `manifest.json`. Unpublished uploads are
+invisible. The relay keeps the newest three published versions (the disk on .96 is small) and
+drops stale uploads. Pre-releases (`-beta.1`) reach only clients already on a pre-release and
+never the public download links.
+
+**Desktop updates.** Tauri updater with our own minisign key (private key in GitHub secrets and
+`~/.neuralagent-secrets`, password in the keychain), dynamic endpoint
+`/api/update/{target}/{arch}/{current}` (204 when up to date). The app checks 15 s after start
+and every 6 h and offers "Install" in a toast; Settings → Updates shows both versions. The
+service runs from a versioned copy (`<data>/bin/neuralagentd-<v>`), so installing replaces the
+app while agents keep running; the new app swaps the service only once no session is alive.
+Not chosen: restarting the service with the app (kills agents), a separate update helper.
+
+**Android.** The APK is a shell around the hosted web remote, so the UI is always current; the
+page compares the APK's version with `/api/releases/latest` and offers the new APK (Custom Tab →
+system installer). Same release keystore, version code `major·10⁶ + minor·10³ + patch`.
+
+**No account, no traffic** except the update check and downloads (PROMPT.md).
+
+**Signing.** macOS builds are not notarized and Windows builds not code-signed yet (needs an
+Apple Developer ID / a certificate — the user's call); the download page explains the first
+start. Updates are verified by the updater signature either way.

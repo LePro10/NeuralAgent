@@ -4,8 +4,17 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
-- M0–M8 done (small leftovers and user checks in STATUS). Next: M9 themes, auto-update,
-  releases; then M10. Details:
+- M0–M9 done (small leftovers and user checks in STATUS). Next: M10 (own ideas, polish,
+  final report). Details:
+  - Themes/updates/releases (M9, D38): `packages/app/src/lib/theme.ts`,
+    `packages/ui/ui/styles/themes.css`; relay `crates/na-relay/src/releases.rs`; desktop
+    `apps/desktop/src-tauri/src/update.rs` + `daemon_upgrade` in `lib.rs`, watcher in
+    `apps/desktop/src/main.tsx`; APK notice `useApkUpdate` in `apps/web/src/remote/Remote.tsx`;
+    `/download` page `apps/web/src/download.tsx`. Release: `node scripts/set-version.mjs X.Y.Z`,
+    commit, tag `vX.Y.Z`, push → `.github/workflows/release.yml` (scripts `stage-daemon`,
+    `release-collect`, `release-publish`). App log: `<data>/logs/app.log`.
+    Local N-1→N kit in `/tmp/na-upd` (`ctl.mjs start|status|stop`, `test.conf.json` allows
+    http, run apps from `/private/tmp/…` — the updater refuses the `/tmp` symlink).
   - Swarm (M8, D37): `crates/na-daemon/src/swarm.rs` (bridge `neuralagentd swarm-mcp`,
     `POST /swarm`, outbox, briefs), `layout::grid_tab`, Neural tool `start_swarm` in `orch.rs`;
     UI `packages/app/src/components/SwarmPage.tsx`. Tests: `scripts/e2e-swarm.ts` with
@@ -42,7 +51,7 @@ decisions: `DECISIONS.md`.
     PushService, AgentWidget, AgentTile, Status); web side `apps/web/src/remote/native.ts`.
     `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
     password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
-- Next: M9 themes/auto-update/releases, then M10.
+- Next: M10.
 - Open small things: "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 

@@ -61,6 +61,15 @@ Open items first. Everything else keeps going locally until these are done.
       Working with AI agents" within ~20 s. Or run
       `cargo test -p na-daemon shows_in_discord -- --ignored --nocapture` with Discord open.
 
+- [ ] **Install the released app** (5 min): `https://agent.neuralhub.dev/download` → your
+  platform. macOS: the app is not notarized, so open it once with right-click → *Open* (or
+  System Settings → Privacy & Security → *Open Anyway*). From then on it updates itself
+  (toast "NeuralAgent X is ready" → *Install*, or Settings → *Updates*); running agents keep
+  going. Android: install the APK from the same page over the CI one (same key).
+- [ ] **Optional — signed builds**: an Apple Developer ID ($99/year) would let CI notarize the
+  macOS app (no right-click on first start); a Windows code-signing certificate would silence
+  SmartScreen. Tell me if you get either; CI only needs the secrets.
+
 - [ ] **Try a swarm** (5 min, optional): sidebar → *Swarm* → *New swarm*, pick a project and a
   small goal, keep the default team (Claude). Watch the messages; Stop when done. Uses your
   Claude quota (pick a Haiku profile to keep it cheap).
