@@ -90,7 +90,15 @@ await until(() => fetch(`${RELAY}/api/health`).then((r) => r.ok).catch(() => fal
 ok(true, "relay running");
 
 const home = join(tmp, "home");
-daemonLog = run("neuralagentd", ["serve"], { NEURALAGENT_HOME: home, NEURALAGENT_RELAY: RELAY });
+const daemonOut = run("neuralagentd", ["serve"], { NEURALAGENT_HOME: home, NEURALAGENT_RELAY: RELAY });
+// The daemon logs to a file in its home; stderr only has what came before logging started.
+daemonLog = () => {
+  let f = "";
+  try {
+    f = readFileSync(join(home, "logs", "daemon.log"), "utf8");
+  } catch {}
+  return daemonOut() + f;
+};
 const info = await until(() => {
   try {
     return JSON.parse(readFileSync(join(home, "daemon.json"), "utf8")) as { port: number; token: string };
@@ -144,7 +152,8 @@ const { url } = await desk.req("remote_sign_in", { provider: "test", message: "e
 ok(url.startsWith(`${RELAY}/auth/test/start?`) && url.includes("code_challenge="), "sign-in URL with PKCE");
 const signin = await fetch(`${url}&email=owner@e2e.test&name=Owner`);
 const page = await signin.text();
-ok(page.includes("You're signed in"), `browser comes back to the daemon (${signin.status} ${signin.url.replace(/\?.*/, "")}: ${page.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)})`);
+await sleep(200);
+ok(page.includes("You're signed in"), `browser comes back to the daemon (${signin.status} ${remoteNow().error ?? page.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)})`);
 await until(() => remoteNow().status === "online", "daemon online");
 ok(remoteNow().account?.email === "owner@e2e.test" && remoteNow().fingerprint, "account and fingerprint in state");
 ok(!JSON.stringify(desk.seen).includes("refresh"), "no tokens in the shared state");
