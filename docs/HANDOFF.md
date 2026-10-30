@@ -4,7 +4,17 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
-- M0–M6 done (small leftovers and user checks in STATUS). Next: M7 orchestrator. Details:
+- M0–M7 done (small leftovers and user checks in STATUS). Next: M8 swarm. Details:
+  - Neural (M7, D36): `crates/na-daemon/src/{orch,llm,secrets,call}.rs`; UI
+    `packages/app/src/components/NeuralPage.tsx`, `lib/call.ts` + `lib/mic-worklet.js`,
+    Settings → Neural / Calls; Android `CallService`, `CallTile`, `MainActivity.calling`.
+    Test kit outside the repo: `/tmp/na-orch` (home with testbot profile, `orch-test.mjs "<text>"`,
+    `clear.mjs`, `last.mjs`), `/tmp/na-call` (`call-test.mjs a.wav b.wav@barge=2000 c.wav@wait=ms`,
+    env NOISE/ECHO/HOLD/OUT; `voices.mjs`), `/tmp/na-drive/call-ui.mjs` (Chromium, fake mic).
+    Start the test daemon with the key from the keychain:
+    `NEURALAGENT_HOME=/tmp/na-orch/home NEURALAGENT_LLM_KEY="$(security find-generic-password -s neuralagent-llm -w)" ./target/release/neuralagentd`.
+    Release daemons on macOS keep remote sign-in in the keychain: use the debug daemon for
+    the Android env (`/tmp/na-android/env2.sh`).
   - Relay `crates/na-relay` live on .96 (container `neuralagent-relay`, `/opt/neuralagent`,
     env `/etc/neuralagent/relay.env` — never print it). CI pushes the image to GHCR; .96 can't
     pull it until the read token exists, so deploy by hand:
@@ -25,8 +35,9 @@ decisions: `DECISIONS.md`.
     PushService, AgentWidget, AgentTile, Status); web side `apps/web/src/remote/native.ts`.
     `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
     password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
-- Next: M7 orchestrator (chat + call, audit log of remote actions), then M8 swarm.
-- Open small things: audit log of remote actions (M7); "Last seen" for a device that never
+- Next: M8 swarm, then M9 themes/auto-update/releases, M10.
+- Open small things: Neural calls a stopped agent "stopped with an error" (exit code of a
+  killed process); "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 
 ## How to run

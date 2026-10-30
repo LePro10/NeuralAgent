@@ -45,6 +45,11 @@ Open items first. Everything else keeps going locally until these are done.
       press *Learn my voice → Record* 3× and say "Hey Neural". Tell me what did not work.
       (A macOS dialog "Terminal wants to control TextEdit" may be open from a test: click
       *Don't Allow*, it is not needed.)
+- [ ] **Call Neural** (5 min): Settings → *Neural* is already set up with the NeuralHub key? If
+      not, paste a key there. Then Neural (first item in the sidebar) → phone icon → talk.
+      macOS asks once for the microphone: please allow. On Android (new APK from CI): *Call
+      Neural* button, or add the *Call Neural* quick-settings tile and try it from the lock
+      screen. Tell me how fast and natural it feels, and if Neural hears itself (echo).
 - [ ] **Legal pages**: fill in name, address, contact on `/imprint`, `/privacy`, `/terms` and
       have them reviewed before inviting people (drafts will be in `apps/web/legal/`).
 - [ ] **Logo uploads** (after the logo is chosen; files in `docs/brand/export/`): Discord
@@ -71,6 +76,7 @@ Open items first. Everything else keeps going locally until these are done.
 |---|---|---|
 | 2026-10-29 | $0.00 | model list only |
 | 2026-10-29 | < $0.05 | 2 Codex test calls (Claude Haiku via NeuralHub, failed) |
+| 2026-10-30 | < $3 (estimate) | M7: ~120 Neural turns (Sonnet 5.5 chat, Haiku 5.5 calls), latency probes |
 
 ## Progress
 
@@ -85,6 +91,32 @@ Open items first. Everything else keeps going locally until these are done.
 | M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
 | M5 relay, accounts, pairing, E2E, remote in the daemon | done: relay, admin `/admin/`, landing, desktop side; real OAuth + mail on your list |
 | M6 web remote, phone layout, Android | done (2026-10-30) — web remote at `/app` with Web Push; Android app (FCM, widget, tile) verified in the emulator; real iPhone on your list |
+| M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — see below; your own voice on a real phone on your list |
+
+### M7 verified (2026-10-30)
+- Text, live NeuralHub: "Starte den testbot in Japan Map" → Neural found the workspace, started
+  the agent, sent the task; audit log `{"client":"orchestrator","device":"Neural","action":
+  "session_start","target":"Japan-Map","ok":true}`. Stop, status and prompting likewise.
+- Voice, synthetic caller (macOS `say` clips streamed in real time, release daemon), end of
+  speech → first audio on the caller's clock:
+  | Clip | First audio | Full answer starts |
+  |---|---|---|
+  | de-status "Was machen meine Agenten gerade?" | 0.82–1.00 s | 2.3–2.4 s |
+  | en-status "What are my agents doing right now?" | 0.80–0.83 s | 2.3 s |
+  | mixed-stop (DE with English words) | 0.92–0.95 s | 2.65–3.2 s |
+  | de-long (asks for details) | 1.00 s | 2.75 s |
+  | barge-in after 2 s of Neural talking | flush, new question answered after 0.91 s | 2.45 s |
+  | with noise (2 %) and 15 % echo | 0.80–1.00 s | 2.3–3.2 s |
+  The first audio is the acknowledgment; the model's first sentence follows ~1.5 s later
+  (Haiku 5.5 via NeuralHub, time to first token ~0.9–1.1 s plus speech synthesis).
+- English question → English answer, German → German, in the same call.
+- Browser (Chromium, fake microphone from a wav): Call Neural → Listening → Thinking → Speaking →
+  Listening, German and English turns, full-screen call above the tab bar.
+- Neural speaks news during a call: "Übrigens: Testbot in Japan-Map ist fertig."
+- Android emulator: tile intent with the screen off and the lock screen on → screen turns on,
+  call over the lock screen, microphone foreground service with *Hang up*; hanging up returns to
+  the lock screen. (Emulator has no microphone: audio itself verified in the browser test.)
+- Settings → Calls: voice (higher/lower 1–5), pace, spoken preview.
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.

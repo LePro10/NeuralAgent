@@ -302,3 +302,41 @@ phones get an input line plus the key bar and the terminal itself takes no keybo
 pane is shown at a time with chips to switch. Release builds are signed with a keystore kept
 outside the repo (password in the macOS keychain, both as GitHub secrets for CI). Android stops
 FCM delivery to a force-stopped app; that is platform policy, not something we can work around.
+
+## D36 — Neural and its calls live in the daemon (2026-10-30)
+
+**Where.** The orchestrator is a client of the daemon (`ClientKind::Orchestrator`, "Neural"), so
+the same policy and audit log apply as for a phone. Its conversation is part of the synced state
+(`orchestrator.messages`, last 60), so desktop, browser and phone see one chat. Calls run in the
+daemon too: the phone or browser streams 16 kHz PCM16 (`call_audio`) and plays 24 kHz speech
+(`call` events); STT, TTS and turn-taking never leave the computer. One call per computer; a new
+one ends the old one.
+
+**Pipeline.** Silero VAD (end of turn after 0.5 s of silence, sentences cut from a 40 s ring with
+0.3 s lead-in) → Parakeet (150–600 ms) → the model, streamed; each finished sentence (or a first
+clause after 24+ characters) → Supertonic → 200 ms audio chunks. If nothing is playing 80 ms
+after the transcript, a cached acknowledgment ("Okay." / "Moment." / "Mhm, okay.", DE/EN) plays,
+so the caller hears something in under a second while the model answers. Barge-in: the caller
+talking for 300 ms over Neural flushes the client queue and stops the model. News about agents
+(done / needs you / error) is spoken between answers, in the call's language.
+
+**Model.** Calls use the separate call model (default `claude/claude-haiku-5-5`) with
+`thinking: {type: "disabled"}`: through NeuralHub Haiku 5.5 otherwise thinks by default
+(time to first token 2–3 s instead of ~1 s; `reasoning_effort` has no effect). Shorter history
+in calls (a third), a spoken-style prompt (1–2 sentences, no ids, no opener because the
+acknowledgment already plays) and a hint which language the last message was in (long German
+histories otherwise pulled English questions into German answers).
+
+**Keys.** BYOK per provider (NeuralHub, Anthropic, OpenAI-compatible, Ollama). Release builds on
+macOS/Windows keep keys in the system keychain (`dev.neuralhub.neuralagent.keys`); development
+builds and Linux in `<data>/keys.json` (0600). `NEURALAGENT_LLM_KEY` overrides for tests/CI.
+Remote clients can use Neural but cannot set keys.
+
+**Echo.** Clients ask for `echoCancellation`/`noiseSuppression`/`autoGainControl`. WebKit (Tauri
+on macOS, iOS) and Android cancel all of the app's output; desktop Chrome's AEC is weaker for
+Web Audio playback, so barge-in there may trigger on Neural's own voice at high volume — the
+fix if it shows up is a higher barge-in threshold while playing.
+
+**Android.** A "Call Neural" quick tile and a microphone foreground service (ongoing
+notification with *Hang up*); during a call the activity shows over the lock screen and keeps
+the screen on. Hanging up while the phone is locked sends the app back behind the lock.
