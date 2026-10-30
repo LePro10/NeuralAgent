@@ -10,19 +10,20 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
 - Released: 0.2.0 (design + remote round, D40–D42), installed and deployed.
 - 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, never built.
 - **0.3.0** (mobile-first polish round: design system D45, light mode, Claude view rebuilt,
-  update UX + changelog D44, connection fixes): tag `v0.3.0` pushed 2026-10-30, but GitHub
-  Actions refuse to run (billing/spending limit) → no desktop/Android builds, and
-  `/api/releases/latest` still says 0.2.0. The relay + website **are deployed** with 0.3.0:
-  `/changelog`, `/version.json` (0.3.0), the web remote `/app/` and with it the Android shell
-  show the new UI. The owner's Mac still runs a locally built 0.2.1 (owner asked not to
-  install 0.3.0 by hand; they want to test the auto-update once CI publishes).
+  update UX + changelog D44, connection fixes): **released and published** 2026-10-30 (all
+  platforms, `/api/releases/latest` = 0.3.0, the Mac updater offers it to 0.2.1). Relay + website
+  deployed with 0.3.0. GitHub Actions minutes for the private repo were used up (macOS = 10×);
+  workaround used: repo made public for the release run, then private again (gitleaks scan of
+  the full history was clean). The owner's Mac still runs 0.2.1 and tests the auto-update.
+- After 0.3.0, on main, **not released or deployed** (owner wants to say when): desktop sidebar
+  collapses vertically again (owner prefers it), terminal repaints from the daemon's screen after
+  a resize (ghosts of Claude Code's frame), website changelog page redesign. See `[Unreleased]`.
 - Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
 ## Next
-1. When GitHub billing is fixed: re-run the Release workflow for **v0.3.0** (`gh run rerun
-   41071938534` or re-run in the UI; v0.2.1 can be skipped), then check
-   `/api/releases/latest` shows 0.3.0. The owner's Mac 0.2.1 should then offer the update.
+1. Next release (0.3.1) when the owner says so. Actions minutes reset monthly; for a release
+   run without minutes, the owner agreed to make the repo public just for the run (scan first).
 2. Owner checks on real devices (STATUS checklist), then M10 final report.
 3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, Android
    status bar colour in light mode (needs a new APK), iOS PWA status text stays white in light
