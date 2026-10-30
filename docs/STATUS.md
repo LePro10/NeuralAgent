@@ -60,9 +60,10 @@ Open items first. Everything else keeps going locally until these are done.
       Working with AI agents" within ~20 s. Or run
       `cargo test -p na-daemon shows_in_discord -- --ignored --nocapture` with Discord open.
 
-- [ ] **Install the released app** (5 min): `https://agent.neuralhub.dev/download` → your
-  platform. macOS: the app is not notarized, so open it once with right-click → *Open* (or
-  System Settings → Privacy & Security → *Open Anyway*). From then on it updates itself
+- [ ] **Install the released app** (5 min). macOS, without any prompt: in Terminal
+  `curl -fsSL https://agent.neuralhub.dev/install.sh | sh`. Other platforms (or the DMG):
+  `https://agent.neuralhub.dev/download`; a downloaded DMG is not notarized, so open it once via
+  System Settings → Privacy & Security → *Open Anyway*. From then on it updates itself
   (toast "NeuralAgent X is ready" → *Install*, or Settings → *Updates*); running agents keep
   going. Android: install the APK from the same page over the CI one (same key).
 - [ ] **Optional — signed builds**: an Apple Developer ID ($99/year) would let CI notarize the
@@ -120,6 +121,8 @@ Open items first. Everything else keeps going locally until these are done.
   bundled service; the darwin-aarch64 update verifies against the app's public key.
 - Relay release tests (upload, publish, update, prune to three, pre-releases only for testers,
   public links skip pre-releases). The proxy accepts 80 MB uploads.
+- 0.1.2: the macOS bundle is ad-hoc signed as a whole (0.1.1 was only linker-signed, so macOS
+  called a downloaded copy "damaged"); `install.sh` installs it without the quarantine prompt.
 - Not tested by hand: installing on Windows/Linux, the APK update notice on a real phone
   (checklist: *Install the released app*).
 
