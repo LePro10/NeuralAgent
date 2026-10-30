@@ -30,6 +30,7 @@ export function Footer({ children }: { children?: ReactNode }) {
       <a href="/imprint" className="hover:text-bright">Imprint</a>
       <a href="/privacy" className="hover:text-bright">Privacy</a>
       <a href="/terms" className="hover:text-bright">Terms</a>
+      <a href="/session/" className="hover:text-bright">How it was built</a>
       <a href="/admin/" className="ml-auto text-tiny text-faint hover:text-dim">Admin</a>
       {children}
     </footer>

@@ -107,7 +107,8 @@ Open items first. Everything else keeps going locally until these are done.
 | M6 web remote, phone layout, Android | done (2026-10-30) — web remote at `/app` with Web Push; Android app (FCM, widget, tile) verified in the emulator; real iPhone on your list |
 | M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — see below; your own voice on a real phone on your list |
 | M8 swarm: agent teams with visible hand-offs | done (2026-10-30) — see below |
-| M9 themes, auto-update, release CI, downloads | done (2026-10-30) — v0.1.1 released through CI, see below |
+| M9 themes, auto-update, release CI, downloads | done (2026-10-30) — v0.1.1 and v0.1.2 released through CI, see below |
+| M10 own ideas, polish, final report | in progress — admin handbook `docs/ADMIN-HANDBUCH.md` (German), public session report at `/session/` (`apps/web/public/session/index.html`) |
 
 ### M9 verified (2026-10-30)
 - Themes: six schemes + accents, per device; screenshots desktop/phone; reload keeps them; the

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eight Hours Autonomous</title>
+<meta name="description" content="How one AI agent built NeuralAgent in about eight hours on its own: phases, subagents, decisions, problems and releases.">
+<meta name="theme-color" content="#080909">
+<link rel="icon" href="/logo.png">
+<style>
+/* NeuralHub design tokens (packages/ui/ui/styles/tokens.css), inlined so this page stands alone. */
+:root {
+  color-scheme: dark;
+  --color-bg: #080909; --color-chrome: #0b0c0c; --color-card: #121413; --color-card-2: #181a19; --color-card-3: #202321;
+  --color-fill-1: rgb(255 255 255 / 0.025); --color-fill-2: rgb(255 255 255 / 0.04); --color-fill-3: rgb(255 255 255 / 0.065); --color-fill-4: rgb(255 255 255 / 0.1);
+  --color-line: rgb(255 255 255 / 0.08); --color-line-2: rgb(255 255 255 / 0.13);
+  --color-bright: #eef1ee; --color-ink: #c6c9c6; --color-dim: #7d847f; --color-faint: #4a504c;
+  --color-accent: #b9d3ff; --color-accent-deep: #3b5bff; --color-mint: #9fe7c8; --color-ember: #ff8a5c;
+  --color-lilac: #a898ff; --color-warning: #ffb454; --color-danger: #ff6b6b; --color-live: #5b9bff;
+  --font-sans: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --text-tiny: 10px; --text-small: 12.5px; --text-body: 14.5px; --text-title: 18px; --text-display: 28px; --text-display-lg: 42px;
+  --radius-card: 18px; --radius-list: 14px; --radius-chip: 8px;
+  --hair: 1px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-bg); color: var(--color-ink); font-family: var(--font-sans); font-size: var(--text-body); line-height: 1.55; }
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+.wrap { width: 100%; max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.top { display: flex; align-items: center; gap: 10px; padding: 20px 0; }
+header.top img { width: 26px; height: 26px; border-radius: 7px; }
+header.top .brand { color: var(--color-bright); font-weight: 540; }
+header.top .nav { margin-left: auto; display: flex; gap: 16px; font-size: var(--text-small); }
+header.top .nav a { color: var(--color-dim); }
+@media (max-width: 520px) { header.top .nav a:not(:last-child) { display: none; } }
+
+.hero { position: relative; padding: 56px 0 28px; overflow: hidden; }
+.hero::before { content: ""; position: absolute; inset: -40% -20% auto; height: 420px; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent-deep) 22%, transparent), transparent 70%); }
+.eyebrow { font-family: var(--font-mono); font-size: var(--text-small); color: var(--color-dim); letter-spacing: .04em; text-transform: uppercase; }
+h1 { position: relative; margin: 10px 0 0; color: var(--color-bright); font-weight: 300; letter-spacing: -.035em; line-height: 1.04; font-size: var(--text-display); }
+h1 em { font-style: normal; color: var(--color-accent); }
+.lede { position: relative; max-width: 640px; margin: 16px 0 0; font-size: 16px; color: var(--color-ink); }
+h2 { margin: 0; color: var(--color-bright); font-weight: 400; letter-spacing: -.02em; font-size: 24px; line-height: 1.2; }
+h3 { margin: 0; color: var(--color-bright); font-weight: 540; font-size: var(--text-title); line-height: 1.3; }
+section { padding: 40px 0 8px; }
+.section-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.section-head p { margin: 0; color: var(--color-dim); max-width: 640px; }
+
+.card { background: linear-gradient(180deg, var(--color-card-2), var(--color-card) 96px); border: var(--hair) solid var(--color-line); border-radius: var(--radius-card); }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 28px; position: relative; }
+.stat { padding: 14px 16px; }
+.stat b { display: block; color: var(--color-bright); font-weight: 400; font-size: 28px; letter-spacing: -.03em; line-height: 1.1; }
+.stat span { display: block; margin-top: 4px; font-size: var(--text-small); color: var(--color-dim); }
+
+.activity { padding: 18px 16px 14px; }
+.bars { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); align-items: end; gap: 4px; height: 140px; margin-top: 14px; }
+.bar { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; }
+.bar i { display: block; border-radius: 4px 4px 2px 2px; background: linear-gradient(180deg, var(--color-accent), var(--color-accent-deep)); min-height: 2px;
+  transform-origin: bottom; animation: grow .9s cubic-bezier(.2,.7,.2,1) both; }
+.bar.user i { background: linear-gradient(180deg, var(--color-ember), color-mix(in oklab, var(--color-ember) 40%, var(--color-bg))); }
+.bar.idle i { background: var(--color-fill-4); }
+.axis { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; margin-top: 6px; font-family: var(--font-mono); font-size: var(--text-tiny); color: var(--color-faint); text-align: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: var(--text-small); color: var(--color-dim); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+@keyframes grow { from { transform: scaleY(0); } }
+
+.timeline { position: relative; margin: 0; padding: 0 0 0 22px; list-style: none; }
+.timeline::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--color-accent), var(--color-lilac) 55%, var(--color-ember)); opacity: .55; }
+.phase { position: relative; margin-bottom: 12px; }
+.phase::before { content: ""; position: absolute; left: -22px; top: 22px; width: 14px; height: 14px; border-radius: 99px; background: var(--color-bg); border: 2px solid var(--color-accent); }
+.phase.user::before { border-color: var(--color-ember); }
+.phase.done::before { background: var(--color-accent); }
+.phase .card { padding: 16px; }
+.phase-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 99px; font-family: var(--font-mono); font-size: 11px; line-height: 18px; background: var(--color-fill-3); color: var(--color-ink); white-space: nowrap; }
+.tag.m { background: color-mix(in oklab, var(--color-accent-deep) 28%, transparent); color: var(--color-accent); }
+.tag.u { background: color-mix(in oklab, var(--color-ember) 18%, transparent); color: var(--color-ember); }
+.tag.ok { background: color-mix(in oklab, var(--color-mint) 14%, transparent); color: var(--color-mint); }
+.time { font-family: var(--font-mono); font-size: var(--text-small); color: var(--color-dim); }
+.phase p { margin: 8px 0 0; }
+.phase ul { margin: 10px 0 0; padding-left: 18px; }
+.phase li { margin: 3px 0; }
+.phase li::marker { color: var(--color-faint); }
+.agents { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.agent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-radius: var(--radius-list); background: var(--color-fill-2); border: var(--hair) solid var(--color-line); }
+.agent .who { grid-row: span 2; align-self: start; }
+.agent b { color: var(--color-bright); font-weight: 540; }
+.agent span { color: var(--color-dim); font-size: var(--text-small); }
+.problem { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-list); background: color-mix(in oklab, var(--color-warning) 7%, transparent); border: var(--hair) solid color-mix(in oklab, var(--color-warning) 22%, transparent); font-size: var(--text-small); }
+.problem b { color: var(--color-warning); font-weight: 540; }
+.quote { margin-top: 10px; padding: 10px 12px; border-left: 2px solid var(--color-ember); background: var(--color-fill-1); border-radius: 0 var(--radius-chip) var(--radius-chip) 0; font-size: var(--text-small); color: var(--color-ink); }
+
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.tile { padding: 16px; }
+.tile p { margin: 6px 0 0; color: var(--color-ink); }
+.tile .fix { margin-top: 8px; color: var(--color-mint); font-size: var(--text-small); }
+.tile .fix::before { content: "Fix · "; color: var(--color-dim); }
+
+table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+th, td { text-align: left; padding: 10px 12px; border-bottom: var(--hair) solid var(--color-line); vertical-align: top; }
+th { color: var(--color-dim); font-weight: 460; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+td b { color: var(--color-bright); font-weight: 540; }
+.table-card { overflow-x: auto; }
+.roster td:first-child { white-space: nowrap; }
+
+.how { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.how .tile h3 { font-size: 15px; }
+footer { margin-top: 48px; padding: 24px 0 40px; border-top: var(--hair) solid var(--color-line); font-size: var(--text-small); color: var(--color-dim); }
+footer .row { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+footer a { color: var(--color-dim); }
+
+@media (min-width: 640px) {
+  h1 { font-size: var(--text-display-lg); }
+  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid2, .how { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .phase .card { padding: 20px; }
+}
+@media (min-width: 860px) {
+  .hero { padding-top: 80px; }
+  h1 { font-size: 56px; }
+  .timeline { padding-left: 120px; }
+  .timeline::before { left: 96px; }
+  .phase::before { left: -30px; }
+  .phase .clock { position: absolute; left: -120px; top: 18px; width: 72px; text-align: right; }
+  .phase .card .time.inline { display: none; }
+}
+@media (max-width: 859px) { .phase .clock { display: none; } }
+@media (prefers-reduced-motion: reduce) { .bar i { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a href="/" style="display:flex;align-items:center;gap:10px"><img src="/logo.png" alt=""><span class="brand">NeuralAgent</span></a>
+    <nav class="nav"><a href="#timeline">Timeline</a><a href="#agents">Subagents</a><a href="#problems">Problems</a><a href="/download/">Download</a></nav>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow">Session report · 29–30 October 2026</div>
+    <h1>One AI agent, <em>about eight hours</em>, a whole product.</h1>
+    <p class="lede">The owner wrote a long brief for NeuralAgent: a desktop app that runs many AI coding agents side by side, a voice orchestrator called Neural, a phone remote and a release pipeline. Then they answered three questions and left the agent to it. This is what the agent did next, phase by phase, including what went wrong.</p>
+    <div class="stats">
+      <div class="card stat"><b>ca. 8 h</b><span>autonomous, 20:37–04:42</span></div>
+      <div class="card stat"><b>10 / 11</b><span>milestones done (M0–M9), M10 in progress</span></div>
+      <div class="card stat"><b>11</b><span>subagents during the build, plus 1 for the handbook</span></div>
+      <div class="card stat"><b>78</b><span>commits up to release 0.1.2</span></div>
+      <div class="card stat"><b>2</b><span>releases (0.1.1, 0.1.2), six downloads each</span></div>
+      <div class="card stat"><b>86</b><span>CI runs: 58 checks, 26 server images, 2 releases</span></div>
+      <div class="card stat"><b>39</b><span>design decisions written down with reasons</span></div>
+      <div class="card stat"><b>2,000+</b><span>shell commands run by the main agent</span></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="card activity">
+      <h3>Activity per hour</h3>
+      <div class="legend" style="margin-top:4px"><span>Events in the agent's transcript (messages and tool calls), local time.</span></div>
+      <div class="bars" role="img" aria-label="Activity per hour: high from 20:00 to 04:00, nothing from 05:00 to 06:00, then a smaller morning session with the owner.">
+        <div class="bar" title="20:00 · 729"><i style="height:40%"></i></div>
+        <div class="bar" title="21:00 · 1,287"><i style="height:71%"></i></div>
+        <div class="bar" title="22:00 · 1,412"><i style="height:78%"></i></div>
+        <div class="bar" title="23:00 · 1,511"><i style="height:83%"></i></div>
+        <div class="bar" title="00:00 · 1,385"><i style="height:76%"></i></div>
+        <div class="bar" title="01:00 · 1,821"><i style="height:100%"></i></div>
+        <div class="bar" title="02:00 · 1,366"><i style="height:75%"></i></div>
+        <div class="bar" title="03:00 · 1,477"><i style="height:81%"></i></div>
+        <div class="bar" title="04:00 · 202"><i style="height:11%"></i></div>
+        <div class="bar idle" title="05:00 · 0"><i style="height:0"></i></div>
+        <div class="bar user" title="06:00 · 119"><i style="height:7%"></i></div>
+        <div class="bar user" title="07:00 · 187"><i style="height:10%"></i></div>
+        <div class="bar user" title="08:00 · 20"><i style="height:1%"></i></div>
+      </div>
+      <div class="axis"><span>20</span><span>21</span><span>22</span><span>23</span><span>00</span><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span><span>08</span></div>
+      <div class="legend"><span><i style="background:var(--color-accent)"></i>autonomous</span><span><i style="background:var(--color-ember)"></i>with the owner, morning fixes</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Setup</div>
+      <h2>How the work was organized</h2>
+    </div>
+    <div class="how">
+      <div class="card tile"><h3>One main agent</h3><p>Claude Opus 5.5 in Claude Code acted as the orchestrator. It planned, wrote most of the code, ran every test and made every commit itself, straight to <code>main</code>, one commit per step.</p></div>
+      <div class="card tile"><h3>Helpers for side work</h3><p>Research and clearly scoped builds went to subagents in the background: <b>scout</b> (Haiku) for reading, <b>worker</b> (Sonnet) for mechanical builds, and general agents (Opus) for research. At most three ran at once, and never two on the same files.</p></div>
+      <div class="card tile"><h3>No questions after the start</h3><p>After one question round the agent decided on its own. Each decision went into a decision log with the reason, and anything only the owner can do went into a checklist.</p></div>
+      <div class="card tile"><h3>Done means verified</h3><p>Nothing counted as done without a check: unit and end-to-end tests, CI on macOS, Windows and Linux, the Android emulator, headless browsers, real releases from CI.</p></div>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <div class="section-head">
+      <div class="eyebrow">Timeline</div>
+      <h2>From brief to release, phase by phase</h2>
+      <p>Times are local (CET) and come from the transcript and the commit history.</p>
+    </div>
+    <ol class="timeline">
+
+      <li class="phase user done"><div class="clock time">20:09</div><div class="card">
+        <div class="phase-top"><span class="tag u">Start</span><h3>"Read PROMPT.md and work through it"</h3><span class="time inline">20:09</span></div>
+        <p>The brief: a desktop app for many AI coding agents in a grid of terminals, a voice orchestrator, a phone remote, an Android app, a server for accounts and remote access, auto-update and CI, split into milestones M0–M10. The agent read it and started research at once.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">20:11</div><div class="card">
+        <div class="phase-top"><span class="tag">Research</span><h3>Three helpers in parallel</h3><span class="time inline">20:11</span></div>
+        <p>Before any code: what exists already, how it works, and what the owner's other app can lend as a template. All of it is clean-room research; no foreign code or assets went into the product.</p>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Opus</span><b>Static analysis of a reference app</b><span>Licensed app, read without running it: feature areas and mechanisms. Result: a report with one section per feature area.</span></div>
+          <div class="agent"><span class="tag who">Opus</span><b>Installers and web research</b><span>What the reference app ships per platform. Result: an installer report; the web part was thin because the vendor pages could not be fetched.</span></div>
+          <div class="agent"><span class="tag who">Haiku</span><b>Android template from an existing app</b><span>Read-only look at the owner's Capacitor app. Result: a template description, no secrets copied.</span></div>
+        </div>
+      </div></li>
+
+      <li class="phase user done"><div class="clock time">20:22</div><div class="card">
+        <div class="phase-top"><span class="tag u">Question round</span><h3>Three questions, then silence</h3><span class="time inline">20:22–20:37</span></div>
+        <ul>
+          <li><b>Wake word:</b> "Hey Neural", so the orchestrator is called Neural.</li>
+          <li><b>Where may agents start without asking?</b> In any workspace.</li>
+          <li><b>May the agent stop the reference app for deeper analysis?</b> Yes.</li>
+        </ul>
+        <p>Then the roadmap: <code>PLAN.md</code> with M0–M10, <code>STATUS.md</code> with a checklist for the owner, and <code>DECISIONS.md</code> for every choice.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">20:40</div><div class="card">
+        <div class="phase-top"><span class="tag">Research</span><h3>Agent CLIs, local voice and a logo</h3><span class="time inline">20:40–20:58</span></div>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Opus</span><b>Agent CLIs: install and hooks</b><span>How each coding CLI installs and reports status. Result: a comparison matrix, every fact marked verified or not, with sources.</span></div>
+          <div class="agent"><span class="tag who">Opus</span><b>Local speech models</b><span>On-device speech-to-text, wake word and voice output. Result: a shortlist with download links; own benchmarks still needed.</span></div>
+          <div class="agent"><span class="tag who">Opus</span><b>Three logo concepts</b><span>SVG marks and app icons. Result: three concepts and a contact sheet; concept C, an "N" built from panes, became the logo.</span></div>
+        </div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">20:56</div><div class="card">
+        <div class="phase-top"><span class="tag m">M0</span><h3>Foundation: protocol and background service</h3><span class="time inline">20:56</span></div>
+        <p>Shared protocol types and a background service (daemon) that hosts the terminals. Terminals outlive the app window: close it, reopen it, everything is still there.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">21:23</div><div class="card">
+        <div class="phase-top"><span class="tag m">M1</span><h3>Desktop shell</h3><span class="time inline">21:23</span></div>
+        <p>Tauri desktop app with a grid of terminal panes, tabs and CI on three operating systems from the first day.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">21:35</div><div class="card">
+        <div class="phase-top"><span class="tag m">M2</span><h3>Agents: catalog, one-click install, live status</h3><span class="time inline">21:35–21:52</span></div>
+        <p>A catalog of coding agents that installs them in a visible terminal, launch profiles, a custom profile editor and a dashboard. Status comes from the CLIs' own hooks, with terminal activity as a fallback.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">22:00</div><div class="card">
+        <div class="phase-top"><span class="tag m">M3</span><h3>Voice, fully local</h3><span class="time inline">22:00–22:42</span></div>
+        <p>Speech-to-text engines with a benchmark, the "Hey Neural" wake word with a learn-my-voice step, local voice output, hold-to-talk dictation into any app and a small listening pill on top of other windows.</p>
+        <div class="problem"><b>Problem:</b> CI lost the speech engine's native libraries after restoring its cache. <b>Fix:</b> rebuild them after the restore.</div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">22:47</div><div class="card">
+        <div class="phase-top"><span class="tag m">M4</span><h3>The daily-driver features</h3><span class="time inline">22:47–23:54</span></div>
+        <ul>
+          <li>Keep the computer awake while agents work, Discord presence, resume agents after a restart.</li>
+          <li>Searchable history of past agent conversations, menu bar icon with agent counts.</li>
+          <li>Git changes per workspace and an own worktree per agent, merged back on request.</li>
+          <li>Browser preview pane that finds dev servers in the terminal output.</li>
+          <li>MCP servers managed once for all agents; usage and cost from the agents' own transcripts.</li>
+        </ul>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Sonnet</span><b>MCP servers page</b><span>UI only, the service side was done. Result: page built, type check and token check clean.</span></div>
+          <div class="agent"><span class="tag who">Sonnet</span><b>Usage page</b><span>Charts and tables for tokens, cost and limits. Result: page works with real data in a headless browser.</span></div>
+        </div>
+        <div class="problem"><b>Problem:</b> Windows terminals hung at start. ConPTY asks for the cursor position and ignored the answer. <b>Fix:</b> four commits later the service answers in a single write and repeats until the output moves on.</div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">00:07</div><div class="card">
+        <div class="phase-top"><span class="tag m">M5</span><h3>Server, accounts and end-to-end encryption</h3><span class="time inline">00:07–00:57</span></div>
+        <p>A small Rust relay server at agent.neuralhub.dev: accounts, pairing by QR code, and a container image with pull deployment, health check and rollback. Phone and computer talk end-to-end encrypted, so the relay only forwards sealed bytes.</p>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Sonnet</span><b>Encryption library, twice</b><span>The same handshake and sealing in Rust and in TypeScript. Result: both give byte-identical output on shared test vectors.</span></div>
+          <div class="agent"><span class="tag who">Sonnet</span><b>Website: landing, legal pages, admin</b><span>Result: built and tested against a local relay; one open risk in the passkey flow, which later went away with the passkeys.</span></div>
+        </div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">00:44</div><div class="card">
+        <div class="phase-top"><span class="tag m">M6</span><h3>Remote: browser, push, Android</h3><span class="time inline">00:44–01:45</span></div>
+        <p>The full agent UI in any browser at <code>/app</code>, a phone layout with a key bar for Esc, Tab and arrows, push notifications when an agent needs attention, and an Android app with a widget and a quick-settings tile, tested in the emulator. Plus an audit log of everything phones, browsers and the orchestrator do.</p>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Haiku</span><b>Push setup of an existing app</b><span>Read-only summary of how the owner's other app handles Android push. Result: a short structure overview, no keys.</span></div>
+        </div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">01:55</div><div class="card">
+        <div class="phase-top"><span class="tag m">M7</span><h3>Neural, the orchestrator you can call</h3><span class="time inline">01:55–02:52</span></div>
+        <p>Neural uses the owner's own model key, has tools to start, prompt and stop agents, and keeps one shared chat across devices. Voice calls run through the local speech pipeline, also from the Android lock screen, and Neural speaks up when an agent finishes, needs input or fails.</p>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">03:03</div><div class="card">
+        <div class="phase-top"><span class="tag m">M8</span><h3>Swarms</h3><span class="time inline">03:03–03:34</span></div>
+        <p>Teams of agents that hand work to each other through a message bridge in the service. Neural can start a swarm by itself.</p>
+        <div class="problem"><b>Problem:</b> some team messages arrived twice. <b>Fix:</b> each message is delivered exactly once.</div>
+        <div class="problem"><b>Problem:</b> CI runners have host names longer than 64 characters, which broke sign-in in the end-to-end test. <b>Fix:</b> a short host name for the relay.</div>
+      </div></li>
+
+      <li class="phase done"><div class="clock time">03:34</div><div class="card">
+        <div class="phase-top"><span class="tag m">M9</span><h3>Themes, auto-update, first release</h3><span class="time inline">03:34–04:42</span></div>
+        <p>Six colour schemes, a release pipeline from a version tag, signed updates through the relay that keep running agents alive, an update notice for the Android app and a download page. Release <b>0.1.1</b> went through CI on every platform and was checked by hand: downloads served, update offers correct, signature valid.</p>
+        <div class="problem"><b>Problem:</b> the local update test installed nothing and said nothing. <b>Fix:</b> the app got a log file, which showed that the updater refuses to run from a linked folder; the test moved to a real path.</div>
+        <p><span class="tag ok">04:42 · M9 verified, autonomous run ends</span></p>
+      </div></li>
+
+      <li class="phase user done"><div class="clock time">06:53</div><div class="card">
+        <div class="phase-top"><span class="tag u">Morning</span><h3>The owner tries it, and finds the rough edges</h3><span class="time inline">06:53–07:46</span></div>
+        <div class="quote">A screenshot: "NeuralAgent.app is damaged and can't be opened."</div>
+        <p>The app was signed by the linker only, so macOS saw unsealed resources. The whole bundle is now signed. A one-line Terminal installer avoids the security prompt as well.</p>
+        <div class="quote">"Passkeys are a pain, remove them."</div>
+        <p>The admin area now just checks that the signed-in account is on the admin list. The change removed about 600 lines and added under 100.</p>
+        <div class="quote">"Deploy, release, uninstall locally, and no more errors."</div>
+        <p>Server deployed, release <b>0.1.2</b> built by CI and checked: the installer puts a correctly signed app in place without any warning.</p>
+      </div></li>
+
+      <li class="phase"><div class="clock time">now</div><div class="card">
+        <div class="phase-top"><span class="tag m">M10</span><h3>Polish and the final report</h3></div>
+        <p>Own ideas, polish, an admin handbook for the owner and this page.</p>
+        <div class="agents">
+          <div class="agent"><span class="tag who">Sonnet</span><b>Admin handbook</b><span>A German handbook for the owner: every feature with use cases, plus where the build differs from the brief and why.</span></div>
+        </div>
+      </div></li>
+    </ol>
+  </section>
+
+  <section id="agents">
+    <div class="section-head">
+      <div class="eyebrow">Roster</div>
+      <h2>All subagents</h2>
+      <p>Every helper the main agent started, in order. The main agent reviewed each result, ran the checks again and made the commit.</p>
+    </div>
+    <div class="card table-card">
+      <table class="roster">
+        <thead><tr><th>Time</th><th>Model</th><th>Task</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">20:11</td><td>Opus</td><td><b>Static analysis of a reference app</b></td><td>Report on features and mechanisms</td></tr>
+          <tr><td class="mono">20:11</td><td>Opus</td><td><b>Installers and web research</b></td><td>Installer report; web part thin</td></tr>
+          <tr><td class="mono">20:12</td><td>Haiku</td><td><b>Android template</b></td><td>Template description</td></tr>
+          <tr><td class="mono">20:40</td><td>Opus</td><td><b>Agent CLIs, install and hooks</b></td><td>Verified comparison matrix</td></tr>
+          <tr><td class="mono">20:40</td><td>Opus</td><td><b>Local speech models</b></td><td>Shortlist with downloads</td></tr>
+          <tr><td class="mono">20:56</td><td>Opus</td><td><b>Logo concepts</b></td><td>Three concepts; C chosen</td></tr>
+          <tr><td class="mono">23:27</td><td>Sonnet</td><td><b>MCP servers page</b></td><td>Page built, checks clean</td></tr>
+          <tr><td class="mono">23:49</td><td>Sonnet</td><td><b>Usage page</b></td><td>Works with real data</td></tr>
+          <tr><td class="mono">23:57</td><td>Sonnet</td><td><b>Encryption in Rust and TypeScript</b></td><td>Byte-identical on test vectors</td></tr>
+          <tr><td class="mono">00:32</td><td>Sonnet</td><td><b>Landing, legal pages, admin</b></td><td>Built, tested against a local relay</td></tr>
+          <tr><td class="mono">00:57</td><td>Haiku</td><td><b>Push setup of an existing app</b></td><td>Structure overview</td></tr>
+          <tr><td class="mono">next day</td><td>Sonnet</td><td><b>Admin handbook</b></td><td>German handbook for the owner</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="problems">
+    <div class="section-head">
+      <div class="eyebrow">Problems</div>
+      <h2>What broke, and how it was fixed</h2>
+      <p>Most of the time went into things that only show up on real machines and real CI runners.</p>
+    </div>
+    <div class="grid2">
+      <div class="card tile"><h3>Windows terminals hung</h3><p>ConPTY asks for the cursor position before it shows anything, and it ignored an answer that came in two parts.</p><div class="fix">Answer in one write, and repeat until output moves on.</div></div>
+      <div class="card tile"><h3>"The app is damaged"</h3><p>The first macOS release was only signed by the linker, so a downloaded copy looked broken to macOS.</p><div class="fix">Sign the whole bundle, plus a Terminal installer without the security prompt.</div></div>
+      <div class="card tile"><h3>Passkeys in the admin area</h3><p>A second factor that got in the way more than it helped for a one-person admin team.</p><div class="fix">Removed; admin access is an allow-listed account.</div></div>
+      <div class="card tile"><h3>A silent updater</h3><p>The update test installed nothing and logged nothing.</p><div class="fix">An app log file, which showed the updater refuses linked folders.</div></div>
+      <div class="card tile"><h3>Long CI host names</h3><p>Cloud runners have names over 64 characters, too long for a device name.</p><div class="fix">A short host name for the relay.</div></div>
+      <div class="card tile"><h3>Lost native libraries</h3><p>CI's cache restore dropped the speech engine's compiled libraries.</p><div class="fix">Rebuild them after the restore.</div></div>
+      <div class="card tile"><h3>Double messages in swarms</h3><p>Some messages between team members arrived twice.</p><div class="fix">Deliver each message exactly once.</div></div>
+      <div class="card tile"><h3>Pre-releases as "latest"</h3><p>A test version could have shown up on the public download page.</p><div class="fix">Public links and updates use stable versions only.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="eyebrow">Notes</div>
+      <h2>About these numbers</h2>
+    </div>
+    <div class="card tile">
+      <p>The figures come from the agent's transcript, the commit history and the CI history; nothing is estimated except where it says "ca.". The transcript was summarized 18 times along the way to stay within the model's context, and work went on after each summary. Secrets such as keys and tokens were never written into commands, files or output; they stayed in the keychain, CI secrets and an env file on the server.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="row"><a href="/">NeuralAgent</a><a href="/download/">Download</a><a href="/imprint">Imprint</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
+  </footer>
+</div>
+</body>
+</html>
