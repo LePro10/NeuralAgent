@@ -289,3 +289,16 @@ endpoints must be a known push service (Apple, Google, Mozilla, Microsoft), the 
 in the relay database unless set in env, and pushes are limited to 30 per account per minute.
 Android uses FCM data messages so the app builds the notification and the tap opens the agent.
 On iPhone, Web Push needs the PWA on the Home Screen (iOS 16.4+); the settings page says so.
+
+## D35 — Android: a Capacitor shell around the hosted web remote (2026-10-30)
+
+The APK loads `https://agent.neuralhub.dev/app/` (`server.url`) instead of bundling the web
+build, so phone and browser always run the same version and the relay deploy updates both;
+`www/` is only an offline page. Native code adds what a page cannot: FCM (data messages, the app
+writes the notification from names it keeps locally), a home-screen widget and a Quick Settings
+tile fed by the page (`setStatus`), and sign-in in a Custom Tab that returns via
+`neuralagent://auth` (Google blocks OAuth in WebViews). xterm.js mangles Android IME input, so
+phones get an input line plus the key bar and the terminal itself takes no keyboard input; one
+pane is shown at a time with chips to switch. Release builds are signed with a keystore kept
+outside the repo (password in the macOS keychain, both as GitHub secrets for CI). Android stops
+FCM delivery to a force-stopped app; that is platform policy, not something we can work around.

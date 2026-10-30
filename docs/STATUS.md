@@ -19,6 +19,11 @@ Open items first. Everything else keeps going locally until these are done.
       address, so you are approved at once. Then open `https://agent.neuralhub.dev/admin/` —
       it asks you to register a **passkey** (Touch ID / iCloud Keychain) on first visit; that
       passkey is the second factor for the admin area from then on.
+- [ ] **Phones** (10 min): Android — install the APK from the latest CI run (Actions → CI →
+      artifact `neuralagent-android`), sign in with Google, turn on notifications in *This
+      device*, let an agent finish while the app is closed, tap the notification. iPhone — open
+      `https://agent.neuralhub.dev/app` in Safari, Share → *Add to Home Screen*, open it from
+      there, sign in, turn on notifications, same test. Note anything odd in an issue.
 - [ ] **Mail check**: ask someone (or use a second Google account) to request access in
       NeuralAgent → you should get "Access request: …" from agent@neuralhub.dev; approve it in
       `/admin` → they get "You're in". Tell me if a mail does not arrive (check spam).
@@ -79,7 +84,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M3 voice: local STT/TTS, push-to-talk, wake word | done on macOS (your own voice still to try, checklist) |
 | M4 git, browser, MCP, usage, sessions, tray, keep-awake, Discord | done — see below (Discord live check on your list) |
 | M5 relay, accounts, pairing, E2E, remote in the daemon | done: relay, admin `/admin/`, landing, desktop side; real OAuth + mail on your list |
-| M6 web remote, phone layout, Android | web remote live at `/app` with phone layout and Web Push; Android (Capacitor, FCM, widget, tile) next |
+| M6 web remote, phone layout, Android | done (2026-10-30) — web remote at `/app` with Web Push; Android app (FCM, widget, tile) verified in the emulator; real iPhone on your list |
 
 ### M1 verified so far (2026-10-29)
 - Tauri app starts the daemon, connects, welcome screen; workspace with 4 → 16 panes.
@@ -219,7 +224,18 @@ Open items first. Everything else keeps going locally until these are done.
   This device registers with the relay, a failing agent reaches the push service while the page
   is hidden, the worker titles the notification with the agent's name, a tap (worker message)
   and a launch URL `/app/?host&sid` both open that agent's workspace. Live relay reports FCM and
-  VAPID ready. Not yet seen: a real push from Apple/Google to a device.
+  VAPID ready. Not yet seen: a real push from Apple to an iPhone.
+- Android app (`apps/android`, debug APK in the emulator `na36`, Android 16 with Play services,
+  against a local relay + daemon over `adb reverse`): test sign-in in a Custom Tab returns via
+  `neuralagent://auth`; computer list; live terminal; typing through the phone input line
+  arrives exactly (xterm's own soft-keyboard input garbled letters, so phones no longer use it);
+  notification permission → "Turn on" registers the FCM token; a failing agent produces a real
+  FCM notification ("Terminal — Stopped with an error", computer name as subtext); tapping it
+  opens that agent's workspace both with the app running and after the process was killed.
+  Quick Settings tile shows "An agent needs you" and opens the app (opening clears it); the
+  "Add" button on This device places the widget, which shows the computer and agent summary.
+  Dark system bars, NeuralAgent icon and splash. Release APK signed with the release key
+  (fingerprint checked with apksigner); `/.well-known/assetlinks.json` served for App Links.
 
 ## Known gaps
 

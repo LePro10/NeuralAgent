@@ -4,7 +4,7 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
-- M0–M5 done (small leftovers and user checks in STATUS). M6 in progress:
+- M0–M6 done (small leftovers and user checks in STATUS). Next: M7 orchestrator. Details:
   - Relay `crates/na-relay` live on .96 (container `neuralagent-relay`, `/opt/neuralagent`,
     env `/etc/neuralagent/relay.env` — never print it). CI pushes the image to GHCR; .96 can't
     pull it until the read token exists, so deploy by hand:
@@ -20,8 +20,12 @@ decisions: `DECISIONS.md`.
     `/etc/neuralagent/firebase-service-account.json` (uid 10001, 400), mounted by compose.
     Web remote: `apps/web/public/app/sw.js` + `src/remote/push.ts`; tap → `/app/?host&sid`.
   - Chromium driver for web push: `/tmp/na-drive/web-push.mjs` (mock push service).
-- Next for M6: Android app (Capacitor around the web remote, FCM, call, widget, tile).
-  Then M7 orchestrator.
+  - Android app `apps/android` (D35): Capacitor 8 shell loading `/app/` from the relay;
+    native code in `android/app/src/main/java/dev/neuralhub/neuralagent/` (NativePlugin,
+    PushService, AgentWidget, AgentTile, Status); web side `apps/web/src/remote/native.ts`.
+    `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
+    password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
+- Next: M7 orchestrator (chat + call, audit log of remote actions), then M8 swarm.
 - Open small things: audit log of remote actions (M7); "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 
@@ -45,5 +49,14 @@ decisions: `DECISIONS.md`.
   in real time, 2 s apart); Swift helpers in `/tmp/na-drive` (`hold <s>` holds ⌥Space,
   `holdf5`, `sink <out> <s>` text field that saves what was typed, `click x y`). Test wavs:
   `/tmp/na-voice/{corpus,wake}`. Models: `$NEURALAGENT_HOME/models`.
+- Android emulator test: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+  ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`; start AVD `na36` headless
+  (`$ANDROID_HOME/emulator/emulator -avd na36 -no-window -gpu swiftshader_indirect`); local relay
+  (test login, FCM) + daemon via `scripts/android-dev.sh` (relay on :8095); `adb reverse tcp:8095
+  tcp:8095` (WebCrypto needs localhost, not 10.0.2.2); build with
+  `cd apps/android && NA_REMOTE_URL=http://localhost:8095/app/ npx cap sync android && cd android
+  && ./gradlew assembleDebug`, then `adb install -r`. Run `npx cap sync android` again without
+  the variable afterwards. WebView JS: `adb forward tcp:9333
+  localabstract:webview_devtools_remote_<pid>` and `/tmp/na-drive/wv.mjs '<expr>'`.
 - Daemon request helper: `/tmp/na-drive/mcp.mjs save|start [profile]|type <data>|screen|usage [days]`
   (`WS=<index>` picks the workspace; `/private/tmp/na-claude-test` is trusted by Claude, use it).
