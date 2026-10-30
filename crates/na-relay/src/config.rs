@@ -36,6 +36,10 @@ pub struct Config {
     pub fcm: Option<PathBuf>,
     /// Web Push (VAPID) key, base64url; made and kept in the database when unset.
     pub vapid: Option<String>,
+    /// Where release builds live (next to the database by default).
+    pub releases: Option<PathBuf>,
+    /// Bearer token CI uploads releases with; uploads are off without it.
+    pub release_token: Option<String>,
 }
 
 fn var(k: &str) -> Option<String> {
@@ -71,6 +75,11 @@ impl Config {
             test_login,
             fcm: var("FCM_SERVICE_ACCOUNT").map(PathBuf::from),
             vapid: var("VAPID_PRIVATE_KEY"),
+            releases: var("NA_RELAY_RELEASES").map(PathBuf::from).or_else(|| {
+                let db = PathBuf::from(var("NA_RELAY_DB").unwrap_or_else(|| "/var/lib/neuralagent/relay.db".into()));
+                Some(db.parent()?.join("releases"))
+            }),
+            release_token: var("RELEASE_UPLOAD_TOKEN"),
         })
     }
 
@@ -89,6 +98,8 @@ impl Config {
             test_login: cfg!(feature = "test-login"),
             fcm: None,
             vapid: None,
+            releases: None,
+            release_token: None,
         }
     }
 

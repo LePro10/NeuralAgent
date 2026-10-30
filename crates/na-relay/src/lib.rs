@@ -9,6 +9,7 @@ pub mod db;
 pub mod hub;
 pub mod mail;
 pub mod push;
+pub mod releases;
 pub mod util;
 pub mod web;
 pub mod webauthn;
@@ -226,12 +227,14 @@ pub fn router(relay: Arc<Relay>) -> Router {
         .route("/devices/signout-all", post(auth::sign_out_all))
         .route("/pair", post(auth::pair_create))
         .route("/pair/redeem", post(auth::pair_redeem))
-        .nest("/admin", admin::router());
+        .nest("/admin", admin::router())
+        .merge(releases::router());
     Router::new()
         .nest("/api", api)
         .route("/auth/{provider}/start", get(auth::start))
         .route("/auth/{provider}/callback", get(auth::callback))
         .route("/ws", get(hub::upgrade))
+        .merge(releases::downloads())
         .merge(web::router(&relay.cfg))
         .with_state(relay)
 }
