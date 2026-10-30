@@ -10,6 +10,8 @@ decisions: `DECISIONS.md`.
   `docs/notes/claude-view.md`), host settings/updates/models/workspaces from remotes and
   earpiece calls (D42, `crates/na-daemon/src/host.rs`, `docs/notes/remote-host-control.md`),
   new website `apps/web/src/landing.tsx` + `src/site/` (`docs/notes/website.md`).
+  Released and deployed 2026-10-30; the user's Mac now runs the app from /Applications (0.2.0);
+  its service stays 0.1.1 until no agent runs, then the app swaps it (new remote features need 0.2.0).
 - M0–M9 done (small leftovers and user checks in STATUS). Next: M10 (own ideas, polish,
   final report). Details:
   - Themes/updates/releases (M9, D38): `packages/app/src/lib/theme.ts`,
