@@ -16,8 +16,8 @@ use std::time::Duration;
 use axum::extract::State as AxState;
 use axum::http::{HeaderMap, StatusCode};
 use na_protocol::{
-    AgentStatus, ApiError, AttentionKind, ErrorCode, Event, Id, McpServer, McpTransport, Session, StartSession, Swarm, SwarmMember,
-    SwarmMessage, SwarmRole,
+    AgentStatus, ApiError, AttentionKind, ErrorCode, Event, Id, McpServer, McpTransport, Session, StartSession, State, StatusSource, Swarm,
+    SwarmMember, SwarmMessage, SwarmRole,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -70,16 +70,18 @@ pub fn brief(role: &str, goal: &str, team: &[String], lead: &str) -> String {
          Team: {role} (you), {}.\n\
          {}\n\n\
          Talk to the team only with the send_message tool of the {SERVER_ID} MCP server (to a role, \"all\", or \"you\" for the user). \
-         Messages to you arrive in this terminal. Keep them short: what you did, where, what is open.\n",
+         Messages to you arrive in this terminal. Keep them short: what you did, where, what is open. \
+         Only send a message that moves the work on (a task, a result, a question); never send acknowledgements, \
+         thanks or status pings, and do not answer messages that need nothing from you.\n",
         others.join(", "),
         part(role),
     );
     if role == lead {
-        s.push_str("Start now: send the first tasks. When the goal is reached, send a short summary to \"you\".");
+        s.push_str("Start now: send the first tasks. When the goal is reached, send one short summary to \"you\" and stop.");
     } else {
         s.push_str(&format!(
-            "Wait for a task from the {lead}; do not start on your own. When a task is done, report to the {lead} \
-             or hand it straight to the member who continues."
+            "Do not send anything yet and do not start on your own: wait for a task from the {lead}. When a task is \
+             done, report the result to the {lead} or hand it straight to the member who continues."
         ));
     }
     s
@@ -92,7 +94,9 @@ fn as_prompt(msgs: &[SwarmMessage]) -> String {
         let to_all = if m.to == "all" { " (to everyone)" } else { "" };
         s.push_str(&format!("Message from {}{to_all}:\n{}\n\n", m.from, m.text.trim()));
     }
-    s.push_str("(Answer with send_message when you are done.)");
+    s.push_str(
+        "(If this hands you work, report the result with send_message when you are done. If it needs nothing from you, do not reply.)",
+    );
     s
 }
 
@@ -117,9 +121,17 @@ fn valid_role(r: &str) -> bool {
         && !["all", "you", "user", "everyone", "team"].contains(&r.to_lowercase().as_str())
 }
 
-/// Ready for the next prompt: finished its turn (not waiting on a permission prompt).
-fn idle(s: &Session) -> bool {
-    s.alive && matches!(s.status, AgentStatus::Done | AgentStatus::Idle)
+/// Ready for the next prompt: finished its turn (not waiting on a permission prompt). Agents
+/// with hooks must have reported once: before that a dialog may be up (Claude Code's folder trust
+/// prompt, where Enter means "No, exit").
+fn ready(st: &State, s: &Session) -> bool {
+    let hooks = st
+        .profiles
+        .iter()
+        .find(|p| p.id == s.profile_id)
+        .and_then(|p| crate::catalog::agent(&p.engine))
+        .is_some_and(|a| a.hooks != crate::catalog::Hooks::None);
+    s.alive && matches!(s.status, AgentStatus::Done | AgentStatus::Idle) && (!hooks || s.status_source == StatusSource::Hooks)
 }
 
 /// The extra MCP server for a member (merged with the user's servers).
@@ -261,7 +273,7 @@ impl Core {
             let sid = swarm.members.iter().find(|m| m.role == from).map(|m| m.session_id.clone());
             if let Some(sid) = sid {
                 let line: String = text.lines().next().unwrap_or("").chars().take(160).collect();
-                self.emit(Event::Attention { session_id: sid, kind: AttentionKind::Done, text: format!("{from}: {line}") });
+                self.emit(Event::Attention { session_id: sid, kind: AttentionKind::Done, text: line });
             }
         }
         self.swarm_deliver();
@@ -277,7 +289,7 @@ impl Core {
                 return;
             }
             out.iter()
-                .filter(|(sid, ids)| !ids.is_empty() && self.read(|s| s.sessions.get(*sid).is_some_and(idle)))
+                .filter(|(sid, ids)| !ids.is_empty() && self.read(|s| s.sessions.get(*sid).is_some_and(|x| ready(s, x))))
                 .map(|(sid, ids)| (sid.clone(), ids.clone()))
                 .collect()
         };
@@ -578,7 +590,7 @@ mod tests {
         let lead = brief("Coordinator", "Make a game", &team, "Coordinator");
         assert!(lead.contains("Goal: Make a game") && lead.contains("Start now") && lead.contains("Scout"));
         let scout = brief("Scout", "Make a game", &team, "Coordinator");
-        assert!(scout.contains("Wait for a task from the Coordinator") && scout.contains("Team: Scout (you), Coordinator."));
+        assert!(scout.contains("wait for a task from the Coordinator") && scout.contains("Team: Scout (you), Coordinator."));
     }
 
     #[test]

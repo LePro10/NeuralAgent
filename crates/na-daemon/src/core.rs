@@ -1132,7 +1132,8 @@ impl Core {
                 // Claude also reports failed background requests after a turn already ended with
                 // Stop; only a turn that is still running fails.
                 let cur = self.read(|st| st.sessions.get(sid).map(|s| s.status));
-                if cur == Some(AgentStatus::Done) {
+                let failed = text("transcript_path").and_then(|p| turn_failed(Path::new(&p))).unwrap_or(true);
+                if cur == Some(AgentStatus::Done) || !failed {
                     self.update_session(sid, mark);
                 } else {
                     let msg = text("error").or_else(|| text("message"));
@@ -1160,7 +1161,8 @@ impl Core {
 }
 
 /// The last assistant text in a Claude Code transcript (JSONL), read from the end of the file.
-fn last_assistant_text(path: &Path) -> Option<String> {
+/// The last 256 KB of a transcript, newest entry first.
+fn transcript_tail(path: &Path) -> Option<Vec<Value>> {
     use std::io::{Read, Seek, SeekFrom};
     let mut f = std::fs::File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
@@ -1168,7 +1170,19 @@ fn last_assistant_text(path: &Path) -> Option<String> {
     f.seek(SeekFrom::Start(start)).ok()?;
     let mut buf = String::new();
     f.take(256 * 1024).read_to_string(&mut buf).ok()?;
-    buf.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find_map(|v| {
+    Some(buf.lines().rev().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect())
+}
+
+/// Whether the transcript's last answer is an API error. Claude also sends StopFailure for failed
+/// side requests (titles, suggestions) while the turn itself goes on.
+fn turn_failed(path: &Path) -> Option<bool> {
+    let tail = transcript_tail(path)?;
+    let last = tail.iter().find(|v| v.get("type").and_then(Value::as_str) == Some("assistant"))?;
+    Some(last.get("isApiErrorMessage").and_then(Value::as_bool) == Some(true))
+}
+
+fn last_assistant_text(path: &Path) -> Option<String> {
+    transcript_tail(path)?.into_iter().find_map(|v| {
         if v.get("type")?.as_str()? != "assistant" {
             return None;
         }
@@ -1290,5 +1304,20 @@ mod tests {
         assert_eq!(super::host_name("Leas-MacBook.local"), "Leas-MacBook");
         assert_eq!(super::host_name(""), "Computer");
         assert_eq!(super::host_name(&"a".repeat(80)).len(), 64);
+    }
+
+    #[test]
+    fn only_an_api_error_fails_a_turn() {
+        let dir = std::env::temp_dir().join(format!("na-turn-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.jsonl");
+        let ok = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}"#;
+        let err = r#"{"type":"assistant","isApiErrorMessage":true,"message":{"content":[{"type":"text","text":"API Error"}]}}"#;
+        std::fs::write(&path, format!("{ok}\n{{\"type\":\"system\"}}\n")).unwrap();
+        assert_eq!(super::turn_failed(&path), Some(false));
+        std::fs::write(&path, format!("{ok}\n{err}\n")).unwrap();
+        assert_eq!(super::turn_failed(&path), Some(true));
+        assert_eq!(super::turn_failed(&dir.join("missing")), None);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

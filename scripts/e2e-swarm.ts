@@ -119,7 +119,7 @@ ok(report.text.startsWith("Done:"), "the coordinator's summary reached the user"
 ok(readFileSync(join(dir, "hello.txt"), "utf8") === "Hello, swarm.\n", "the builder did the work");
 ok(messages().every((m) => m.delivered), "every message was delivered");
 const att = events().filter((e) => e.e === "attention");
-ok(att.length === 1 && att[0].text.startsWith("Coordinator: Done"), `one notification, for the report (${att.map((a) => a.text).join(" | ")})`);
+ok(att.length === 1 && att[0].text.startsWith("Done:"), `one notification, for the report (${att.map((a) => a.text).join(" | ")})`);
 
 await req("swarm_send", { swarm_id: swarm.id, to: "all", text: "Thanks, team." });
 await until(() => messages().find((m) => m.from === "You" && m.delivered), "the user's message reaches every member", 20000);

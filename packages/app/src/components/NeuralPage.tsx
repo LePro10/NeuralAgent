@@ -215,7 +215,7 @@ function Line({ m, live }: { m: OrchMessage; live: boolean }) {
 }
 
 /** Opens an agent's pane: its workspace, with its tab in front. */
-function useOpenSession() {
+export function useOpenSession() {
   const client = useClient();
   const setWorkspace = useUi((u) => u.setWorkspace);
   return (sid: string) => {

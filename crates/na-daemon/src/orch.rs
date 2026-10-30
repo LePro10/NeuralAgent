@@ -294,6 +294,33 @@ impl Core {
                     ),
                 }
             }
+            "start_swarm" => {
+                let (Some(folder), Some(goal)) = (s("folder"), s("goal")) else { return fail("folder and goal are needed") };
+                let ws = match self.resolve_workspace(&folder).await {
+                    Ok(w) => w,
+                    Err(e) => return fail(&e.message),
+                };
+                let profile = match s("agent").map(|p| self.resolve_profile(&p)) {
+                    Some(Ok(p)) => Some(p),
+                    Some(Err(e)) => return fail(&e.message),
+                    None => None,
+                };
+                let members = profile.map(|p| crate::swarm::default_team(&p));
+                match self.handle(&me(), Request::SwarmStart { workspace_id: ws.0.clone(), goal, members }).await {
+                    Ok(v) => {
+                        let lead = v["members"][0]["session_id"].as_str().map(str::to_string);
+                        let roles: Vec<&str> = v["members"].as_array().into_iter().flatten().filter_map(|m| m["role"].as_str()).collect();
+                        let label = format!("Started a swarm in {}: {}", ws.1, roles.join(", "));
+                        (json!({ "ok": true, "team": roles }).to_string(), Some(label), true, lead)
+                    }
+                    Err(e) => (
+                        json!({ "ok": false, "error": e.message }).to_string(),
+                        Some(format!("Could not start a swarm in {}: {}", ws.1, e.message)),
+                        false,
+                        None,
+                    ),
+                }
+            }
             "send_to_agent" => {
                 let (Some(agent), Some(text)) = (s("agent"), s("text")) else { return fail("agent and text are needed") };
                 let Some((sid, name)) = self.resolve_session(&agent) else { return fail("no such agent") };
@@ -644,6 +671,15 @@ fn tools() -> Vec<Tool> {
                 "prompt": { "type": "string", "description": "The task, written as a good prompt for a coding agent" },
                 "worktree": { "type": "boolean", "description": "Work in a separate git worktree (only when asked)" }
             }, "required": ["folder"] }),
+        },
+        Tool {
+            name: "start_swarm",
+            description: "Start a team of four agents (Coordinator, Scout, Builder, Reviewer) on one bigger goal. They plan, hand tasks to each other and report back; their messages show on the Swarm page. Use it only when the user asks for a team or swarm.",
+            params: json!({ "type": "object", "properties": {
+                "folder": { "type": "string", "description": "Workspace name, or folder path from find_folder" },
+                "goal": { "type": "string", "description": "What the team should achieve, as a clear brief" },
+                "agent": { "type": "string", "description": "Agent type id for every member; omit for the default" }
+            }, "required": ["folder", "goal"] }),
         },
         Tool {
             name: "send_to_agent",
