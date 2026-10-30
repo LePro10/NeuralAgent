@@ -1,0 +1,132 @@
+name: Release
+
+# Push a tag `v<version>` (the Cargo workspace version, see scripts/set-version.mjs). Builds the
+# desktop apps and the Android APK, uploads them to agent.neuralhub.dev and publishes the
+# manifest there; desktop apps update themselves from it.
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version matches the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          v=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          a=$(node -p 'require("./apps/android/package.json").version')
+          echo "tag ${GITHUB_REF_NAME}, cargo $v, android $a"
+          [ "v$v" = "$GITHUB_REF_NAME" ] && [ "$a" = "$v" ]
+
+  desktop:
+    name: Desktop (${{ matrix.target }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin, bundles: "app,dmg" }
+          - { os: macos-latest, target: x86_64-apple-darwin, bundles: "app,dmg" }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis }
+          # The oldest supported Ubuntu, so the AppImage runs on older glibc too.
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: "appimage,deb" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux webview deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libasound2-dev patchelf
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: pnpm install --frozen-lockfile
+      - name: Build the service (bundled as a sidecar)
+        run: cargo build --release --locked -p na-daemon --target ${{ matrix.target }}
+      - run: node scripts/stage-daemon.mjs ${{ matrix.target }}
+      - name: Build the app
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # linuxdeploy is an AppImage itself; runners have no FUSE.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+      - run: node scripts/release-collect.mjs ${{ matrix.target }} dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/
+          retention-days: 7
+
+  android:
+    name: Android APK
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - name: Secrets
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" > apps/android/android/app/google-services.json
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "NA_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Build APK
+        working-directory: apps/android
+        env:
+          NA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        # Android installs only a higher version code over an older one: 1.2.3 → 1002003.
+        run: |
+          export NA_VERSION_CODE=$(node -p 'const [a,b,c]=require("./package.json").version.split("-")[0].split(".").map(Number); a*1e6+b*1e3+c')
+          pnpm exec cap sync android && cd android && ./gradlew --no-daemon -q assembleRelease
+      - run: node scripts/release-collect.mjs android dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish on agent.neuralhub.dev
+    needs: [desktop, android]
+    # A platform that failed to build is left out rather than holding back the others.
+    if: ${{ !cancelled() && needs.android.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Upload and publish
+        env:
+          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: node scripts/release-publish.mjs dist
