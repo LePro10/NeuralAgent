@@ -34,9 +34,10 @@ const MAX_MEMBERS: usize = 8;
 /// What the agent's process environment has to pass to the bridge (Codex only passes what it is told).
 const BRIDGE_ENV: [&str; 3] = ["NEURALAGENT_SESSION", "NEURALAGENT_HOOK_TOKEN", "NEURALAGENT_PORT"];
 
-/// Messages still to be typed into a terminal: session → message ids, oldest first.
+/// Messages still to be typed into a terminal: session → message ids, oldest first. The second
+/// lock is held while delivering: the tick and a new message both deliver, and only one may type.
 #[derive(Default)]
-pub struct Outbox(Mutex<HashMap<Id, Vec<Id>>>);
+pub struct Outbox(Mutex<HashMap<Id, Vec<Id>>>, Mutex<()>);
 
 pub fn default_team(profile: &str) -> Vec<SwarmRole> {
     ["Coordinator", "Scout", "Builder", "Reviewer"].map(|r| SwarmRole { role: r.into(), profile_id: profile.into() }).into()
@@ -283,26 +284,30 @@ impl Core {
     /// Types waiting messages into the terminals of members that finished their turn. Runs with
     /// every tick and after every message.
     pub fn swarm_deliver(&self) {
+        // Busy: the other delivery (or the next tick) picks the message up.
+        let Some(_typing) = self.outbox.1.try_lock() else {
+            return;
+        };
         let ready: Vec<(Id, Vec<Id>)> = {
-            let out = self.outbox.0.lock();
+            let mut out = self.outbox.0.lock();
             if out.is_empty() {
                 return;
             }
-            out.iter()
+            let sids: Vec<Id> = out
+                .iter()
                 .filter(|(sid, ids)| !ids.is_empty() && self.read(|s| s.sessions.get(*sid).is_some_and(|x| ready(s, x))))
-                .map(|(sid, ids)| (sid.clone(), ids.clone()))
-                .collect()
+                .map(|(sid, _)| sid.clone())
+                .collect();
+            sids.into_iter().filter_map(|sid| out.get_mut(&sid).map(|v| (sid, std::mem::take(v)))).collect()
         };
         for (sid, ids) in ready {
             let msgs: Vec<SwarmMessage> = self.read(|s| s.swarm_messages.iter().filter(|m| ids.contains(&m.id)).cloned().collect());
             if !msgs.is_empty() && self.send_prompt(&sid, &as_prompt(&msgs)).is_err() {
+                self.outbox.0.lock().entry(sid).or_default().splice(0..0, ids);
                 continue;
             }
             // Status follows with the agent's own hook; until then it is not idle for us.
             self.transition(&sid, AgentStatus::Working, None, |_| {});
-            if let Some(v) = self.outbox.0.lock().get_mut(&sid) {
-                v.retain(|i| !ids.contains(i));
-            }
             self.swarm_mark_delivered(&ids);
         }
         // Members that are gone never read their messages.
