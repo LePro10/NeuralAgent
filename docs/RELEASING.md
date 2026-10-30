@@ -101,6 +101,22 @@ nothing beyond 0.2.0). The user's Mac runs a locally built 0.2.1.
   straight to the newest version, and the dialog shows all notes in between.
 - The website and changelog can still be deployed by hand at any time (section above).
 
+## macOS signing (stable self-signed identity)
+
+The Mac app is signed with our own self-signed certificate "NeuralAgent Code Signing" (not an
+Apple Developer ID, so no notarization; first launch still needs right-click → Open). macOS keeps
+permissions such as Accessibility and the microphone per signing identity: with ad hoc signing
+every build was a new app and lost them, with the fixed certificate they survive updates.
+
+- CI: secrets `MACOS_SIGNING_P12` (base64 PKCS#12) and `MACOS_SIGNING_P12_PASSWORD`; the
+  workflow imports it into a temporary keychain and passes `signingIdentity` to `tauri build`.
+  Without the secrets the app falls back to ad hoc. The log prints the designated requirement
+  (`certificate root = H"…"`): it must stay the same from release to release.
+- Backup: `~/.config/neuralagent-signing/cert.p12` on the owner's Mac, its password in the
+  login keychain (service "NeuralAgent code signing p12 password"). Valid until 2046. Losing
+  or replacing it makes every user grant the permissions once more.
+- Switching identity (ad hoc → this one, or later to a Developer ID) costs one re-grant.
+
 ## Testing updates locally
 - UI without a release: `apps/desktop/src/dev-browser.tsx` fakes updates through hash params,
   for example `#port=…&token=…&update=0.3.0&service=0.2.0&serviceError=1`, or `&web=1` for the web

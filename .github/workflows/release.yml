@@ -57,14 +57,39 @@ jobs:
       - name: Build the service (bundled as a sidecar)
         run: cargo build --release --locked -p na-daemon --target ${{ matrix.target }}
       - run: node scripts/stage-daemon.mjs ${{ matrix.target }}
+      # macOS: sign with our own stable self-signed certificate instead of ad hoc. macOS keeps
+      # permissions (Accessibility, microphone) per signing identity, so they now survive updates.
+      # Without the secret (forks) the app stays ad hoc. Background: docs/RELEASING.md.
+      - name: macOS signing identity
+        if: runner.os == 'macOS'
+        env:
+          P12: ${{ secrets.MACOS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "no signing certificate: ad hoc"; exit 0; fi
+          K="$RUNNER_TEMP/signing.keychain-db"
+          KP=$(openssl rand -hex 16)
+          security create-keychain -p "$KP" "$K"
+          security set-keychain-settings -lut 21600 "$K"
+          security unlock-keychain -p "$KP" "$K"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$K" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KP" "$K" > /dev/null
+          security list-keychains -d user -s "$K" $(security list-keychains -d user | tr -d '"')
+          echo 'NA_SIGN_CONFIG={"bundle":{"macOS":{"signingIdentity":"NeuralAgent Code Signing"}}}' >> "$GITHUB_ENV"
       - name: Build the app
         working-directory: apps/desktop
+        shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # linuxdeploy is an AppImage itself; runners have no FUSE.
           APPIMAGE_EXTRACT_AND_RUN: 1
-        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json ${NA_SIGN_CONFIG:+--config "$NA_SIGN_CONFIG"}
+      - name: Show the macOS signature
+        if: runner.os == 'macOS'
+        run: codesign -d -r- target/${{ matrix.target }}/release/bundle/macos/*.app 2>&1 | tail -1
       - run: node scripts/release-collect.mjs ${{ matrix.target }} dist
       - uses: actions/upload-artifact@v4
         with:

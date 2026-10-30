@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-30 by `node scripts/codemap.mjs` (446 files). Do not edit by hand; regenerate after adding,
+Generated 2026-10-30 by `node scripts/codemap.mjs` (447 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -39,7 +39,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **mic.rs** (187) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
 - **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
-- **update.rs** (74) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
+- **update.rs** (175) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
 - **voice.rs** (491) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/web/
@@ -169,7 +169,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **build-web-icons.mjs** (163) — Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
 
 ## packages/app/src/
-- **App.tsx** (392) — `App()`
+- **App.tsx** (439) — `App()`
 - **index.ts** (12) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote`
 
 ## packages/app/src/components/
@@ -203,7 +203,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **SwarmPage.tsx** (104) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
-- **UpdateBadge.tsx** (117) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
+- **UpdateBadge.tsx** (124) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
@@ -372,7 +372,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 ## packages/ui/ui/components/layout/
 - **AppShell.tsx** (101) — App frame: a floating glass sidebar on desktop, a floating liquid-glass tab · `type NavItem, interface Nav, AppShell()`
 - **Page.tsx** (166) — A scrollable screen with a large title — and the one owner of page spacing. · `interface PageProps, BackButton(), Page(), Section()`
-- **Sidebar.tsx** (226) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
+- **Sidebar.tsx** (338) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
 - **TabBar.tsx** (360) — Floating liquid-glass tab bar (phones), with the rest of the app inside it. · `interface TabItem, signalOf, TabBar()`
 - **index.ts** (5)
 
@@ -381,7 +381,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **CommandPalette.tsx** (224) — Command palette (⌘K / Ctrl+K): one field that reaches everything. · `interface Command, interface CommandGroup, fuzzyMatch(), useCommandShortcut(), CommandPalette()`
 - **ConfirmButton.tsx** (117) — Confirm inside the button itself — no dialog. The first tap arms it: the · `ConfirmButton()`
 - **ConfirmSheet.tsx** (47) — Confirm before something that is irreversible AND external: sending to · `ConfirmSheet()`
-- **ContextMenu.tsx** (164) — iOS-style context menu. Touch: a long-press (420ms) lifts the item above a · `ContextMenu()`
+- **ContextMenu.tsx** (169) — iOS-style context menu. Touch: a long-press (420ms) lifts the item above a · `ContextMenu()`
 - **Disclosure.tsx** (165) — Inline editing instead of a sheet. A row that opens its content right · `Disclosure(), interface PickerOption, InlinePicker()`
 - **Menu.tsx** (183) — Menu for toolbars and rows (sort, filter, "more", account switch, any choice · `interface MenuEntry, menuKeys(), Menu()`
 - **MenuList.tsx** (94) — The one look of every small menu (pull-down, context menu): an opaque · `MENU_SURFACE, menuHeight(), MenuItems()`
@@ -457,4 +457,5 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **pages.mjs** (25) — Tour of the main pages. Seed first (env.mjs up --seed [--llm]).
 - **swarm.mjs** (135) — The Swarm page, clicked through: list, each swarm, the feed scrolled, a member, the actions,
 - **workspace.mjs** (59) — The workspace view: split panes (Gemini + Claude), the focused pane, the Chat/Terminal switch,
+- **ws-menu.mjs** (37) — Desktop sidebar workspaces: the right-click menu, renaming in place, and dragging into a new order.
 - **zoom.mjs** (33) — Interface size (desktop): the setting in Settings → Appearance and the "120%" that shows while

@@ -17,6 +17,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ### Fixed
 - macOS: after an update, NeuralAgent stays pinned in the Dock instead of showing up as a second icon.
+- macOS: the app now has a fixed signature, so Accessibility and microphone permissions stay granted after updates (grant them one last time after this update).
 
 ## [0.3.3] - 2026-10-30
 

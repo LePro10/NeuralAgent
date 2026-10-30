@@ -26,9 +26,11 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   sidebar peek, desktop interface size, calls fixed (mic worklet was inlined as data: URL and
   blocked by the CSP), "Hey Neural" sends to Neural. 0.3.3: dictation pastes on macOS (synthetic
   typing dropped characters in terminals), voice pill follows the mic level.
-- macOS app is ad-hoc signed: every update loses the Accessibility permission (owner must remove
-  and re-add NeuralAgent). Fix offered to the owner: a stable self-signed signing identity in CI
-  (free) or an Apple Developer ID. Not decided yet.
+- macOS signing: from the next release the app is signed with a stable self-signed identity
+  (docs/RELEASING.md "macOS signing"), so Accessibility/microphone survive updates. The first
+  update onto it still needs one re-grant. Updates now swap `Contents` in place, so the Dock pin
+  survives (from the update after the one that ships it). Unreleased, not deployed:
+  update pill (accent, download icon, clip-path morph), sidebar workspace menu/rename/drag.
 - Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
