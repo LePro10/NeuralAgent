@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS passkeys(
   x BLOB NOT NULL, y BLOB NOT NULL, sign_count INTEGER NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS stats(day TEXT NOT NULL, key TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY(day, key));
 CREATE TABLE IF NOT EXISTS device_days(day TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY(day, device_id));
+CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ";
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -172,6 +173,8 @@ impl Db {
 
     fn init(c: Connection) -> Result<Db> {
         c.execute_batch(SCHEMA)?;
+        // Columns added after the first release (fails harmlessly when present).
+        let _ = c.execute("ALTER TABLE devices ADD COLUMN push TEXT", []);
         Ok(Db(Mutex::new(c)))
     }
 
@@ -331,9 +334,37 @@ impl Db {
     }
 
     pub fn revoke_device(&self, id: &str) -> Result<()> {
+        self.0.lock().execute(
+            "UPDATE devices SET revoked_at = ?2, refresh_hash = NULL, prev_hash = NULL, push = NULL WHERE id = ?1",
+            params![id, now()],
+        )?;
+        Ok(())
+    }
+
+    /// What a device is woken with (FCM token or Web Push subscription); `None` clears it.
+    pub fn set_push(&self, id: &str, target: Option<&crate::push::Target>) -> Result<()> {
+        let v = target.map(serde_json::to_string).transpose()?;
+        self.0.lock().execute("UPDATE devices SET push = ?2 WHERE id = ?1", params![id, v])?;
+        Ok(())
+    }
+
+    /// Active client devices of an account that can be woken.
+    pub fn push_targets(&self, user_id: &str) -> Result<Vec<(String, crate::push::Target)>> {
+        let c = self.0.lock();
+        let mut st =
+            c.prepare("SELECT id, push FROM devices WHERE user_id = ?1 AND revoked_at IS NULL AND kind = 'client' AND push IS NOT NULL")?;
+        let rows = st.query_map([user_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.filter_map(|r| r.ok()).filter_map(|(id, v)| Some((id, serde_json::from_str(&v).ok()?))).collect())
+    }
+
+    pub fn kv_get(&self, key: &str) -> Result<Option<String>> {
+        Ok(self.0.lock().query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0)).optional()?)
+    }
+
+    pub fn kv_set(&self, key: &str, value: &str) -> Result<()> {
         self.0
             .lock()
-            .execute("UPDATE devices SET revoked_at = ?2, refresh_hash = NULL, prev_hash = NULL WHERE id = ?1", params![id, now()])?;
+            .execute("INSERT INTO kv(key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = ?2", params![key, value])?;
         Ok(())
     }
 

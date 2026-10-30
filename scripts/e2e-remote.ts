@@ -5,6 +5,7 @@
 // Usage: cargo build -p na-daemon && cargo build -p na-relay --features test-login
 //        node --experimental-strip-types scripts/e2e-remote.ts
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -271,6 +272,83 @@ await web.req({ m: "term_write", p: { sid: s.id, data: "echo web-$((20+3))\r" } 
 await until(() => webOut.includes("web-23"), "web terminal output");
 ok(true, "browser types into the shell and sees the output");
 detach();
+
+// Web Push: a mock push service stands in for Apple/Google and decrypts like a browser (RFC 8291).
+const pushes: { auth: string; body: Buffer; path: string }[] = [];
+const mock = createServer((req, res) => {
+  const chunks: Buffer[] = [];
+  req.on("data", (c) => chunks.push(c));
+  req.on("end", () => {
+    pushes.push({ auth: String(req.headers.authorization), body: Buffer.concat(chunks), path: req.url! });
+    res.writeHead(201).end();
+  });
+}).listen(0, "127.0.0.1");
+await new Promise((r) => mock.once("listening", r));
+const mockPort = (mock.address() as any).port;
+const subtle = crypto.subtle;
+const ua = await subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+const uaPublic = new Uint8Array(await subtle.exportKey("raw", ua.publicKey));
+const authSecret = crypto.getRandomValues(new Uint8Array(16));
+const b64u = (b: Uint8Array) => Buffer.from(b).toString("base64url");
+await webAcc.api("PUT", "/api/me/push", { web: { endpoint: "https://evil.example/push", p256dh: b64u(uaPublic), auth: b64u(authSecret) } }).then(
+  () => ok(false, "push to an unknown service"),
+  () => ok(true, "relay refuses a push endpoint that is not a known push service"),
+);
+await webAcc.api("PUT", "/api/me/push", { web: { endpoint: `http://127.0.0.1:${mockPort}/push/e2e`, p256dh: b64u(uaPublic), auth: b64u(authSecret) } });
+ok(true, "browser registers for Web Push");
+
+const hkdf = async (salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, bytes: number) =>
+  new Uint8Array(await subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt, info }, await subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]), bytes * 8));
+async function openPush(body: Buffer) {
+  const salt = body.subarray(0, 16);
+  const idlen = body[20]!;
+  const asPublic = body.subarray(21, 21 + idlen);
+  const peer = await subtle.importKey("raw", asPublic, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const shared = new Uint8Array(await subtle.deriveBits({ name: "ECDH", public: peer }, ua.privateKey, 256));
+  const ikm = await hkdf(authSecret, shared, new Uint8Array([...enc.encode("WebPush: info\0"), ...uaPublic, ...asPublic]), 32);
+  const cek = await hkdf(salt, ikm, enc.encode("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = await hkdf(salt, ikm, enc.encode("Content-Encoding: nonce\0"), 12);
+  const key = await subtle.importKey("raw", cek, "AES-GCM", false, ["decrypt"]);
+  const plain = new Uint8Array(await subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, body.subarray(21 + idlen)));
+  ok(plain[plain.length - 1] === 2, "push is a single last record");
+  return JSON.parse(dec.decode(plain.subarray(0, -1)));
+}
+
+// While the browser is on screen it gets no push; once hidden, an agent failing wakes it.
+const failing = async () => {
+  const x = await web.req({ m: "session_start", p: { workspace_id: ws.id, profile_id: "shell", cols: 80, rows: 24 } } as any);
+  await sleep(800);
+  await web.req({ m: "term_write", p: { sid: x.id, data: "exit 3\r" } } as any);
+  return x.id as string;
+};
+await failing();
+await sleep(1500);
+ok(pushes.length === 0, "no push while the browser is on screen");
+link.setVisible(false);
+await sleep(300);
+const failed = await failing();
+const got = await until(() => pushes[0], "web push delivered");
+ok(got.path === "/push/e2e", "push goes to the registered endpoint");
+const cfg = await fetch(`${RELAY}/api/config`).then((r) => r.json());
+const vapid = /^vapid t=([^,]+), k=(.+)$/.exec(got.auth);
+ok(vapid && vapid[2] === cfg.vapid, "VAPID header carries the relay's public key from /api/config");
+const [h, pl, sig] = vapid![1]!.split(".");
+const vk = await subtle.importKey("raw", Buffer.from(cfg.vapid, "base64url"), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+const claims = JSON.parse(Buffer.from(pl!, "base64url").toString());
+ok(
+  (await subtle.verify({ name: "ECDSA", hash: "SHA-256" }, vk, Buffer.from(sig!, "base64url"), enc.encode(`${h}.${pl}`))) &&
+    claims.aud === `http://127.0.0.1:${mockPort}` && claims.exp > Date.now() / 1000,
+  "VAPID token is signed by the relay and scoped to the push service",
+);
+const note = await openPush(got.body);
+ok(note.t === "attention" && note.kind === "error" && note.host === host.id && note.sid === failed, "push decrypts to kind, computer and session");
+ok(Object.keys(note).sort().join() === "host,kind,sid,t", "push carries nothing else (no terminal text)");
+await webAcc.api("PUT", "/api/me/push", null);
+const before = pushes.length;
+await failing();
+await sleep(1500);
+ok(pushes.length === before, "unregistered browser gets no more pushes");
+mock.close();
 web.close();
 
 // Signing in on the web with the same account (no QR): the computer's key is trusted on first use.

@@ -17,7 +17,7 @@ use crate::{ACCESS_TTL, Access, Authed, Code, Flow, Ip, PAIR_TTL, Pair, Relay, b
 const PLATFORMS: &[&str] = &["macos", "windows", "linux", "android", "ios", "web"];
 
 pub async fn config(State(r): State<Arc<Relay>>) -> Json<Value> {
-    Json(json!({ "providers": r.cfg.providers(), "pair_ttl": PAIR_TTL }))
+    Json(json!({ "providers": r.cfg.providers(), "pair_ttl": PAIR_TTL, "vapid": r.push.vapid_public(), "fcm": r.push.fcm_ready() }))
 }
 
 /// Where a sign-in may return to: the app's deep link, a loopback port of the desktop app
@@ -420,6 +420,18 @@ pub async fn update_device(State(r): State<Arc<Relay>>, a: Authed, Json(b): Json
     let name = b.name.as_deref().map(str::trim).filter(|n| !n.is_empty() && n.chars().count() <= 64);
     r.db.update_device(&a.device.id, name, b.pubkey.as_deref())?;
     r.hub.presence(&r, &a.user.id);
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Registers how this device is woken for agents that need attention (`null` stops it).
+pub async fn set_push(State(r): State<Arc<Relay>>, a: Authed, Json(t): Json<Option<crate::push::Target>>) -> ApiResult<Json<Value>> {
+    if let Some(t) = &t {
+        t.check().map_err(|e| ApiError::bad(e.to_string()))?;
+    }
+    if a.device.kind != "client" {
+        return Err(ApiError::bad("only phones and browsers get push"));
+    }
+    r.db.set_push(&a.device.id, t.as_ref())?;
     Ok(Json(json!({ "ok": true })))
 }
 

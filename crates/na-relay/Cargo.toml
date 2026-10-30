@@ -32,7 +32,10 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "form", "query"] }
 lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "tokio1", "tokio1-rustls", "builder", "ring", "webpki-roots"] }
 tower-http = { version = "0.7.1", features = ["fs"] }
-p256 = { version = "0.13.2", features = ["ecdsa"] }
+p256 = { version = "0.13.2", features = ["ecdsa", "ecdh"] }
+rsa = { version = "0.9", features = ["sha2"] }
+hkdf.workspace = true
+aes-gcm.workspace = true
 ciborium = "0.2.2"
 sha2.workspace = true
 url = "2.5.8"

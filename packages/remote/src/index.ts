@@ -366,6 +366,7 @@ export class RelayLink {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
   private opening = false;
+  private visible = true;
   private ready: Promise<void> = Promise.resolve();
   private markReady: () => void = () => {};
 
@@ -441,7 +442,10 @@ export class RelayLink {
     if (this.stopped) return;
     const ws = new WebSocket(this.account.relay.replace(/^http/, "ws") + "/ws");
     this.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ t: "auth", token }));
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ t: "auth", token }));
+      if (!this.visible) ws.send(JSON.stringify({ t: "visible", v: false }));
+    };
     ws.onclose = () => {
       if (this.ws === ws) this.ws = null;
       this.retry("Connection to the relay lost");
@@ -514,6 +518,13 @@ export class RelayLink {
         break;
       }
     }
+  }
+
+  /** Whether the user is looking at this device. The relay only pushes to devices that are not. */
+  setVisible(v: boolean) {
+    if (this.visible === v) return;
+    this.visible = v;
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ t: "visible", v }));
   }
 
   private route(to: string, env: Envelope) {

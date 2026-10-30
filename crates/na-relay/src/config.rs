@@ -32,6 +32,10 @@ pub struct Config {
     pub admins: Vec<String>,
     /// Sign-in without a provider, for tests and local development only.
     pub test_login: bool,
+    /// Firebase service-account JSON for FCM (Android push).
+    pub fcm: Option<PathBuf>,
+    /// Web Push (VAPID) key, base64url; made and kept in the database when unset.
+    pub vapid: Option<String>,
 }
 
 fn var(k: &str) -> Option<String> {
@@ -65,6 +69,8 @@ impl Config {
                 .map(|v| v.split(',').map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect())
                 .unwrap_or_default(),
             test_login,
+            fcm: var("FCM_SERVICE_ACCOUNT").map(PathBuf::from),
+            vapid: var("VAPID_PRIVATE_KEY"),
         })
     }
 
@@ -81,6 +87,8 @@ impl Config {
             mail_from: "agent@neuralhub.dev".into(),
             admins: vec![],
             test_login: cfg!(feature = "test-login"),
+            fcm: None,
+            vapid: None,
         }
     }
 

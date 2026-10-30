@@ -1,7 +1,8 @@
 //! WebSocket hub: routes opaque end-to-end envelopes between online devices of the same account,
 //! tells devices who is online, and pushes account changes (approval, block) live.
 //!
-//! Client → relay: `{"t":"auth","token"}` (first frame), `{"t":"route","to","env"}`.
+//! Client → relay: `{"t":"auth","token"}` (first frame), `{"t":"route","to","env"}`,
+//! `{"t":"visible","v"}` (clients), `{"t":"notify","kind","sid"}` (computers, see push.rs).
 //! Relay → client: `ready`, `presence`, `route{from,env}`, `undeliverable{to}`, `account{user}`,
 //! `revoked{reason}`.
 
@@ -41,6 +42,8 @@ struct Peer {
     tx: mpsc::Sender<Out>,
     /// Account may route (approved and remote on); updated live.
     routable: bool,
+    /// The app is on screen (clients say so); no push then.
+    visible: bool,
 }
 
 #[derive(Default)]
@@ -50,6 +53,11 @@ pub struct Hub {
 }
 
 impl Hub {
+    /// Connected and showing the app: it sees attention itself.
+    pub fn on_screen(&self, device: &str) -> bool {
+        self.peers.lock().get(device).is_some_and(|p| p.visible)
+    }
+
     pub fn online(&self, device: &str) -> bool {
         self.peers.lock().contains_key(device)
     }
@@ -141,8 +149,19 @@ pub async fn upgrade(State(r): State<Arc<Relay>>, ws: WebSocketUpgrade) -> Respo
 #[derive(Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 enum In {
-    Auth { token: String },
-    Route { to: String, env: String },
+    Auth {
+        token: String,
+    },
+    Route {
+        to: String,
+        env: String,
+    },
+    /// Client: the app went to the background (false) or came back (true).
+    Visible {
+        v: bool,
+    },
+    /// Host: a session needs attention; the relay wakes the account's other devices.
+    Notify(crate::push::Notice),
 }
 
 async fn serve(r: Arc<Relay>, socket: WebSocket) {
@@ -170,7 +189,10 @@ async fn serve(r: Arc<Relay>, socket: WebSocket) {
         let mut peers = r.hub.peers.lock();
         let full = peers.values().filter(|p| p.user == user).count() >= MAX_CONNS && !peers.contains_key(&device);
         if !full
-            && let Some(old) = peers.insert(device.clone(), Peer { conn, user: user.clone(), tx: tx.clone(), routable: a.user.can_route() })
+            && let Some(old) = peers.insert(
+                device.clone(),
+                Peer { conn, user: user.clone(), tx: tx.clone(), routable: a.user.can_route(), visible: a.device.kind == "client" },
+            )
         {
             let _ = old.tx.try_send(Out::Close("signed in again elsewhere".into()));
         }
@@ -225,7 +247,29 @@ async fn serve(r: Arc<Relay>, socket: WebSocket) {
             let _ = tx.try_send(Out::Close("too much traffic".into()));
             break;
         }
-        let Ok(In::Route { to, env }) = serde_json::from_str::<In>(&text) else { continue };
+        let (to, env) = match serde_json::from_str::<In>(&text) {
+            Ok(In::Route { to, env }) => (to, env),
+            Ok(In::Visible { v }) => {
+                if let Some(p) = r.hub.peers.lock().get_mut(&device).filter(|p| p.conn == conn) {
+                    p.visible = v;
+                }
+                continue;
+            }
+            Ok(In::Notify(mut n)) => {
+                let routable = r.hub.peers.lock().get(&device).is_some_and(|p| p.conn == conn && p.routable);
+                if a.device.kind == "host" && routable && n.valid() {
+                    n.host = device.clone();
+                    let (r, user) = (r.clone(), user.clone());
+                    tokio::spawn(async move {
+                        if let Err(e) = r.push.notify(&r, &user, &n).await {
+                            tracing::warn!("push: {e:#}");
+                        }
+                    });
+                }
+                continue;
+            }
+            _ => continue,
+        };
         let target = {
             let peers = r.hub.peers.lock();
             let me = peers.get(&device).filter(|p| p.conn == conn);

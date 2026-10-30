@@ -531,9 +531,23 @@ async fn connect(core: &Arc<Core>, c: &Creds, mut wake: std::pin::Pin<&mut tokio
     let (out_tx, mut out_rx) = mpsc::channel::<String>(1024);
     let mut sessions: HashMap<String, Sess> = HashMap::new();
     let mut ping = tokio::time::interval(Duration::from_secs(30));
+    let mut events = core.subscribe(None).rx;
     let end = loop {
         tokio::select! {
             _ = &mut wake => break End::Wake,
+            ev = events.recv() => match ev {
+                // The relay turns this into a push for the user's phones that are not looking.
+                Ok((_, Event::Attention { session_id, kind, .. })) => {
+                    let kind = match kind {
+                        AttentionKind::Done => "done",
+                        AttentionKind::Waiting => "waiting",
+                        AttentionKind::Error => "error",
+                    };
+                    let _ = out_tx.try_send(json!({ "t": "notify", "kind": kind, "sid": session_id }).to_string());
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break End::Park,
+                _ => {}
+            },
             _ = ping.tick() => if sink.send(Message::Ping(Default::default())).await.is_err() { break End::Retry("connection lost".into()) },
             Some(text) = out_rx.recv() => if sink.send(Message::Text(text.into())).await.is_err() { break End::Retry("connection lost".into()) },
             m = tokio::time::timeout(Duration::from_secs(90), stream.next()) => {

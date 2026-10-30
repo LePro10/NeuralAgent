@@ -8,6 +8,7 @@ pub mod config;
 pub mod db;
 pub mod hub;
 pub mod mail;
+pub mod push;
 pub mod util;
 pub mod web;
 pub mod webauthn;
@@ -80,12 +81,20 @@ pub struct Relay {
     pub challenges: Ttl<String, webauthn::Challenge>,
     /// Admin sessions after a passkey check, keyed by token hash → user id.
     pub admin_sessions: Ttl<String, String>,
+    pub push: push::Push,
     limiter: Mutex<HashMap<IpAddr, (i64, u32)>>,
 }
 
 impl Relay {
     pub fn new(cfg: Config, db: Db) -> Arc<Relay> {
+        let push = push::Push::new(cfg.fcm.as_deref(), cfg.vapid.clone(), &db)
+            .or_else(|e| {
+                tracing::error!("push: {e:#}; Android push is off");
+                push::Push::new(None, cfg.vapid.clone(), &db)
+            })
+            .expect("push keys");
         Arc::new(Relay {
+            push,
             mail: mail::Mailer::new(&cfg),
             http: reqwest::Client::builder()
                 .user_agent("NeuralAgent-Relay")
@@ -211,6 +220,7 @@ pub fn router(relay: Arc<Relay>) -> Router {
         .route("/auth/logout", post(auth::logout))
         .route("/me", get(auth::me))
         .route("/me/device", put(auth::update_device))
+        .route("/me/push", put(auth::set_push))
         .route("/devices", get(auth::devices))
         .route("/devices/{id}", delete(auth::delete_device))
         .route("/devices/signout-all", post(auth::sign_out_all))
