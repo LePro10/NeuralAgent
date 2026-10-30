@@ -14,6 +14,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 ### Improved
 - The **Update** button is filled with your theme's accent colour, shows a download arrow, and unrolls smoothly into a pill when the sidebar opens.
 
+### Fixed
+- macOS: after an update, NeuralAgent stays pinned in the Dock instead of showing up as a second icon.
+
 ## [0.3.3] - 2026-10-30
 
 ### Improved

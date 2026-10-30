@@ -3375,6 +3375,8 @@ dependencies = [
  "cpal",
  "dirs",
  "enigo",
+ "flate2",
+ "libc",
  "na-voice",
  "parking_lot 0.13.0",
  "png",
