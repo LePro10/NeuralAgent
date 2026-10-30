@@ -1,6 +1,6 @@
 // Web Push for the web remote: the service worker, the subscription the relay pushes to, and
 // "open this agent" requests from notification taps.
-import { account, ios } from "./session";
+import { account, ios, native } from "./session";
 
 const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
 
@@ -10,8 +10,31 @@ const supported = () => "serviceWorker" in navigator && "PushManager" in window 
 
 let worker: Promise<ServiceWorkerRegistration | null> = Promise.resolve(null);
 
-/** Registers the service worker; safe to call once at start. */
+// The Android app pushes through FCM; remember whether this install asked for it.
+const FCM = "na-remote:fcm";
+const fcmOn = {
+  get: () => {
+    try {
+      return localStorage.getItem(FCM) === "1";
+    } catch {
+      return false;
+    }
+  },
+  set: (v: boolean) => {
+    try {
+      if (v) localStorage.setItem(FCM, "1");
+      else localStorage.removeItem(FCM);
+    } catch {}
+  },
+};
+
+/** Registers the service worker (or the app's tap listener); safe to call once at start. */
 export function startWorker() {
+  if (native) {
+    void native.plugin.addListener("open", (o) => request(o.host, o.sid));
+    void native.plugin.addListener("token", (o) => void (fcmOn.get() && account.api("PUT", "/api/me/push", { fcm: o.token }).catch(() => {})));
+    return;
+  }
   if (!("serviceWorker" in navigator)) return;
   worker = navigator.serviceWorker.register("/app/sw.js", { scope: "/app/" }).catch((e) => {
     console.warn(`remote: service worker: ${(e as Error).message}`);
@@ -23,6 +46,12 @@ export function startWorker() {
 }
 
 export async function pushState(): Promise<PushState> {
+  if (native) {
+    const s = await native.plugin.pushState();
+    if (!s.available) return "unsupported";
+    if (s.permission === "denied") return "denied";
+    return s.permission === "granted" && fcmOn.get() ? "on" : "off";
+  }
   // iPhone and iPad only offer Web Push to an app added to the Home Screen.
   if (ios && !standalone) return "install";
   if (!supported()) return "unsupported";
@@ -41,6 +70,12 @@ function target(sub: PushSubscription) {
 
 /** Asks for permission (call from a tap) and registers this browser with the relay. */
 export async function enablePush(): Promise<PushState> {
+  if (native) {
+    const { token } = await native.plugin.pushToken();
+    await account.api("PUT", "/api/me/push", { fcm: token });
+    fcmOn.set(true);
+    return "on";
+  }
   if ((await Notification.requestPermission()) !== "granted") return pushState();
   const reg = await worker;
   if (!reg) throw new Error("This browser could not start the notification service.");
@@ -59,6 +94,12 @@ export async function enablePush(): Promise<PushState> {
 }
 
 export async function disablePush(): Promise<PushState> {
+  if (native) {
+    await account.api("PUT", "/api/me/push", null);
+    fcmOn.set(false);
+    await native.plugin.dropToken();
+    return pushState();
+  }
   const sub = await (await worker)?.pushManager.getSubscription();
   await account.api("PUT", "/api/me/push", null);
   await sub?.unsubscribe();
@@ -68,6 +109,11 @@ export async function disablePush(): Promise<PushState> {
 /** Push services rotate endpoints: tell the relay the current one on every start. */
 export async function syncPush() {
   if (!account.signedIn || (await pushState()) !== "on") return;
+  if (native) {
+    const { token } = await native.plugin.pushToken();
+    await account.api("PUT", "/api/me/push", { fcm: token }).catch(() => {});
+    return;
+  }
   const sub = await (await worker)?.pushManager.getSubscription();
   if (sub) await account.api("PUT", "/api/me/push", target(sub)).catch(() => {});
 }
@@ -107,6 +153,7 @@ export function doneOpening(sid: string) {
 
 /** Agent names for notifications; stays on this device, the push itself has no names. */
 export function rememberNames(json: string) {
+  if (native) return void native.plugin.setNames({ json }).catch(() => {});
   if (!("caches" in window)) return;
   void caches
     .open("na-remote")

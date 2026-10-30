@@ -2,11 +2,11 @@ import { App as AgentApp, DaemonProvider, useClient, useDaemon, type Platform } 
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
 import { Avatar, Button, Callout, ConfirmButton, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
-import { Bell, Code, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Bell, Code, LayoutGrid, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Brand } from "../brand";
 import { disablePush, doneOpening, enablePush, onOpenRequest, pushState, rememberNames, startWorker, syncPush, takeLaunchRequest, type PushState } from "./push";
-import { account, deviceName, lastHost, link, REDIRECT, useLink } from "./session";
+import { account, deviceName, lastHost, link, native, REDIRECT, useLink } from "./session";
 
 startWorker();
 const launch = takeLaunchRequest();
@@ -51,6 +51,7 @@ export function Remote() {
     const seen = () => link.setVisible(document.visibilityState === "visible");
     seen();
     document.addEventListener("visibilitychange", seen);
+    native?.onActive((active) => link.setVisible(active));
     return () => document.removeEventListener("visibilitychange", seen);
   }, []);
   useEffect(() => {
@@ -117,7 +118,9 @@ function SignIn({ error }: { error: string | null }) {
   const go = async (provider: string, extra?: Record<string, string>) => {
     setBusy(true);
     try {
-      location.href = await account.signInUrl(provider, REDIRECT, extra);
+      const url = await account.signInUrl(provider, REDIRECT, extra);
+      if (native) await native.signIn(url);
+      else location.href = url;
     } catch (e) {
       setBusy(false);
       fail(e);
@@ -126,7 +129,7 @@ function SignIn({ error }: { error: string | null }) {
   return (
     <Screen>
       <div className="flex flex-col gap-2">
-        <h1 className="display text-display">Web remote</h1>
+        <h1 className="display text-display">{native ? "NeuralAgent" : "Web remote"}</h1>
         <p className="text-body text-dim">See and steer the agents on your computer. Sign in with the account you use in NeuralAgent on the computer.</p>
       </div>
       {error && <Callout tone="danger" title="Sign-in failed">{error}</Callout>}
@@ -295,16 +298,26 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
   // Agent names for notification titles, kept on this device only.
   useEffect(() => {
     let last = "";
+    let counts = "";
     const off = client.subscribe(() => {
-      const names = JSON.stringify(Object.fromEntries(Object.values(client.state?.sessions ?? {}).map((s) => [s.id, s.title])));
+      const st = client.state;
+      const names = JSON.stringify(Object.fromEntries(Object.values(st?.sessions ?? {}).map((s) => [s.id, s.title])));
       if (names !== last) rememberNames((last = names));
+      // The Android widget and tile show what the agents were doing when the app last looked.
+      if (!native || !st) return;
+      const engine = (id: string) => st.profiles.find((p) => p.id === id)?.engine ?? "shell";
+      const agents = Object.values(st.sessions).filter((s) => s.alive && engine(s.profile_id) !== "shell" && !s.profile_id.startsWith("install:"));
+      const next = [agents.length, agents.filter((s) => s.status === "working").length, agents.filter((s) => s.status === "waiting").length];
+      if (next.join() === counts) return;
+      counts = next.join();
+      void native.plugin.setStatus({ computer: host.name, running: next[0]!, working: next[1]!, waiting: next[2]! }).catch(() => {});
     });
     return () => void off();
-  }, [client]);
+  }, [client, host.name]);
 
   const platform = useMemo<Platform>(
     () => ({
-      kind: "web",
+      kind: native ? "android" : "web",
       clientName: deviceName,
       connect,
       openExternal: (url) => void window.open(url, "_blank", "noopener"),
@@ -350,7 +363,7 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
   const status = useDaemon((c) => c.status);
   const user = account.user;
   return (
-    <Page title="This device" eyebrow="Web remote">
+    <Page title="This device" eyebrow={native ? "Android app" : "Web remote"}>
       <div className="flex flex-col gap-6 pb-8">
         <List label="Computer">
           <Row
@@ -362,6 +375,19 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
           <Row Icon={RefreshCw} title="Switch computer" onClick={onSwitch} />
         </List>
         <Notifications />
+        {native && (
+          <List label="Home screen" footer="Shows what the agents were doing when the app last looked. The Agents tile is in Quick Settings → Edit.">
+            <Row
+              Icon={LayoutGrid}
+              title="Agents widget"
+              trailing={
+                <Button size="sm" variant="glass" onClick={() => void native!.plugin.pinWidget().then((r) => r.ok || toast("Long-press the home screen → Widgets → NeuralAgent."), fail)}>
+                  Add
+                </Button>
+              }
+            />
+          </List>
+        )}
         <List label="Emergency" footer="Cuts every phone and browser off this computer. Turn it back on at the computer.">
           <Row
             Icon={PlugZap}
@@ -388,12 +414,15 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
   );
 }
 
+const closed = native ? "the app is closed" : "this page is closed";
 const PUSH_NOTE: Record<PushState, string> = {
-  on: "A notification when an agent finishes, fails or needs your input while this page is closed.",
-  off: "Get a notification when an agent finishes, fails or needs your input while this page is closed.",
-  denied: "Notifications are blocked for this site. Allow them in the browser's site settings.",
+  on: `A notification when an agent finishes, fails or needs your input while ${closed}.`,
+  off: `Get a notification when an agent finishes, fails or needs your input while ${closed}.`,
+  denied: native
+    ? "Notifications are off for NeuralAgent. Turn them on in Android Settings → Apps → NeuralAgent → Notifications."
+    : "Notifications are blocked for this site. Allow them in the browser's site settings.",
   install: "On iPhone and iPad, notifications only work after Share → Add to Home Screen. Open NeuralAgent from the Home Screen, then turn them on here.",
-  unsupported: "This browser cannot show notifications from a closed page.",
+  unsupported: native ? "This build of the app cannot receive notifications." : "This browser cannot show notifications from a closed page.",
 };
 
 function Notifications() {

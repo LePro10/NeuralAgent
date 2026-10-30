@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.neuralhub.neuralagent",
+      "sha256_cert_fingerprints": ["8B:B0:53:76:06:25:73:8E:B1:B1:1F:B3:0A:79:64:55:18:A5:39:36:ED:44:03:5A:C2:5C:10:F7:41:7A:77:6B"]
+    }
+  }
+]

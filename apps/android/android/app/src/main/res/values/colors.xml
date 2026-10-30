@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors the NeuralHub tokens in packages/ui/ui/styles/tokens.css (native views cannot read CSS). -->
+<resources>
+    <color name="na_bg">#080909</color>
+    <color name="na_bright">#eef1ee</color>
+    <color name="na_dim">#7d847f</color>
+    <color name="na_accent">#b9d3ff</color>
+    <color name="na_line">#14ffffff</color>
+</resources>

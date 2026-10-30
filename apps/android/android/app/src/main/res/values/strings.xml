@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NeuralAgent</string>
+    <string name="title_activity_main">NeuralAgent</string>
+    <string name="package_name">dev.neuralhub.neuralagent</string>
+    <string name="custom_url_scheme">neuralagent</string>
+    <string name="widget_description">What your agents are doing</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The NeuralAgent mark (docs/brand), drawn for the adaptive icon's 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="@color/na_bright" android:pathData="M34.2,32.0 H38.97 A2.2,2.2 0 0 1 41.17,34.2 V73.8 A2.2,2.2 0 0 1 38.97,76.0 H34.2 A2.2,2.2 0 0 1 32.0,73.8 V34.2 A2.2,2.2 0 0 1 34.2,32.0 Z" />
+    <path android:fillColor="@color/na_bright" android:pathData="M45.44,32.73 H51.56 A2.44,2.44 0 0 1 54.0,35.169999999999995 V43.370000000000005 A2.44,2.44 0 0 1 51.56,45.81 H45.44 A2.44,2.44 0 0 1 43.0,43.370000000000005 V35.169999999999995 A2.44,2.44 0 0 1 45.44,32.73 Z" />
+    <path android:fillColor="@color/na_accent" android:pathData="M50.94,47.4 H57.06 A2.44,2.44 0 0 1 59.5,49.839999999999996 V58.04 A2.44,2.44 0 0 1 57.06,60.48 H50.94 A2.44,2.44 0 0 1 48.5,58.04 V49.839999999999996 A2.44,2.44 0 0 1 50.94,47.4 Z" />
+    <path android:fillColor="@color/na_bright" android:pathData="M56.44,62.07 H62.56 A2.44,2.44 0 0 1 65.0,64.51 V72.7 A2.44,2.44 0 0 1 62.56,75.14 H56.44 A2.44,2.44 0 0 1 54.0,72.7 V64.51 A2.44,2.44 0 0 1 56.44,62.07 Z" />
+    <path android:fillColor="@color/na_bright" android:pathData="M69.03,32.0 H73.8 A2.2,2.2 0 0 1 76.0,34.2 V73.8 A2.2,2.2 0 0 1 73.8,76.0 H69.03 A2.2,2.2 0 0 1 66.83,73.8 V34.2 A2.2,2.2 0 0 1 69.03,32.0 Z" />
+</vector>

@@ -7,8 +7,11 @@ export const ios = /iPhone|iPad|iPod/.test(ua) || (ua.includes("Mac") && navigat
 const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
 const os = ios ? (/iPad/.test(ua) ? "iPad" : "iPhone") : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
 
+/** The Android app loads this page with Capacitor's bridge in place. */
+export const native = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() ? await import("./native") : null;
+
 /** How this browser shows up in the device list, e.g. "Safari on iPhone". */
-export const deviceName = os ? `${browser} on ${os}` : browser;
+export const deviceName = native ? "NeuralAgent for Android" : os ? `${browser} on ${os}` : browser;
 
 const store = localStore();
 export const account = await RemoteAccount.open({
@@ -16,7 +19,7 @@ export const account = await RemoteAccount.open({
   store,
   // A private window may have no IndexedDB; the key then lives as long as the tab.
   keys: "indexedDB" in window ? webKeyStore(store) : memoryKeyStore(),
-  device: { name: deviceName, platform: ios ? "ios" : "web" },
+  device: { name: deviceName, platform: native ? "android" : ios ? "ios" : "web" },
 });
 
 export const link = new RelayLink(account);
@@ -49,4 +52,4 @@ export const lastHost = {
   },
 };
 
-export const REDIRECT = `${location.origin}/app/`;
+export const REDIRECT = native?.REDIRECT ?? `${location.origin}/app/`;

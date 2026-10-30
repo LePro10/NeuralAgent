@@ -47,6 +47,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  android:
+    name: Android app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      # Firebase config and release keystore live only in GitHub secrets; without them the
+      # build still runs (no push, unsigned APK).
+      - name: Secrets
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > apps/android/android/app/google-services.json; fi
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "NA_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+      - name: Build APK
+        working-directory: apps/android
+        env:
+          NA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NA_VERSION_CODE: ${{ github.run_number }}
+        run: pnpm exec cap sync android && cd android && ./gradlew --no-daemon -q assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neuralagent-android
+          path: apps/android/android/app/build/outputs/apk/release/*.apk
+          retention-days: 14
+
   rust:
     name: Rust (${{ matrix.os }})
     strategy:
