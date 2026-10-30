@@ -13,7 +13,13 @@ overrides it wherever they differ (see D45).
 - **Appearance** is System / Light / Dark (`lib/theme.ts` → `appearance`, Settings → Appearance).
   It resolves to `data-appearance="light|dark"` on `<html>`. Every scheme (Night, Graphite,
   Midnight, Black, Dusk, Forest) has both. An inline script in each `index.html` sets it before
-  first paint. `syncThemeColor()` keeps `<meta name=theme-color>` matching the background.
+  first paint. `syncThemeColor()` keeps `<meta name=theme-color>` matching the top of the ground.
+- **Ground**: the app background is `.ground` (AppShell, every `NavPage`, the launch screen): a
+  static CSS mesh of four soft lights (accent top right, scheme colour top left, the scheme's second
+  colour low left, an accent echo low right) over a wash from `--color-ground-top` into `bg`. It is
+  what makes accents and themes tell apart at a glance. Strengths are tokens (`--ground-a/b/c/d/top`
+  in `tokens.css`, retuned per scheme and for light in `themes.css`). A full-screen view gets it
+  with the `ground` class instead of `bg-bg`; page-level light on top is `Glow` (app) or `Ambient`.
 - Never write `white/…` or `black/…`. For translucent ink use `rgb(var(--fg-rgb) / .x)` (in
   packages/ui) or the tokens below. Both appearances must keep AA contrast.
 

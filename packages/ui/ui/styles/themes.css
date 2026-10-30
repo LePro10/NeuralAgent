@@ -169,3 +169,8 @@
 [data-appearance="light"] .rim::before {
   background: linear-gradient(180deg, rgb(255 255 255 / .9), rgb(255 255 255 / .3) 40%, rgb(20 24 32 / .04) 70%, rgb(20 24 32 / .08));
 }
+/* Ground strengths (see tokens.css → --ground-*): Black stays near black, light grounds
+   take the light as a pastel wash. */
+[data-scheme="black"] { --ground-a: 22%; --ground-b: 13%; --ground-c: 8%; --ground-d: 8%; --ground-top: 4%; }
+[data-appearance="light"] { --ground-a: 21%; --ground-b: 15%; --ground-c: 12%; --ground-d: 10%; --ground-top: 6%; }
+[data-appearance="light"][data-scheme="black"], [data-appearance="light"] [data-scheme="black"] { --ground-a: 14%; --ground-b: 9%; --ground-c: 7%; --ground-d: 6%; --ground-top: 3%; }

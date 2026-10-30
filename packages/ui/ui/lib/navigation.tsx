@@ -68,7 +68,7 @@ export function NavPage({ id, depth, back, children }: { id: string; depth: numb
           animate="center"
           exit="exit"
           transition={transition}
-          className="absolute inset-0 bg-bg"
+          className="ground absolute inset-0"
           // The page being covered dims a little, like iOS's parallax shadow.
           style={{ zIndex: d === 'pop' ? 0 : 1 }}
         >

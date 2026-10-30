@@ -26,7 +26,7 @@ export function LaunchScreen({ ready, offline }: { ready: boolean; offline: bool
       {!ready && (
         <motion.div
           key="launch"
-          className="absolute inset-0 grid place-items-center bg-bg"
+          className="ground absolute inset-0 grid place-items-center"
           style={{ zIndex: "var(--z-intro)" }}
           initial={false}
           exit={{ opacity: 0, transition: { duration: 0.32, ease: [0.32, 0.72, 0, 1] } }}

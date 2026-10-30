@@ -77,7 +77,7 @@ export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mod
     <div
       ref={ref}
       data-mode={mode}
-      className={cn('relative flex h-dvh w-full overflow-hidden bg-bg [transform:translateZ(0)]', className)}
+      className={cn('ground relative flex h-dvh w-full overflow-hidden [transform:translateZ(0)]', className)}
       style={{
         ['--tabbar-space' as string]: phone && bar && !keyboard ? 'calc(74px + max(10px, var(--safe-bottom)))' : '0px',
         ['--sidebar-space' as string]: !phone && side ? `${space}px` : '0px',

@@ -271,6 +271,11 @@
      blobs and how strong they are; the second blob follows the accent. */
   --aurora-1: #3b5bff; --aurora-2: var(--color-accent-deep); --aurora-3: #1f9e92;
   --aurora-strength: 0.34;
+  /* Ground (.ground, see effects.css): how strong each light of the app background is.
+     a = accent (top right), b = scheme colour (top left), c = scheme's second colour (low left),
+     d = accent echo (low right), top = accent in the top wash (status bar colour).
+     Schemes and the light appearance retune these in themes.css. */
+  --ground-a: 30%; --ground-b: 20%; --ground-c: 14%; --ground-d: 11%; --ground-top: 8%;
   /* Glass recipe (see data-glass). */
   --glass-bg: rgb(28 30 29 / 0.58);
   --glass-blur: 22px;
@@ -281,6 +286,18 @@
   /* "Ink as light": the channel every translucent fill/line is drawn with.
      255 on dark grounds, 0 on light. Use as rgb(var(--fg-rgb) / .1). */
   --fg-rgb: 255 255 255;
+}
+/* The ground's paint, recomputed wherever a scheme, accent or appearance is set (so a preview
+   subtree gets its own). --color-ground-top is the colour at the very top: the theme-color
+   (status bar / PWA title bar) follows it, see syncThemeColor(). */
+:root, [data-scheme], [data-accent], [data-appearance] {
+  --color-ground-top: color-mix(in oklab, var(--color-bg), var(--color-accent-deep) var(--ground-top));
+  --ground-wash: linear-gradient(180deg, var(--color-ground-top), var(--color-bg) 64%);
+  --ground-lights:
+    radial-gradient(74% 64% at 96% 0%, color-mix(in oklab, var(--color-accent-deep) var(--ground-a), transparent), 30%, transparent),
+    radial-gradient(62% 56% at 2% 2%, color-mix(in oklab, var(--aurora-1) var(--ground-b), transparent), 32%, transparent),
+    radial-gradient(72% 50% at 8% 102%, color-mix(in oklab, var(--aurora-3) var(--ground-c), transparent), 36%, transparent),
+    radial-gradient(60% 46% at 100% 98%, color-mix(in oklab, var(--color-accent-deep) var(--ground-d), transparent), 38%, transparent);
 }
 @media (min-width: 900px) {
   :root { --tabbar-space: 0px; }

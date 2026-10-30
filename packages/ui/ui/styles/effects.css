@@ -149,6 +149,16 @@
   @keyframes aurora-b { to { transform: translate3d(-20vmax, 14vmax, 0) scale(.9); } }
   @keyframes aurora-c { to { transform: translate3d(-16vmax, -10vmax, 0) scale(1.15); } }
 
+  /* ── Ground ─────────────────────────────────────────────────────────── */
+  /* The coloured light the app stands on: the shell, every navigation page, the launch screen.
+     A mesh of soft lights — the accent (top right, strongest, so an accent reads at a glance),
+     the scheme's own colour (top left), its second colour low on the left and an accent echo low
+     on the right — over a wash that starts at --color-ground-top (the status bar colour) and
+     settles into the page colour. Strengths are tokens (--ground-*, tokens.css), tuned per scheme
+     and appearance. Colour hints (the bare %) give each light a Gaussian-like falloff instead of
+     a cone. Static on purpose: one paint, no layer, nothing to pause. */
+  .ground { background: var(--ground-lights), var(--ground-wash); background-color: var(--color-bg); }
+
   /* ── Liquid entrances ───────────────────────────────────────────────── */
   /* Arrives out of focus and a little low, settles with the spring curve. */
   @keyframes liquid-in { from { opacity: 0; transform: translate3d(0, 10px, 0) scale(.985); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
@@ -181,7 +191,7 @@
   /* Top edge while scrolled: content sinks into black under a frosted, tapering blur. */
   .top-fade {
     position: absolute; inset: 0 0 -28px 0; pointer-events: none;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 88%, transparent) 0%, color-mix(in srgb, var(--color-bg) 60%, transparent) 55%, transparent 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-ground-top) 88%, transparent) 0%, color-mix(in srgb, var(--color-ground-top) 60%, transparent) 55%, transparent 100%);
   }
   .top-fade-solid {
     background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 98%, transparent) 0%, color-mix(in srgb, var(--color-bg) 97%, transparent) 60%, color-mix(in srgb, var(--color-bg) 70%, transparent) 76%, color-mix(in srgb, var(--color-bg) 28%, transparent) 89%, transparent 100%);
@@ -379,3 +389,4 @@
 .logo-run { animation: logo-run var(--ll-speed, 1.6s) linear infinite; }
 .logo-dot { transform-box: fill-box; transform-origin: center; animation: logo-dot var(--ll-speed, 1.6s) ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .logo-run, .logo-dot { animation: none; } }
+
