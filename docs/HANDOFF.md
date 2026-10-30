@@ -10,8 +10,14 @@ decisions: `DECISIONS.md`.
   `docs/notes/claude-view.md`), host settings/updates/models/workspaces from remotes and
   earpiece calls (D42, `crates/na-daemon/src/host.rs`, `docs/notes/remote-host-control.md`),
   new website `apps/web/src/landing.tsx` + `src/site/` (`docs/notes/website.md`).
-  Released and deployed 2026-10-30; the user's Mac now runs the app from /Applications (0.2.0);
-  its service stays 0.1.1 until no agent runs, then the app swaps it (new remote features need 0.2.0).
+  Released and deployed 2026-10-30.
+- 0.2.1 (fix, D43): 0.2.0 lost remote access after every start (rustls had two backends and
+  panicked on the wss connect; keychain prompt per update). Tag v0.2.1 is pushed but GitHub
+  Actions refuse to start (billing/spending limit): NOT published on agent.neuralhub.dev, no
+  Windows/Linux/Android builds. The user's Mac runs 0.2.1 built locally
+  (`pnpm tauri build --target aarch64-apple-darwin --bundles app --config <no-updater conf>`,
+  installed by `/tmp/na-install.sh`, log `/tmp/na-install.log`). Re-run the Release workflow
+  for v0.2.1 once billing is fixed.
 - M0–M9 done (small leftovers and user checks in STATUS). Next: M10 (own ideas, polish,
   final report). Details:
   - Themes/updates/releases (M9, D38): `packages/app/src/lib/theme.ts`,
