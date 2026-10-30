@@ -1,5 +1,5 @@
 //! Whole account flow against a real server on a local port, with the test sign-in:
-//! request → admin mail → passkey → approve → live unlock → pairing → routing, and that a
+//! request → admin mail → approve → live unlock → pairing → routing, and that a
 //! second account can see and reach nothing of the first.
 
 use std::net::SocketAddr;
@@ -13,7 +13,6 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::config::Config;
 use crate::db::Db;
 use crate::util::{s256, token};
-use crate::webauthn::testkit::Authenticator;
 use crate::{Relay, router};
 
 struct T {
@@ -85,22 +84,14 @@ impl T {
         }
     }
 
-    async fn call(&self, method: reqwest::Method, path: &str, s: &Signed, body: Option<Value>, cookie: Option<&str>) -> (u16, Value) {
+    async fn call(&self, method: reqwest::Method, path: &str, s: &Signed, body: Option<Value>) -> (u16, Value) {
         let mut req = self.http.request(method, format!("{}{path}", self.base)).bearer_auth(&s.access);
         if let Some(b) = body {
             req = req.json(&b);
         }
-        if let Some(c) = cookie {
-            req = req.header("cookie", c);
-        }
         let res = req.send().await.unwrap();
         let status = res.status().as_u16();
-        let set_cookie = res.headers().get("set-cookie").map(|c| c.to_str().unwrap().split(';').next().unwrap().to_string());
-        let mut v: Value = res.json().await.unwrap_or(Value::Null);
-        if let Some(c) = set_cookie {
-            v["_cookie"] = c.into();
-        }
-        (status, v)
+        (status, res.json().await.unwrap_or(Value::Null))
     }
 
     async fn ws(&self, s: &Signed) -> Ws {
@@ -154,33 +145,18 @@ async fn account_flow_and_isolation() {
 
     // Pending: may connect and wait, but cannot pair or route.
     let mut ann_ws = t.ws(&ann).await;
-    assert_eq!(t.call(Method::POST, "/api/pair", &ann, None, None).await.0, 403);
+    assert_eq!(t.call(Method::POST, "/api/pair", &ann, None).await.0, 403);
     route(&mut ann_ws, &boss.device, "x").await;
     assert_eq!(next(&mut ann_ws, "undeliverable").await["to"], boss.device.as_str());
 
-    // Admin API needs the passkey; non-admins never get in.
+    // Admin API: admin accounts only.
     let users = format!("/api/admin/users/{}/approve", ann.user["id"].as_str().unwrap());
-    assert_eq!(t.call(Method::POST, &users, &boss, None, None).await.0, 403);
-    assert_eq!(t.call(Method::GET, "/api/admin/session", &ann, None, None).await.0, 403);
-    let (_, opts) = t.call(Method::POST, "/api/admin/passkey/register/start", &boss, None, None).await;
-    let auth = Authenticator::new();
-    let (id, cd, att) = auth.create(&t.base, "127.0.0.1", opts["challenge"].as_str().unwrap());
-    let (st, v) = t
-        .call(
-            Method::POST,
-            "/api/admin/passkey/register/finish",
-            &boss,
-            Some(json!({ "id": id, "client_data": cd, "attestation": att })),
-            None,
-        )
-        .await;
-    assert_eq!(st, 200, "{v}");
-    let cookie = v["_cookie"].as_str().unwrap().to_string();
-    // The cookie is bound to the admin: it does not help anyone else.
-    assert_eq!(t.call(Method::GET, "/api/admin/users", &ann, None, Some(&cookie)).await.0, 403);
+    assert_eq!(t.call(Method::GET, "/api/admin/session", &ann, None).await.0, 403);
+    assert_eq!(t.call(Method::POST, &users, &ann, None).await.0, 403);
+    assert_eq!(t.call(Method::GET, "/api/admin/session", &boss, None).await.0, 200);
 
     // Approve: Ann's open connection is unlocked live and she gets the "You're in" mail.
-    let (st, _) = t.call(Method::POST, &users, &boss, None, Some(&cookie)).await;
+    let (st, _) = t.call(Method::POST, &users, &boss, None).await;
     assert_eq!(st, 200);
     let acc = next(&mut ann_ws, "account").await;
     assert_eq!(acc["user"]["status"], "approved");
@@ -188,7 +164,7 @@ async fn account_flow_and_isolation() {
     assert!(t.relay.mail.sent.lock().iter().any(|(to, s)| to == "ann@example.com" && s.starts_with("You're in")));
 
     // Add phone: one-time code for Ann's account only.
-    let (st, pair) = t.call(Method::POST, "/api/pair", &ann, None, None).await;
+    let (st, pair) = t.call(Method::POST, "/api/pair", &ann, None).await;
     assert_eq!(st, 200);
     let phone = json!({ "name": "Ann's phone", "platform": "android", "kind": "client", "pubkey": crate::auth::random_pubkey() });
     let redeem = |code: &str| json!({ "code": code, "device": phone });
@@ -215,9 +191,9 @@ async fn account_flow_and_isolation() {
 
     // A second, approved user.
     let bob = t.sign_in("bob@example.com", "client", None).await;
-    t.call(Method::POST, &format!("/api/admin/users/{}/approve", bob.user["id"].as_str().unwrap()), &boss, None, Some(&cookie)).await;
+    t.call(Method::POST, &format!("/api/admin/users/{}/approve", bob.user["id"].as_str().unwrap()), &boss, None).await;
     // Bob cannot use Ann's code while signed in as Bob.
-    let (_, pair2) = t.call(Method::POST, "/api/pair", &ann, None, None).await;
+    let (_, pair2) = t.call(Method::POST, "/api/pair", &ann, None).await;
     let res = t
         .http
         .post(format!("{}/api/pair/redeem", t.base))
@@ -238,9 +214,9 @@ async fn account_flow_and_isolation() {
     assert!(pres["devices"].as_array().unwrap().iter().all(|d| d["name"].as_str().unwrap().starts_with("bob")));
     route(&mut bob_ws, &ann.device, "evil").await;
     assert_eq!(next(&mut bob_ws, "undeliverable").await["to"], ann.device.as_str());
-    let (_, devs) = t.call(Method::GET, "/api/devices", &bob, None, None).await;
+    let (_, devs) = t.call(Method::GET, "/api/devices", &bob, None).await;
     assert_eq!(devs["devices"].as_array().unwrap().len(), 1);
-    assert_eq!(t.call(Method::DELETE, &format!("/api/devices/{}", ann.device), &bob, None, None).await.0, 404);
+    assert_eq!(t.call(Method::DELETE, &format!("/api/devices/{}", ann.device), &bob, None).await.0, 404);
 
     // Refresh rotates; reusing the old refresh token signs the device out.
     let fresh: Value = t
@@ -259,15 +235,15 @@ async fn account_flow_and_isolation() {
     assert_eq!(next(&mut bob_ws, "revoked").await["reason"].as_str().unwrap(), "signed out: this sign-in was used elsewhere");
 
     // Block works at once: open connections close, tokens stop working.
-    t.call(Method::POST, &format!("/api/admin/users/{}/block", ann.user["id"].as_str().unwrap()), &boss, None, Some(&cookie)).await;
+    t.call(Method::POST, &format!("/api/admin/users/{}/block", ann.user["id"].as_str().unwrap()), &boss, None).await;
     assert_eq!(next(&mut phone_ws, "revoked").await["reason"], "account blocked");
     assert_eq!(next(&mut ann_ws, "revoked").await["reason"], "account blocked");
-    assert_eq!(t.call(Method::GET, "/api/me", &ann_phone, None, None).await.0, 401);
+    assert_eq!(t.call(Method::GET, "/api/me", &ann_phone, None).await.0, 401);
     let r = t.http.post(format!("{}/api/auth/refresh", t.base)).json(&json!({ "refresh": ann.refresh })).send().await.unwrap();
     assert_eq!(r.status(), 403);
 
     // Anonymous stats for the dashboard.
-    let (_, s) = t.call(Method::GET, "/api/admin/stats", &boss, None, Some(&cookie)).await;
+    let (_, s) = t.call(Method::GET, "/api/admin/stats", &boss, None).await;
     assert_eq!(s["users"], 2); // boss + bob (ann is blocked)
     assert!(s["days"][0]["connections"].as_i64().unwrap() >= 3);
 }

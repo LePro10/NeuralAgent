@@ -1,4 +1,4 @@
-//! SQLite storage: accounts, provider identities, devices, admin passkeys and anonymous stats.
+//! SQLite storage: accounts, provider identities, devices and anonymous stats.
 //! One connection behind a mutex; the relay's write load is a few rows per sign-in.
 
 use std::path::Path;
@@ -30,9 +30,7 @@ CREATE TABLE IF NOT EXISTS devices(
   revoked_at INTEGER, bytes INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS devices_user ON devices(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS devices_refresh ON devices(refresh_hash);
-CREATE TABLE IF NOT EXISTS passkeys(
-  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  x BLOB NOT NULL, y BLOB NOT NULL, sign_count INTEGER NOT NULL, created_at INTEGER NOT NULL);
+DROP TABLE IF EXISTS passkeys;
 CREATE TABLE IF NOT EXISTS stats(day TEXT NOT NULL, key TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY(day, key));
 CREATE TABLE IF NOT EXISTS device_days(day TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY(day, device_id));
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -118,9 +116,6 @@ pub enum Refresh {
     Reused(Device),
     Unknown,
 }
-
-/// A stored passkey: credential id, P-256 x and y, signature counter.
-pub type Passkey = (String, Vec<u8>, Vec<u8>, u32);
 
 pub struct Db(Mutex<Connection>);
 
@@ -389,26 +384,6 @@ impl Db {
             "INSERT INTO stats(day, key, value) VALUES (?1, ?2, ?3) ON CONFLICT(day, key) DO UPDATE SET value = value + ?3",
             params![day(0), key, n],
         )?;
-        Ok(())
-    }
-
-    pub fn add_passkey(&self, user_id: &str, id: &str, x: &[u8], y: &[u8], sign_count: u32) -> Result<()> {
-        self.0.lock().execute(
-            "INSERT INTO passkeys(id, user_id, x, y, sign_count, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![id, user_id, x, y, sign_count, now()],
-        )?;
-        Ok(())
-    }
-
-    /// Passkeys of an account: (credential id, x, y, sign count).
-    pub fn passkeys(&self, user_id: &str) -> Result<Vec<Passkey>> {
-        let c = self.0.lock();
-        let mut st = c.prepare("SELECT id, x, y, sign_count FROM passkeys WHERE user_id = ?1")?;
-        Ok(st.query_map([user_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?)
-    }
-
-    pub fn set_sign_count(&self, id: &str, n: u32) -> Result<()> {
-        self.0.lock().execute("UPDATE passkeys SET sign_count = ?2 WHERE id = ?1", params![id, n])?;
         Ok(())
     }
 

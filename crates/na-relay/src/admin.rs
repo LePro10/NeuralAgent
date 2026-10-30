@@ -1,32 +1,22 @@
-//! Admin API (`/api/admin`): an admin account (from `ADMIN_EMAILS`) plus a passkey check.
+//! Admin API (`/api/admin`): accounts whose email is in `ADMIN_EMAILS`.
 //! Requests, users, devices, sessions and anonymous statistics.
 
 use std::sync::Arc;
 
 use axum::extract::{FromRequestParts, Path, Query, State};
-use axum::http::HeaderMap;
-use axum::http::header::SET_COOKIE;
 use axum::http::request::Parts;
-use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::db::Status;
-use crate::util::{ApiError, ApiResult, hash, token};
-use crate::{Authed, Relay, webauthn};
-
-const COOKIE: &str = "na_admin";
-const SESSION_TTL: i64 = 12 * 3600;
+use crate::util::{ApiError, ApiResult};
+use crate::{Authed, Relay};
 
 pub fn router() -> Router<Arc<Relay>> {
     Router::new()
         .route("/session", get(session))
-        .route("/passkey/register/start", post(register_start))
-        .route("/passkey/register/finish", post(register_finish))
-        .route("/passkey/login/start", post(login_start))
-        .route("/passkey/login/finish", post(login_finish))
         .route("/users", get(users))
         .route("/users/{id}", delete(delete_user))
         .route("/users/{id}/devices", get(user_devices))
@@ -35,130 +25,22 @@ pub fn router() -> Router<Arc<Relay>> {
         .route("/stats", get(stats))
 }
 
-/// Signed in with an admin account (passkey not yet checked).
-pub struct AdminUser(Authed);
+/// Signed in with an admin account.
+pub struct Admin(Authed);
 
-impl FromRequestParts<Arc<Relay>> for AdminUser {
+impl FromRequestParts<Arc<Relay>> for Admin {
     type Rejection = ApiError;
     async fn from_request_parts(parts: &mut Parts, r: &Arc<Relay>) -> Result<Self, ApiError> {
         let a = Authed::from_request_parts(parts, r).await?;
         if !a.user.is_admin {
             return Err(ApiError::forbidden("admins only"));
         }
-        Ok(AdminUser(a))
-    }
-}
-
-fn cookie(headers: &HeaderMap) -> Option<String> {
-    headers.get_all("cookie").iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).find_map(|c| {
-        let (k, v) = c.trim().split_once('=')?;
-        (k == COOKIE).then(|| v.to_string())
-    })
-}
-
-fn verified(r: &Relay, headers: &HeaderMap, user_id: &str) -> bool {
-    cookie(headers).and_then(|c| r.admin_sessions.get(&hash(&c))).is_some_and(|u| u == user_id)
-}
-
-/// Admin account plus a passkey check in this browser.
-pub struct Admin(Authed);
-
-impl FromRequestParts<Arc<Relay>> for Admin {
-    type Rejection = ApiError;
-    async fn from_request_parts(parts: &mut Parts, r: &Arc<Relay>) -> Result<Self, ApiError> {
-        let AdminUser(a) = AdminUser::from_request_parts(parts, r).await?;
-        if !verified(r, &parts.headers, &a.user.id) {
-            return Err(ApiError::forbidden("passkey required"));
-        }
         Ok(Admin(a))
     }
 }
 
-fn start_session(r: &Relay, user_id: &str) -> Response {
-    let t = token();
-    r.admin_sessions.insert(hash(&t), user_id.to_string(), SESSION_TTL);
-    let secure = if r.cfg.public_url.starts_with("https://") { "; Secure" } else { "" };
-    let c = format!("{COOKIE}={t}; Path=/api/admin; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL}{secure}");
-    ([(SET_COOKIE, c)], Json(json!({ "ok": true }))).into_response()
-}
-
-async fn session(State(r): State<Arc<Relay>>, AdminUser(a): AdminUser, headers: HeaderMap) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({
-        "user": a.user,
-        "passkeys": r.db.passkeys(&a.user.id)?.len(),
-        "verified": verified(&r, &headers, &a.user.id),
-    })))
-}
-
-/// WebAuthn options; the page turns the base64url fields into ArrayBuffers.
-async fn register_start(State(r): State<Arc<Relay>>, AdminUser(a): AdminUser, headers: HeaderMap) -> ApiResult<Json<Value>> {
-    let keys = r.db.passkeys(&a.user.id)?;
-    // The first passkey needs only the admin sign-in; more need an existing passkey.
-    if !keys.is_empty() && !verified(&r, &headers, &a.user.id) {
-        return Err(ApiError::forbidden("passkey required"));
-    }
-    Ok(Json(json!({
-        "challenge": webauthn::challenge(&r, &a.user.id, true),
-        "rp": { "id": r.cfg.rp_id(), "name": "NeuralAgent Admin" },
-        "user": { "id": crate::util::b64u(a.user.id.as_bytes()), "name": a.user.email, "displayName": a.user.name },
-        "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }],
-        "authenticatorSelection": { "residentKey": "preferred", "userVerification": "required" },
-        "excludeCredentials": keys.iter().map(|k| json!({ "type": "public-key", "id": k.0 })).collect::<Vec<_>>(),
-        "timeout": 120000,
-        "attestation": "none",
-    })))
-}
-
-#[derive(Deserialize)]
-struct RegisterFinish {
-    id: String,
-    client_data: String,
-    attestation: String,
-}
-
-async fn register_finish(
-    State(r): State<Arc<Relay>>,
-    AdminUser(a): AdminUser,
-    headers: HeaderMap,
-    Json(b): Json<RegisterFinish>,
-) -> ApiResult<Response> {
-    if !r.db.passkeys(&a.user.id)?.is_empty() && !verified(&r, &headers, &a.user.id) {
-        return Err(ApiError::forbidden("passkey required"));
-    }
-    webauthn::register(&r, &a.user.id, &b.id, &b.client_data, &b.attestation)
-        .map_err(|e| ApiError::bad(format!("passkey not accepted: {e}")))?;
-    tracing::info!("admin passkey registered");
-    Ok(start_session(&r, &a.user.id))
-}
-
-async fn login_start(State(r): State<Arc<Relay>>, AdminUser(a): AdminUser) -> ApiResult<Json<Value>> {
-    let keys = r.db.passkeys(&a.user.id)?;
-    if keys.is_empty() {
-        return Err(ApiError::bad("no passkey yet: create one first"));
-    }
-    Ok(Json(json!({
-        "challenge": webauthn::challenge(&r, &a.user.id, false),
-        "rpId": r.cfg.rp_id(),
-        "allowCredentials": keys.iter().map(|k| json!({ "type": "public-key", "id": k.0 })).collect::<Vec<_>>(),
-        "userVerification": "required",
-        "timeout": 120000,
-    })))
-}
-
-#[derive(Deserialize)]
-struct LoginFinish {
-    id: String,
-    client_data: String,
-    authenticator_data: String,
-    signature: String,
-}
-
-async fn login_finish(State(r): State<Arc<Relay>>, AdminUser(a): AdminUser, Json(b): Json<LoginFinish>) -> ApiResult<Response> {
-    webauthn::verify(&r, &a.user.id, &b.id, &b.client_data, &b.authenticator_data, &b.signature).map_err(|e| {
-        tracing::warn!("admin passkey check failed: {e:#}");
-        ApiError::forbidden("passkey check failed")
-    })?;
-    Ok(start_session(&r, &a.user.id))
+async fn session(Admin(a): Admin) -> ApiResult<Json<Value>> {
+    Ok(Json(json!({ "user": a.user })))
 }
 
 async fn users(State(r): State<Arc<Relay>>, _: Admin) -> ApiResult<Json<Value>> {

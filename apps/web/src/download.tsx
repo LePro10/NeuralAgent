@@ -22,6 +22,8 @@ const KINDS: { kind: string; Icon: LucideIcon; title: string; detail: string; os
   { kind: "android", Icon: Smartphone, title: "Android", detail: "APK", os: /Android/ },
 ];
 
+const INSTALL = `curl -fsSL ${location.origin}/install.sh | sh`;
+
 function DownloadPage() {
   const [latest, setLatest] = useState<Latest | null | undefined>(undefined);
   useEffect(() => {
@@ -54,6 +56,12 @@ function DownloadPage() {
                 <Button href={latest.downloads[mine.kind]} Icon={Download}>Download for {mine.title}</Button>
               </div>
             )}
+            {(mine?.kind === "mac" || mine?.kind === "mac-intel") && (
+              <div className="mt-4">
+                <p className="text-small text-dim">Or install from Terminal, without the macOS security prompt:</p>
+                <code className="card !rounded-list mt-2 block select-all overflow-x-auto whitespace-nowrap p-3 font-mono text-small text-bright">{INSTALL}</code>
+              </div>
+            )}
             <div className="mt-8 grid gap-2 sm:grid-cols-2">
               {kinds.map(({ kind, Icon, title, detail }) => (
                 <a key={kind} href={latest.downloads[kind]} className="card !rounded-list flex items-center gap-3 p-4 hover:bg-fill-2">
@@ -70,7 +78,7 @@ function DownloadPage() {
             </div>
             <h2 className="mt-10 text-title text-bright">First start</h2>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-body text-dim">
-              <li>macOS: the app is not notarized yet. Open it once with right-click → Open, or allow it under System Settings → Privacy & Security.</li>
+              <li>macOS: the app is not notarized yet. Use the Terminal command above, or after the DMG open System Settings → Privacy & Security → Open Anyway once.</li>
               <li>Windows: if SmartScreen warns, choose More info → Run anyway.</li>
               <li>Linux: make the AppImage executable (chmod +x) and start it.</li>
               <li>Android: allow installs from your browser when asked. The app tells you when a newer APK is out.</li>

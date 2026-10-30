@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Brand } from "../brand";
 import { ApiError, api, finishSignIn, hasStoredSession, onSignedOut, restore, signOut, type Session } from "./api";
 import { Dashboard } from "./Dashboard";
-import { CreatePasskey, UnlockPasskey } from "./PasskeyScreens";
 import { SignIn } from "./SignIn";
 
 type State =
@@ -90,12 +89,7 @@ export function App() {
           </div>
         </Screen>
       );
-    case "ready": {
-      const { session } = state;
-      if (session.passkeys === 0) return <Screen><CreatePasskey onDone={check} onSignOut={out} /></Screen>;
-      if (!session.verified) return <Screen><UnlockPasskey onDone={check} onSignOut={out} /></Screen>;
-      // A later "passkey required" (cookie gone) sends the user back to the unlock screen.
-      return <Dashboard session={session} onSignOut={out} onLocked={() => setState({ at: "ready", session: { ...session, verified: false } })} />;
-    }
+    case "ready":
+      return <Dashboard session={state.session} onSignOut={out} />;
   }
 }

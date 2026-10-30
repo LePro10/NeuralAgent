@@ -1,5 +1,5 @@
 //! NeuralAgent relay: Google/GitHub sign-in with admin approval, devices, QR pairing, admin
-//! area with passkeys, and routing of end-to-end encrypted envelopes between the devices of one
+//! area, and routing of end-to-end encrypted envelopes between the devices of one
 //! account. The relay never sees what is inside an envelope.
 
 pub mod admin;
@@ -12,7 +12,6 @@ pub mod push;
 pub mod releases;
 pub mod util;
 pub mod web;
-pub mod webauthn;
 
 #[cfg(all(test, feature = "test-login"))]
 mod tests;
@@ -79,9 +78,6 @@ pub struct Relay {
     /// Keyed by the hash of the access token.
     pub access: Ttl<String, Access>,
     pub pairs: Ttl<String, Pair>,
-    pub challenges: Ttl<String, webauthn::Challenge>,
-    /// Admin sessions after a passkey check, keyed by token hash → user id.
-    pub admin_sessions: Ttl<String, String>,
     pub push: push::Push,
     limiter: Mutex<HashMap<IpAddr, (i64, u32)>>,
 }
@@ -109,8 +105,6 @@ impl Relay {
             codes: Ttl::default(),
             access: Ttl::default(),
             pairs: Ttl::default(),
-            challenges: Ttl::default(),
-            admin_sessions: Ttl::default(),
             limiter: Mutex::new(HashMap::new()),
         })
     }

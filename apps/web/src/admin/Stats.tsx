@@ -36,8 +36,8 @@ function Bars({ label, days, metric }: { label: string; days: DayStats[]; metric
   );
 }
 
-export function Stats({ onLocked }: { onLocked: () => void }) {
-  const { data, error } = usePolled(() => api.stats(30), 30_000, onLocked);
+export function Stats() {
+  const { data, error } = usePolled(() => api.stats(30), 30_000);
   if (error && !data) return <Callout tone="danger" title="Could not load stats">{error}</Callout>;
   if (!data) return <div className="flex justify-center py-10"><Spinner label="Loading stats" /></div>;
   return (

@@ -16,9 +16,8 @@ Open items first. Everything else keeps going locally until these are done.
       touches the relay deploys itself within ~5 minutes (with rollback).
 - [ ] **Try remote with your real account** (5 min, after the next app build): NeuralAgent →
       *Remote* (sidebar) → *Continue with GitHub* (or Google). Your address is an admin
-      address, so you are approved at once. Then open `https://agent.neuralhub.dev/admin/` —
-      it asks you to register a **passkey** (Touch ID / iCloud Keychain) on first visit; that
-      passkey is the second factor for the admin area from then on.
+      address, so you are approved at once. Then open `https://agent.neuralhub.dev/admin/` and
+      sign in the same way (admins are the addresses in `ADMIN_EMAILS`; no passkey, D39).
 - [ ] **Phones** (10 min): Android — install the APK from the latest CI run (Actions → CI →
       artifact `neuralagent-android`), sign in with Google, turn on notifications in *This
       device*, let an agent finish while the app is closed, tap the notification. iPhone — open

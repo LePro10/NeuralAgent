@@ -25,7 +25,7 @@ export function useAction(reload: () => Promise<void>) {
   };
 }
 
-export function Requests({ users }: { users: Polled<User[]>; onLocked: () => void }) {
+export function Requests({ users }: { users: Polled<User[]> }) {
   const { busy, run } = useAction(users.reload);
   if (users.error && !users.data) return <Callout tone="danger" title="Could not load requests">{users.error}</Callout>;
   if (!users.data) return <div className="flex justify-center py-10"><Spinner label="Loading requests" /></div>;

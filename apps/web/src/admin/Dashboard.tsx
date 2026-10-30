@@ -10,10 +10,10 @@ import { Users } from "./Users";
 
 type Tab = "requests" | "users" | "stats";
 
-export function Dashboard({ session, onSignOut, onLocked }: { session: Session; onSignOut: () => void; onLocked: () => void }) {
+export function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>("requests");
   // Shared with the Requests and Users tabs; also drives the badge.
-  const users = usePolled(() => api.users(), 10_000, onLocked);
+  const users = usePolled(() => api.users(), 10_000);
   const pending = users.data?.filter((u) => u.status === "pending").length ?? 0;
   const me = session.user;
 
@@ -44,9 +44,9 @@ export function Dashboard({ session, onSignOut, onLocked }: { session: Session; 
         {pending > 0 && <Pill tone="warning" size="sm">{pending} pending</Pill>}
       </div>
 
-      {tab === "requests" && <Requests users={users} onLocked={onLocked} />}
-      {tab === "users" && <Users users={users} me={me.id} onLocked={onLocked} />}
-      {tab === "stats" && <Stats onLocked={onLocked} />}
+      {tab === "requests" && <Requests users={users} />}
+      {tab === "users" && <Users users={users} me={me.id} />}
+      {tab === "stats" && <Stats />}
     </div>
   );
 }

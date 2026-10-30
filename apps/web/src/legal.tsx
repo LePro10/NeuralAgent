@@ -45,7 +45,7 @@ const Privacy = () => (
     <H>Hosting</H>
     <p>The service runs on our own server in Switzerland.</p>
     <H>Cookies and tracking</H>
-    <p>No tracking, no analytics and no advertising. The only cookie is the admin session cookie, set for administrators after the passkey check. Visitors get no cookies.</p>
+    <p>No tracking, no analytics and no advertising. The site sets no cookies.</p>
     <H>Your rights</H>
     <p>You can ask for access to, correction of, or deletion of your data at any time: <b className="font-medium text-bright">[Email]</b>. Removing a device or deleting your account removes its data.</p>
   </>

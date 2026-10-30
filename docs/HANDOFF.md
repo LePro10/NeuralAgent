@@ -37,7 +37,7 @@ decisions: `DECISIONS.md`.
     `git ls-files -z | rsync -a --from0 --files-from=- ./ root@192.168.30.96:/opt/neuralagent/src/`
     then on .96 `cd /opt/neuralagent/src && docker build -f deploy/relay/Dockerfile -t ghcr.io/lepro10/neuralagent-relay:latest .`
     and `cd /opt/neuralagent && docker compose up -d`. The image includes `apps/web/dist`.
-  - `apps/web`: landing, legal drafts, `/admin/` (passkey), `/app/` web remote
+  - `apps/web`: landing, legal drafts, `/admin/` (admin accounts), `/app/` web remote
     (`src/remote/`, uses `@neuralagent/remote` + the shared `@neuralagent/app`).
   - `packages/remote`: RemoteAccount / RelayLink / sealed Transport (D27–D29, D32).
   - Phone layout in `packages/app` (D33).

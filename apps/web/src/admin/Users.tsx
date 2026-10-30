@@ -45,7 +45,7 @@ function Devices({ userId, onChange }: { userId: string; onChange: () => Promise
   );
 }
 
-export function Users({ users, me }: { users: Polled<User[]>; me: string; onLocked: () => void }) {
+export function Users({ users, me }: { users: Polled<User[]>; me: string }) {
   const { busy, run } = useAction(users.reload);
   const [open, setOpen] = useState<string | null>(null);
   if (users.error && !users.data) return <Callout tone="danger" title="Could not load users">{users.error}</Callout>;

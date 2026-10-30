@@ -47,8 +47,6 @@ export interface Stats {
 
 export interface Session {
   user: User;
-  passkeys: number;
-  verified: boolean;
 }
 
 export interface Config {
@@ -263,11 +261,6 @@ export async function signOut() {
 
 export const api = {
   session: () => call<Session>("GET", "/api/admin/session"),
-  registerStart: () => call<Record<string, unknown>>("POST", "/api/admin/passkey/register/start"),
-  registerFinish: (b: { id: string; client_data: string; attestation: string }) => call<unknown>("POST", "/api/admin/passkey/register/finish", b),
-  loginStart: () => call<Record<string, unknown>>("POST", "/api/admin/passkey/login/start"),
-  loginFinish: (b: { id: string; client_data: string; authenticator_data: string; signature: string }) =>
-    call<unknown>("POST", "/api/admin/passkey/login/finish", b),
   users: () => call<{ users: User[] }>("GET", "/api/admin/users").then((r) => r.users),
   userAction: (id: string, action: "approve" | "deny" | "block" | "unblock" | "remote_on" | "remote_off") =>
     call<{ user: User }>("POST", `/api/admin/users/${encodeURIComponent(id)}/${action}`).then((r) => r.user),

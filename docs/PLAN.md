@@ -120,7 +120,7 @@ patterns. Details per CLI in `DECISIONS.md`.
   (JWT, 15 min) + rotating refresh token per device (hashed in DB). Desktop & APK return via
   `neuralagent://auth?code=…` (one-time code exchanged with PKCE verifier); browser/PWA via
   same-origin redirect + HttpOnly cookie.
-* Admin: `/admin`, admins from `ADMIN_EMAILS`, WebAuthn passkey as second factor.
+* Admin: `/admin`, admins from `ADMIN_EMAILS`, sign-in only (passkeys removed, D39).
 
 ### 3.4 E2E (`na-crypto` / `packages/crypto`)
 

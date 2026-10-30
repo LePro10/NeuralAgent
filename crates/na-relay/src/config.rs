@@ -20,7 +20,7 @@ pub struct Smtp {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bind: SocketAddr,
-    /// Public origin, e.g. `https://agent.neuralhub.dev` (OAuth callbacks, passkeys, mail links).
+    /// Public origin, e.g. `https://agent.neuralhub.dev` (OAuth callbacks, mail links).
     pub public_url: String,
     pub db: PathBuf,
     /// Built web files (landing, `/app`, `/admin`); optional.
@@ -101,11 +101,6 @@ impl Config {
             releases: None,
             release_token: None,
         }
-    }
-
-    /// Host name for passkeys (`rp.id`).
-    pub fn rp_id(&self) -> String {
-        url::Url::parse(&self.public_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_else(|| "localhost".into())
     }
 
     pub fn providers(&self) -> Vec<&'static str> {

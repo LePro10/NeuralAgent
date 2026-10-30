@@ -411,3 +411,9 @@ system installer). Same release keystore, version code `major·10⁶ + minor·10
 **Signing.** macOS builds are not notarized and Windows builds not code-signed yet (needs an
 Apple Developer ID / a certificate — the user's call); the download page explains the first
 start. Updates are verified by the updater signature either way.
+
+## D39 — Admin area without passkeys (2026-10-30)
+
+The user found the passkey step annoying and asked for it to go. The admin area now needs only
+a sign-in (Google/GitHub) with an address in `ADMIN_EMAILS`; the provider's own 2FA protects it.
+WebAuthn code, the admin cookie and the `passkeys` table are gone (dropped on start).
