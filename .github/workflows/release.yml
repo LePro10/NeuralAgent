@@ -28,6 +28,9 @@ jobs:
   desktop:
     name: Desktop (${{ matrix.target }})
     needs: version
+    # Every secret lives in the "release" environment, which only v* tags (only the owner may
+    # push them) and main can use. Branches and pull requests never see them.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +69,11 @@ jobs:
           P12: ${{ secrets.MACOS_SIGNING_P12 }}
           P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
         run: |
-          if [ -z "$P12" ]; then echo "no signing certificate: ad hoc"; exit 0; fi
+          if [ -z "$P12" ]; then
+            # An official release must keep the same identity, or every user loses permissions.
+            if [ "$GITHUB_REPOSITORY" = "LePro10/NeuralAgent" ]; then echo "::error::MACOS_SIGNING_P12 missing"; exit 1; fi
+            echo "no signing certificate: ad hoc"; exit 0
+          fi
           K="$RUNNER_TEMP/signing.keychain-db"
           KP=$(openssl rand -hex 16)
           security create-keychain -p "$KP" "$K"
@@ -100,6 +107,7 @@ jobs:
   android:
     name: Android APK
     needs: version
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,6 +149,7 @@ jobs:
     needs: [desktop, android]
     # A platform that failed to build is left out rather than holding back the others.
     if: ${{ !cancelled() && needs.android.result == 'success' }}
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

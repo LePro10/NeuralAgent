@@ -108,9 +108,9 @@ Apple Developer ID, so no notarization; first launch still needs right-click →
 permissions such as Accessibility and the microphone per signing identity: with ad hoc signing
 every build was a new app and lost them, with the fixed certificate they survive updates.
 
-- CI: secrets `MACOS_SIGNING_P12` (base64 PKCS#12) and `MACOS_SIGNING_P12_PASSWORD`; the
+- CI: secrets (environment `release`) `MACOS_SIGNING_P12` (base64 PKCS#12) and `MACOS_SIGNING_P12_PASSWORD`; the
   workflow imports it into a temporary keychain and passes `signingIdentity` to `tauri build`.
-  Without the secrets the app falls back to ad hoc. The log prints the designated requirement
+  Without the secrets a fork falls back to ad hoc; an official tag fails instead. The log prints the designated requirement
   (`certificate root = H"…"`): it must stay the same from release to release.
 - Backup: `~/.config/neuralagent-signing/cert.p12` on the owner's Mac, its password in the
   login keychain (service "NeuralAgent code signing p12 password"). Valid until 2046. Losing
@@ -126,3 +126,11 @@ every build was a new app and lost them, with the fixed certificate they survive
   app at a local relay. Run the apps from
   `/private/tmp/…`, because the updater refuses the `/tmp` symlink. Always use a test
   `NEURALAGENT_HOME`.
+
+## Release secrets
+All release secrets live in the GitHub environment `release` (not as repository secrets), which
+only `v*` tags and `main` may use, so branches and pull requests never see them (D51):
+`TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)`, `MACOS_SIGNING_P12(_PASSWORD)`, `ANDROID_KEYSTORE_B64`,
+`ANDROID_KEYSTORE_PASSWORD`, `GOOGLE_SERVICES_JSON`, `RELEASE_UPLOAD_TOKEN`. After changing one:
+`gh secret set NAME -e release < file`, then `gh workflow run release-secrets.yml` checks that
+all are present and open (nothing is built or published).

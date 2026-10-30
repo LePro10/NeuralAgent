@@ -9,7 +9,7 @@ NeuralAgent is a desktop app for running many AI coding agents side by side (Cla
 Gemini and more in a grid of persistent terminals). It has a dashboard, local voice control, an
 orchestrator called **Neural**, a Claude view over the real CLI, swarms, and a phone remote (web +
 Android) that reaches the computer end-to-end encrypted through a relay at
-`agent.neuralhub.dev`. Closed source, © Leandro Probst. The owner works only through AI agents.
+`agent.neuralhub.dev`. Open source (AGPL-3.0, `LICENSE`), © Leandro Probst; outside contributions arrive as pull requests (`CONTRIBUTING.md`). The owner works only through AI agents.
 
 ## Repo map
 | Path | What |

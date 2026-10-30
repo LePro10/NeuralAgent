@@ -580,3 +580,20 @@ viewport and caches object URLs (LRU 60). Alternatives: inline base64 (megabytes
 page over the relay), client-side downscaling (still transfers the full bytes), a temp-file cache
 on the host (state to clean up). The full-screen viewer is a custom overlay, like the Picker.
 
+
+## D51 — Public repository: forks and pull requests, release secrets in an environment (2026-10-30)
+The repository is public under the AGPL-3.0 (copies that are changed and shared or run as a
+service stay open). Outside contributors fork and open pull requests; trusted helpers may be
+invited as collaborators and push branches here. Rulesets: `main` takes changes only through a
+pull request with the code owner's approval (`.github/CODEOWNERS`), no force push or deletion;
+`v*` tags can be created only by the owner. The owner (repository admin) is on the bypass list,
+so the owner's agents keep pushing to `main` directly. All signing keys and the upload token
+live in the `release` environment, usable only from `v*` tags and `main`: a branch or pull
+request (even from a collaborator who edits a workflow) never sees them, and CI builds the
+Android APK unsigned. An official tag without the macOS certificate now fails instead of
+silently shipping an ad hoc build (users would lose their permissions). Workflows of outside
+contributors need the owner's approval before they run. Note: a merge to `main` that touches
+the relay or the website goes live on the server within minutes (`relay-image.yml` +
+`deploy/relay/update.sh`), so review relay changes like a deploy. Alternatives: a private repo
+with a public mirror (PRs ported by hand), a separate private release repo (more moving parts),
+keeping the relay closed (open core; possible later).

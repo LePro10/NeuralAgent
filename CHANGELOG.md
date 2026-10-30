@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### New
+- NeuralAgent is now open source (AGPL-3.0). Anyone can read the code and suggest changes on GitHub.
+
 ## [0.3.4] - 2026-10-30
 
 ### Improved

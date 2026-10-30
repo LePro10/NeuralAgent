@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.3.4"
 edition = "2024"
-license = "LicenseRef-Proprietary"
+license = "AGPL-3.0-only"
 authors = ["Leandro Probst"]
 repository = "https://github.com/LePro10/NeuralAgent"
 

@@ -4,7 +4,8 @@ A desktop app for running many AI coding agents side by side — Claude Code, Co
 more in a grid of persistent terminals — with a dashboard, local voice control, an orchestrator
 called **Neural**, and a phone remote.
 
-Closed source. © Leandro Probst.
+Open source under the [GNU AGPL-3.0](LICENSE). © Leandro Probst. Contributions are welcome:
+see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Where to start
 - [`AGENTS.md`](AGENTS.md): entry point for contributors and agents (repo map, rules, release checklist).
