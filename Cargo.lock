@@ -3232,6 +3232,7 @@ dependencies = [
  "keyring",
  "na-crypto",
  "na-protocol",
+ "na-voice",
  "parking_lot 0.13.0",
  "portable-pty",
  "qrcode",

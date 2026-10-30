@@ -118,7 +118,7 @@ pub async fn run_client(
     out: mpsc::Sender<ServerMsg>,
     stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
 ) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())) };
+    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), call: None };
     while let Some(msg) = next_msg(stream).await {
         conn.on_msg(msg).await;
     }
@@ -127,7 +127,7 @@ pub async fn run_client(
 
 /// The same loop for clients that arrive over another channel (remote devices via the relay).
 pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, rx: &mut mpsc::Receiver<ClientMsg>) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())) };
+    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), call: None };
     while let Some(msg) = rx.recv().await {
         conn.on_msg(msg).await;
     }
@@ -140,12 +140,26 @@ pub struct Conn {
     pub out: mpsc::Sender<ServerMsg>,
     state_task: Option<JoinHandle<()>>,
     attached: Arc<Mutex<HashMap<Id, JoinHandle<()>>>>,
+    call: Option<crate::call::CallHandle>,
 }
 
 impl Conn {
     pub async fn on_msg(&mut self, msg: ClientMsg) {
         match msg {
             ClientMsg::Hello { .. } => {}
+            ClientMsg::CallStart => {
+                if self.client.kind == ClientKind::Orchestrator {
+                    return;
+                }
+                self.call = None;
+                self.call = Some(self.core.call_start(self.out.clone()));
+            }
+            ClientMsg::CallAudio { d } => {
+                if let Some(c) = &self.call {
+                    c.audio(&d);
+                }
+            }
+            ClientMsg::CallEnd => self.call = None,
             ClientMsg::Ping { at } => {
                 let _ = self.out.send(ServerMsg::Pong { at }).await;
             }
@@ -209,6 +223,7 @@ impl Conn {
     }
 
     pub fn close(&mut self) {
+        self.call = None;
         if let Some(t) = self.state_task.take() {
             t.abort();
         }

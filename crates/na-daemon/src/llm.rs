@@ -70,19 +70,21 @@ pub fn needs_key(p: LlmProvider) -> bool {
     p != LlmProvider::Ollama
 }
 
+/// One request to the model.
+pub struct Ask<'a> {
+    pub model: &'a str,
+    pub key: Option<&'a str>,
+    pub system: &'a str,
+    pub msgs: &'a [Msg],
+    pub tools: &'a [Tool],
+    /// No extended thinking: for calls, where the first word counts.
+    pub quick: bool,
+}
+
 impl Llm {
-    #[allow(clippy::too_many_arguments)]
     /// Runs one model turn; `on_text` gets each piece of text as it streams in.
-    pub async fn turn(
-        &self,
-        cfg: &LlmSettings,
-        model: &str,
-        key: Option<&str>,
-        system: &str,
-        msgs: &[Msg],
-        tools: &[Tool],
-        mut on_text: impl FnMut(&str),
-    ) -> Result<Turn> {
+    pub async fn turn(&self, cfg: &LlmSettings, ask: Ask<'_>, mut on_text: impl FnMut(&str)) -> Result<Turn> {
+        let Ask { model, key, system, msgs, tools, quick } = ask;
         let base = if cfg.base_url.trim().is_empty() { default_url(cfg.provider) } else { cfg.base_url.trim() }.trim_end_matches('/');
         let anthropic = cfg.provider == LlmProvider::Anthropic;
         let (url, body) = if anthropic {
@@ -90,6 +92,11 @@ impl Llm {
         } else {
             (format!("{base}/chat/completions"), openai_body(model, system, msgs, tools))
         };
+        let mut body = body;
+        // Claude models may think before answering; in a call that costs seconds.
+        if quick && matches!(cfg.provider, LlmProvider::Anthropic | LlmProvider::Neuralhub) {
+            body["thinking"] = json!({ "type": "disabled" });
+        }
         let mut req = self.http.post(&url).json(&body);
         if let Some(k) = key {
             req = if anthropic { req.header("x-api-key", k).header("anthropic-version", "2023-06-01") } else { req.bearer_auth(k) };

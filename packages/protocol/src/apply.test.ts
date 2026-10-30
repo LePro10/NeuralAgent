@@ -5,7 +5,7 @@ import type { State, Workspace } from "./gen/index.ts";
 
 const empty: State = { workspaces: [], layouts: {}, sessions: {}, profiles: [], catalog: [], mcp: [],
     limits: [], remote: { status: "signed_out", relay: "", paused: false, devices: [] }, settings: { keep_awake: "while_working", resume_on_start: true, theme: "ice", discord_presence: "general", default_profile: "claude",
-    llm: { provider: "neuralhub", base_url: "", model: "m", call_model: "" } }, orchestrator: { ready: false, keys: [], busy: false, messages: [] } };
+    llm: { provider: "neuralhub", base_url: "", model: "m", call_model: "" }, call: { voice: 0, speed: 1 } }, orchestrator: { ready: false, keys: [], busy: false, messages: [] } };
 const ws: Workspace = { id: "w1", name: "a", path: "/a", approved: true, pinned: false, order: 1, created_at: 0 };
 
 test("upsert, then remove cascades", () => {

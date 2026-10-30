@@ -33,7 +33,7 @@ pub const SPECS: &[Spec] = &[
         purpose: "Dictation and commands, 25 languages",
         url: "asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
         sha256: "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
-        folder: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+        folder: na_voice::models::PARAKEET,
         size: 487_170_055,
     },
     Spec {
@@ -42,7 +42,7 @@ pub const SPECS: &[Spec] = &[
         purpose: "Listens for \u{201c}Hey Neural\u{201d}",
         url: "kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
         sha256: "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a",
-        folder: "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01",
+        folder: na_voice::models::WAKE,
         size: 17_626_723,
     },
     Spec {
@@ -51,7 +51,7 @@ pub const SPECS: &[Spec] = &[
         purpose: "Finds where speech starts and ends",
         url: "asr-models/silero_vad.onnx",
         sha256: "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
-        folder: "silero_vad.onnx",
+        folder: na_voice::models::VAD,
         size: 643_854,
     },
     Spec {
@@ -60,7 +60,7 @@ pub const SPECS: &[Spec] = &[
         purpose: "Spoken replies, 31 languages",
         url: "tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
         sha256: "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
-        folder: "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+        folder: na_voice::models::SUPERTONIC,
         size: 128_774_318,
     },
 ];

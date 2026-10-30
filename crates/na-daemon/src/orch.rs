@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::{Core, err, now_ms};
-use crate::llm::{Call, Llm, Msg, Tool};
+use crate::llm::{Ask, Call, Llm, Msg, Tool};
 
 /// Messages kept in the shared state (and sent to the model as history).
 const KEEP: usize = 60;
@@ -87,7 +87,18 @@ impl Core {
         let r = self
             .orch
             .llm
-            .turn(&cfg, &cfg.model, key.as_deref(), "Answer with one word.", &[Msg::User("Say ok.".into())], &[], |_| {})
+            .turn(
+                &cfg,
+                Ask {
+                    model: &cfg.model,
+                    key: key.as_deref(),
+                    system: "Answer with one word.",
+                    msgs: &[Msg::User("Say ok.".into())],
+                    tools: &[],
+                    quick: false,
+                },
+                |_| {},
+            )
             .await;
         match r {
             Ok(t) => LlmCheck { ok: true, model: cfg.model, ms: t.first_ms.unwrap_or(0), error: None },
@@ -160,8 +171,11 @@ impl Core {
         let cfg = self.read(|s| s.settings.llm.clone());
         let model = if voice && !cfg.call_model.trim().is_empty() { cfg.call_model.clone() } else { cfg.model.clone() };
         let key = self.llm_key(cfg.provider);
-        let mut msgs = self.read(history);
+        // Calls keep less history: a shorter prompt answers faster.
+        let mut msgs = self.read(|s| history(s, if voice { HISTORY / 3 } else { HISTORY }));
         let tools = tools();
+        // In calls the first words matter most: the first piece may end at a comma.
+        let mut spoken = false;
         for _ in 0..MAX_STEPS {
             if token.is_cancelled() {
                 return Ok(());
@@ -174,7 +188,7 @@ impl Core {
             let turn = self
                 .orch
                 .llm
-                .turn(&cfg, &model, key.as_deref(), &system, &msgs, &tools, |t| {
+                .turn(&cfg, Ask { model: &model, key: key.as_deref(), system: &system, msgs: &msgs, tools: &tools, quick: voice }, |t| {
                     answer.text.push_str(t);
                     if last_emit.elapsed() > Duration::from_millis(60) {
                         last_emit = Instant::now();
@@ -182,7 +196,8 @@ impl Core {
                     }
                     if let Some(tx) = &speech {
                         sentence.push_str(t);
-                        while let Some(i) = sentence_end(&sentence) {
+                        while let Some(i) = sentence_end(&sentence, !spoken) {
+                            spoken = true;
                             let s: String = sentence.drain(..i).collect();
                             let _ = tx.send(s.trim().to_string());
                         }
@@ -220,6 +235,7 @@ impl Core {
                     return Ok(());
                 }
                 let (content, label, ok, sid) = self.run_tool(call).await;
+                tracing::info!(tool = call.name, args = %call.args, ok, "neural tool");
                 if let Some(label) = label {
                     self.orch_post(OrchRole::Action, label, Some(ok), sid);
                 }
@@ -302,7 +318,7 @@ impl Core {
                 let Some(agent) = s("agent") else { return fail("agent is missing") };
                 let Some((sid, name)) = self.resolve_session(&agent) else { return fail("no such agent") };
                 match self.handle(&me(), Request::SessionStop { id: sid.clone() }).await {
-                    Ok(_) => (json!({ "ok": true }).to_string(), Some(format!("Stopped {name}")), true, Some(sid)),
+                    Ok(_) => (json!({ "ok": true, "stopped": name }).to_string(), Some(format!("Stopped {name}")), true, Some(sid)),
                     Err(e) => (
                         json!({ "ok": false, "error": e.message }).to_string(),
                         Some(format!("Could not stop {name}: {}", e.message)),
@@ -483,17 +499,24 @@ fn candidate_dirs(home: &std::path::Path) -> Vec<std::path::PathBuf> {
     out
 }
 
-/// Where a spoken sentence ends (after ". ", "? ", "! " or a newline), as a byte index.
-fn sentence_end(s: &str) -> Option<usize> {
+/// Where a spoken sentence ends (after ". ", "? ", "! " or a newline), as a byte index. With
+/// `eager` a longer clause ending in ", " counts too.
+fn sentence_end(s: &str, eager: bool) -> Option<usize> {
     let b = s.as_bytes();
-    (1..b.len()).find(|&i| (matches!(b[i - 1], b'.' | b'?' | b'!' | b':' | b';') && b[i] == b' ' && i > 12) || b[i] == b'\n').map(|i| i + 1)
+    (1..b.len())
+        .find(|&i| {
+            let end = matches!(b[i - 1], b'.' | b'?' | b'!' | b':' | b';') && i > 12;
+            let clause = eager && b[i - 1] == b',' && i > 24;
+            ((end || clause) && b[i] == b' ') || b[i] == b'\n'
+        })
+        .map(|i| i + 1)
 }
 
 /// The conversation as the model sees it: user and assistant turns, with what Neural did and
 /// what happened written as `[log]` notes.
-fn history(s: &State) -> Vec<Msg> {
+fn history(s: &State, keep: usize) -> Vec<Msg> {
     let msgs = &s.orchestrator.messages;
-    let from = msgs.len().saturating_sub(HISTORY);
+    let from = msgs.len().saturating_sub(keep);
     let mut out: Vec<Msg> = vec![];
     for m in &msgs[from..] {
         match m.role {
@@ -554,11 +577,20 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
         .collect();
     ctx.push_str(&format!("\nAgent types installed: {}. Default: {}.\n", types.join(", "), s.settings.default_profile));
 
+    // Long German histories pull answers to German; say plainly what the latest message is in.
+    let latest = s.orchestrator.messages.iter().rev().find(|m| m.role == OrchRole::User).map(|m| m.text.as_str()).unwrap_or("");
+    let lang = match crate::call::lang_of(latest, "") {
+        "de" => " The user's latest message is in German: answer in German.",
+        "en" => " The user's latest message is in English: answer in English.",
+        _ => "",
+    };
     let style = if voice {
-        "You are on a phone call. Speak like a competent colleague on the phone: short, natural sentences, \
-         usually one or two. Never use lists, markdown, code, file paths or ids out loud; say folder and agent names \
-         naturally. When a tool may take a moment, first say a short natural bridge (\"Okay, moment.\"). Only give \
-         details when asked."
+        "You are on a phone call. Speak like a competent colleague on the phone: one or two short, natural \
+         sentences, at most about 30 words, unless the user asks for details. Never use lists, markdown, code, file \
+         paths, quotes or ids out loud; say folder and agent names naturally. The call already plays a short \
+         acknowledgment when the user stops talking, so do not start with \"Okay\" or \"Sure\". Before a tool call \
+         say a few words of what you do (\"Ich schau kurz nach.\"); after it, say the result in one sentence and \
+         trust what the tool returned. Do not correct or repeat earlier answers unless asked."
     } else {
         "You are in a chat. Keep answers short and plain; a short list is fine when it helps. No headings."
     };
@@ -568,7 +600,9 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          or their phone. You start, prompt, watch, summarise and stop those agents for them.\n\n\
          {style}\n\n\
          Rules:\n\
-         - Answer in the language the user speaks (German or English; they mix technical English words into German).\n\
+         - Answer in the language of the user's latest message, even if earlier ones were in another language \
+         (German or English; they mix technical English words into German). \
+         In German use the informal \"du\".\n\
          - Find folders from everyday names (\"Japan Map\" → the Japan Map workspace). If the workspace list does not \
          clearly match, call find_folder; if two match, ask which one in a few words.\n\
          - Turn the user's half sentence into a good prompt for the agent: clear goal, the context they gave, what \
@@ -582,7 +616,7 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          computer, tell the user plainly.\n\
          - Agent references in tools: the short id in brackets. Never show ids to the user; name agents by \
          workspace and title.\n\n\
-         Now: {now}.\n\n{ctx}",
+         Now: {now}.{lang}\n\n{ctx}",
         host = s.remote.devices.iter().find(|d| d.this).map(|d| d.name.as_str()).unwrap_or("this computer"),
     )
 }
@@ -673,9 +707,12 @@ mod tests {
     #[test]
     fn sentences_split_for_speech() {
         let s = "Okay, moment please. I am starting it now";
-        let i = sentence_end(s).unwrap();
+        let i = sentence_end(s, false).unwrap();
         assert_eq!(&s[..i], "Okay, moment please. ");
-        assert_eq!(sentence_end("Ok. Fine"), None, "very short pieces wait for more");
+        assert_eq!(sentence_end("Ok. Fine", false), None, "very short pieces wait for more");
+        let s = "Der Agent in Japan Map arbeitet noch, er schreibt gerade Tests";
+        assert_eq!(&s[..sentence_end(s, true).unwrap()], "Der Agent in Japan Map arbeitet noch, ");
+        assert_eq!(sentence_end(s, false), None);
     }
 
     #[test]

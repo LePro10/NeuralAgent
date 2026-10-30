@@ -46,6 +46,15 @@ pub enum ClientMsg {
         #[ts(type = "number")]
         at: Millis,
     },
+    /// Starts a voice call with Neural on this connection (one call per computer: a new one
+    /// ends the previous).
+    CallStart,
+    /// Microphone audio: base64 of 16-bit little-endian mono PCM at 16 kHz, captured with echo
+    /// cancellation.
+    CallAudio {
+        d: String,
+    },
+    CallEnd,
 }
 
 /// Daemon → client.
@@ -99,6 +108,52 @@ pub enum ServerMsg {
         #[ts(type = "number")]
         at: Millis,
     },
+    Call {
+        ev: CallEvent,
+    },
+}
+
+/// What happens in a call, for the client that holds it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "k", rename_all = "snake_case")]
+#[ts(export)]
+pub enum CallEvent {
+    State {
+        state: CallState,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        error: Option<String>,
+    },
+    /// What the user said (after each pause).
+    Heard { text: String },
+    /// A sentence Neural starts speaking (captions).
+    Say { text: String },
+    /// Speech: base64 of 16-bit little-endian mono PCM at `rate`. Play in order.
+    Audio { d: String, rate: u32 },
+    /// The user talked over Neural: stop playing and drop what is queued.
+    Flush,
+    /// End of the user's sentence → first sound back, and → first word of the real answer.
+    Latency {
+        #[ts(type = "number")]
+        first_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[ts(type = "number")]
+        answer_ms: Option<u64>,
+        filler: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum CallState {
+    /// Loading the speech models.
+    Connecting,
+    Listening,
+    Thinking,
+    Speaking,
+    Ended,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -667,6 +722,24 @@ pub struct Settings {
     /// The model Neural (the orchestrator) uses. The key is kept separately (`LlmKeySet`).
     #[serde(default)]
     pub llm: LlmSettings,
+    #[serde(default)]
+    pub call: CallSettings,
+}
+
+/// How Neural sounds in calls.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CallSettings {
+    /// Speaker of the speech model (Supertonic has ten).
+    pub voice: u32,
+    /// 1.0 is normal.
+    pub speed: f32,
+}
+
+impl Default for CallSettings {
+    fn default() -> Self {
+        Self { voice: 0, speed: 1.05 }
+    }
 }
 
 /// Bring your own key: which provider and models Neural talks to.
@@ -717,6 +790,7 @@ impl Default for Settings {
             discord_presence: DiscordPresence::General,
             default_profile: "claude".into(),
             llm: LlmSettings::default(),
+            call: CallSettings::default(),
         }
     }
 }
@@ -980,6 +1054,13 @@ pub enum Request {
     },
     /// Check the current provider settings with a tiny request. Returns `LlmCheck`.
     LlmTest,
+    /// A short sample of a voice → `CallPreviewAudio`.
+    CallPreview {
+        voice: u32,
+        speed: f32,
+        /// `de` or `en`.
+        lang: String,
+    },
     /// What phones, browsers and the orchestrator did here, newest first.
     AuditList {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1028,6 +1109,14 @@ pub struct StartSession {
 }
 
 // ───────────────────────────── responses ─────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CallPreviewAudio {
+    /// Base64 of 16-bit little-endian mono PCM.
+    pub d: String,
+    pub rate: u32,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]

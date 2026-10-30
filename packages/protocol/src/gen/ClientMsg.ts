@@ -5,4 +5,4 @@ import type { Request } from "./Request";
 /**
  * Client → daemon.
  */
-export type ClientMsg = { "t": "hello", v: number, client: ClientInfo, } | { "t": "req", id: number, req: Request, } | { "t": "sub", since?: number, } | { "t": "ping", at: number, };
+export type ClientMsg = { "t": "hello", v: number, client: ClientInfo, } | { "t": "req", id: number, req: Request, } | { "t": "sub", since?: number, } | { "t": "ping", at: number, } | { "t": "call_start" } | { "t": "call_audio", d: string, } | { "t": "call_end" };

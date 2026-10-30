@@ -91,6 +91,7 @@ pub struct Core {
     pub remote: crate::remote::Remote,
     pub audit: crate::audit::Audit,
     pub orch: crate::orch::Orch,
+    pub calls: crate::call::Calls,
 }
 
 pub struct Subscription {
@@ -152,6 +153,7 @@ impl Core {
             remote: Default::default(),
             audit,
             orch: Default::default(),
+            calls: Default::default(),
         })
     }
 
@@ -289,6 +291,12 @@ impl Core {
             }
             Request::LlmKeySet { provider, key } => self.llm_key_set(provider, key).map(|_| json!(null)),
             Request::LlmTest => Ok(json!(self.llm_test().await)),
+            Request::CallPreview { voice, speed, lang } => {
+                let core = self.clone();
+                let d = blocking(move || core.call_preview(voice, speed, &lang).map_err(|e| err(ErrorCode::Unavailable, format!("{e:#}"))))
+                    .await?;
+                Ok(json!(CallPreviewAudio { d, rate: crate::call::OUT_RATE }))
+            }
             Request::AuditList { limit } => Ok(json!(self.audit.list(limit.unwrap_or(200).min(2000) as usize))),
             r @ (Request::RemoteSignIn { .. }
             | Request::RemoteSignOut
@@ -412,7 +420,11 @@ impl Core {
                 Ok(json!(catalog))
             }
             Request::SettingsSet { settings } => {
+                let voice_changed = self.read(|s| s.settings.call != settings.call);
                 self.emit(Event::SettingsSet { settings });
+                if voice_changed {
+                    self.call_reload();
+                }
                 self.orch_status();
                 Ok(Value::Null)
             }
