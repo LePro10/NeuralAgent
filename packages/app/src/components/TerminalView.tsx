@@ -50,7 +50,8 @@ export function isAppShortcut(e: KeyboardEvent): boolean {
   return /^(Digit[0-9]|KeyT|KeyW|KeyD|KeyN|KeyK|KeyB|Enter|BracketLeft|BracketRight|Comma|Backslash)$/.test(e.code);
 }
 
-export function TerminalView({ sid, focused, startedAt, webgl, onFocus }: { sid: string; focused: boolean; startedAt: number; webgl: boolean; onFocus: () => void }) {
+/** `touch`: phones type through the pane's input line; the terminal only shows output. */
+export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }: { sid: string; focused: boolean; startedAt: number; webgl: boolean; touch?: boolean; onFocus: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
   const client = useClient();
@@ -115,6 +116,12 @@ export function TerminalView({ sid, focused, startedAt, webgl, onFocus }: { sid:
     void loadFont().then(() => {
       if (disposed) return;
       t.open(el);
+      // Android keyboards garble input to xterm's hidden textarea (composition events), and a
+      // keyboard popping up over the output on every tap is in the way.
+      if (touch) {
+        t.options.disableStdin = true;
+        t.textarea?.setAttribute("inputmode", "none");
+      }
       if (webgl) {
         try {
           const gl = new WebglAddon();
@@ -157,7 +164,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, onFocus }: { sid:
       term.current = null;
     };
     // Restarted process (new started_at) = new stream.
-  }, [sid, startedAt, webgl, client, platform]);
+  }, [sid, startedAt, webgl, touch, client, platform]);
 
   useEffect(() => {
     if (focused) term.current?.focus();

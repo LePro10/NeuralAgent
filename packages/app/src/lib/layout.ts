@@ -129,8 +129,13 @@ export function gridOf(contents: PaneContent[]): LayoutNode {
   return rowNodes.length === 1 ? rowNodes[0]! : { type: "split", id: newId(), dir: "column", sizes: rowNodes.map(() => 1 / rowNodes.length), children: rowNodes };
 }
 
-/** The layout with the tab that shows `sid` in front, or null when it is already in front (or not shown). */
+/** The layout with the tab and pane that show `sid` in front and focused, or null when they already are (or it is not shown). */
 export function frontTabFor(l: WorkspaceLayout | undefined, sid: string): WorkspaceLayout | null {
-  const tab = l?.tabs.find((t) => panes(t.root).some((p) => p.content.kind === "terminal" && p.content.session === sid));
-  return l && tab && l.active_tab !== tab.id ? { ...l, active_tab: tab.id } : null;
+  for (const t of l?.tabs ?? []) {
+    const pane = panes(t.root).find((p) => p.content.kind === "terminal" && p.content.session === sid);
+    if (!pane) continue;
+    if (l!.active_tab === t.id && t.focused === pane.id) return null;
+    return { ...l!, active_tab: t.id, tabs: l!.tabs.map((x) => (x.id === t.id ? { ...x, focused: pane.id } : x)) };
+  }
+  return null;
 }

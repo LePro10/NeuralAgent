@@ -1,6 +1,6 @@
 import type { PaneContent, Session } from "@neuralagent/protocol";
-import { StatusDot, useLayoutMode } from "@neuralagent/ui";
-import { Columns2, GitBranch, Globe, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
+import { IconButton, StatusDot, useLayoutMode } from "@neuralagent/ui";
+import { ArrowUp, Columns2, GitBranch, Globe, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@neuralagent/ui";
 import { STATUS } from "../lib/status";
@@ -155,7 +155,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
       </div>
       <div className="relative min-h-0 flex-1">
         {sid && session ? (
-          <TerminalView sid={sid} focused={focused} startedAt={session.started_at} webgl={webgl} onFocus={actions.focus} />
+          <TerminalView sid={sid} focused={focused} startedAt={session.started_at} webgl={webgl} touch={phone} onFocus={actions.focus} />
         ) : content.kind === "browser" ? (
           <BrowserPane url={content.url} onFocus={actions.focus} onNavigate={(url) => actions.setContent({ kind: "browser", url })} />
         ) : (
@@ -198,10 +198,41 @@ const KEYS: [string, string][] = [
   ["Enter", "\r"],
 ];
 
+/** Phones: a line to type in (autocorrect and dictation work) and the keys a phone keyboard lacks. */
 function KeyBar({ sid }: { sid: string }) {
   const client = useClient();
+  const [text, setText] = useState("");
+  const send = () => {
+    // Text first, Enter a moment later: agents read text and CR in one chunk as a paste.
+    if (text) client.write(sid, text);
+    setText("");
+    setTimeout(() => client.write(sid, "\r"), text ? 60 : 0);
+  };
   return (
-    <div className="flex shrink-0 gap-1 overflow-x-auto border-t border-line px-2 py-1.5">
+    <div className="flex shrink-0 flex-col gap-1.5 border-t border-line px-2 py-1.5">
+      <form
+        className="flex items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Type to the agent"
+          enterKeyHint="send"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          aria-label="Type to the agent"
+          className="h-9 min-w-0 flex-1 rounded-field bg-fill-2 px-3 text-input text-bright outline-none placeholder:text-faint"
+        />
+        <IconButton type="submit" size="sm" variant="tint" label="Send">
+          <ArrowUp />
+        </IconButton>
+      </form>
+      <div className="flex gap-1 overflow-x-auto">
       {KEYS.map(([label, seq]) => (
         <button
           key={label}
@@ -214,6 +245,7 @@ function KeyBar({ sid }: { sid: string }) {
           {label}
         </button>
       ))}
+      </div>
     </div>
   );
 }

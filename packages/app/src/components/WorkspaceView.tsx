@@ -1,5 +1,5 @@
 import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent/protocol";
-import { ConfirmSheet, Menu, StatusDot, cn, toast, type MenuEntry } from "@neuralagent/ui";
+import { ConfirmSheet, Menu, StatusDot, cn, toast, useLayoutMode, type MenuEntry } from "@neuralagent/ui";
 import { Download, GitBranch, GitCompare, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeTab, gridOf, newTab, order, panes, removePane, setContent, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
@@ -32,6 +32,7 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const { worktrees, setWorktrees } = useUi();
   const worktree = useWorktreeStart(workspaceId);
   const tab = layout ? activeTab(layout) : undefined;
+  const phone = useLayoutMode() === "phone";
   const [closing, setClosing] = useState<{ tab: Tab; live: number } | null>(null);
 
   const save = useCallback(
@@ -75,12 +76,13 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
     return {
       workspaceId,
       focused: tab.focused,
-      zoomed: tab.zoomed,
-      webgl: visible <= WEBGL_MAX,
+      // Phones show one pane at a time, the focused one; chips above switch.
+      zoomed: phone ? (panes(tab.root).find((p) => p.id === tab.focused) ?? panes(tab.root)[0])?.id : tab.zoomed,
+      webgl: phone || visible <= WEBGL_MAX,
       actions,
       onSizes: (splitId, sizes) => editTab((t) => setSizes(t, splitId, sizes)),
     };
-  }, [layout, tab, editTab, save, client, workspaceId]);
+  }, [layout, tab, editTab, save, client, workspaceId, phone]);
 
   // Keyboard: ⌘T tab, ⌘W close pane, ⌘D split right, ⌘\ split down, ⌘↩ zoom, ⌘1–9 pane, ⌘[ ⌘] tabs.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
@@ -227,6 +229,26 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
           )}
         />
       </div>
+      {phone && ctx && tab && panes(tab.root).length > 1 && (
+        <div className="flex shrink-0 gap-1 overflow-x-auto px-2 pb-1.5">
+          {order(tab).map((id, i) => {
+            const c = panes(tab.root).find((p) => p.id === id)?.content;
+            const s = c?.kind === "terminal" ? sessions?.[c.session] : undefined;
+            const label = s?.title ?? (c?.kind === "browser" ? "Browser" : `Pane ${i + 1}`);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => ctx.actions(id).focus()}
+                className={cn("flex h-7 shrink-0 items-center gap-1.5 rounded-item px-2.5 text-chip", ctx.zoomed === id ? "bg-fill-3 text-bright" : "text-dim")}
+              >
+                {s && <StatusDot tone={STATUS[s.status].tone} pulse={STATUS[s.status].pulse} size={6} label={STATUS[s.status].label} />}
+                <span className="max-w-32 truncate">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="relative min-h-0 flex-1 px-2 pb-2">
         <div className="relative h-full w-full">
           <PaneTree key={tab.id} node={tab.root} ctx={ctx} />
