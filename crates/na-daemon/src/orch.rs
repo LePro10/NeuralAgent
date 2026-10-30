@@ -522,7 +522,11 @@ fn history(s: &State, keep: usize) -> Vec<Msg> {
         match m.role {
             OrchRole::User => out.push(Msg::User(m.text.clone())),
             OrchRole::Assistant if !m.text.is_empty() => out.push(Msg::Assistant { text: m.text.clone(), calls: vec![] }),
-            OrchRole::Action | OrchRole::Notice => out.push(Msg::User(format!("[log] {}", m.text))),
+            // With the agent's short id, so "stop it again" knows which one.
+            OrchRole::Action | OrchRole::Notice => out.push(Msg::User(match &m.session_id {
+                Some(sid) => format!("[log] {} [{}]", m.text, short(sid)),
+                None => format!("[log] {}", m.text),
+            })),
             _ => {}
         }
     }
@@ -590,7 +594,7 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          paths, quotes or ids out loud; say folder and agent names naturally. The call already plays a short \
          acknowledgment when the user stops talking, so do not start with \"Okay\" or \"Sure\". Before a tool call \
          say a few words of what you do (\"Ich schau kurz nach.\"); after it, say the result in one sentence and \
-         trust what the tool returned. Do not correct or repeat earlier answers unless asked."
+         trust what the tool returned."
     } else {
         "You are in a chat. Keep answers short and plain; a short list is fine when it helps. No headings."
     };
@@ -615,7 +619,10 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          - Agents may only be started in approved workspaces; if a tool says something needs confirmation on the \
          computer, tell the user plainly.\n\
          - Agent references in tools: the short id in brackets. Never show ids to the user; name agents by \
-         workspace and title.\n\n\
+         workspace and title. \"it\" or \"the agent\" usually means the one you last started or talked about; \
+         the [log] lines carry its id.\n\
+         - The agent list below is live: it already includes agents you just started.\n\
+         - Trust tool results. Do not correct, revisit or repeat earlier answers unless the user asks.\n\n\
          Now: {now}.{lang}\n\n{ctx}",
         host = s.remote.devices.iter().find(|d| d.this).map(|d| d.name.as_str()).unwrap_or("this computer"),
     )

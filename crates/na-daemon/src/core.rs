@@ -61,6 +61,8 @@ struct Live {
     last_output: Option<Instant>,
     working_since: Option<Instant>,
     prompted: bool,
+    /// Stopped on request: its exit code is not an error.
+    stopped: bool,
 }
 
 struct Inner {
@@ -346,7 +348,11 @@ impl Core {
             }
             Request::SessionStart(start) => self.session_start(start).map(|s| json!(s)),
             Request::SessionStop { id } => {
-                self.pty(&id)?.kill();
+                let pty = self.pty(&id)?;
+                if let Some(l) = self.live.lock().get_mut(&id) {
+                    l.stopped = true;
+                }
+                pty.kill();
                 Ok(Value::Null)
             }
             Request::SessionClose { id } => {
@@ -790,6 +796,7 @@ impl Core {
                 last_output: None,
                 working_since: None,
                 prompted: launch.prompt_in_args && prompt.is_some(),
+                stopped: false,
             },
         );
         self.emit(Event::SessionUpsert { session: session.clone() });
@@ -896,14 +903,14 @@ impl Core {
                 }
             }
             PtyNote::Exited(code) => {
-                let was_live = self.live.lock().remove(sid).is_some();
-                if !was_live {
+                let Some(live) = self.live.lock().remove(sid) else {
                     return; // closed or restarted on purpose
-                }
+                };
+                let failed = code.unwrap_or(0) != 0 && !live.stopped;
                 self.update_session(sid, |s| {
                     s.alive = false;
                     s.exit_code = code;
-                    s.status = if code.unwrap_or(0) == 0 { AgentStatus::Exited } else { AgentStatus::Error };
+                    s.status = if failed { AgentStatus::Error } else { AgentStatus::Exited };
                     s.status_since = now_ms();
                 });
                 let installer =
@@ -913,7 +920,7 @@ impl Core {
                     let core = self.clone();
                     std::thread::spawn(move || core.refresh_catalog());
                 }
-                if code.unwrap_or(0) != 0 {
+                if failed {
                     self.emit(Event::Attention {
                         session_id: sid.clone(),
                         kind: AttentionKind::Error,

@@ -36,8 +36,7 @@ decisions: `DECISIONS.md`.
     `google-services.json` and the release keystore (`~/.neuralagent-secrets/android-release.jks`,
     password in keychain `neuralagent-android-keystore`) are outside the repo and GitHub secrets.
 - Next: M8 swarm, then M9 themes/auto-update/releases, M10.
-- Open small things: Neural calls a stopped agent "stopped with an error" (exit code of a
-  killed process); "Last seen" for a device that never
+- Open small things: "Last seen" for a device that never
   connected shows its creation date; dashboard says "No agents running" while only a shell runs.
 
 ## How to run
