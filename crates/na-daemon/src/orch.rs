@@ -677,7 +677,15 @@ pub async fn watch(core: Arc<Core>) {
                 };
                 let detail =
                     if text.trim().is_empty() { String::new() } else { format!(": {}", text.chars().take(200).collect::<String>()) };
-                core.orch_post(OrchRole::Notice, format!("{label} {what}{detail}"), None, Some(session_id));
+                core.orch_post(OrchRole::Notice, format!("{label} {what}{detail}"), None, Some(session_id.clone()));
+                if let Some((ws, title)) = core.read(|s| {
+                    s.sessions.get(&session_id).map(|x| {
+                        let ws = s.workspaces.iter().find(|w| w.id == x.workspace_id).map(|w| w.name.clone()).unwrap_or_default();
+                        (ws, x.title.clone())
+                    })
+                }) {
+                    core.call_news(kind, ws, title);
+                }
             }
             Ok(_) => {}
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}

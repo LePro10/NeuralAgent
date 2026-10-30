@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use base64::Engine as _;
-use na_protocol::{CallEvent, CallState, ServerMsg};
+use na_protocol::{AttentionKind, CallEvent, CallState, ServerMsg};
 use na_voice::stt::{Stt, SttKind, SttModel};
 use na_voice::tts::{Tts, TtsKind, TtsModel};
 use na_voice::vad::Vad;
@@ -54,6 +54,8 @@ pub struct Calls {
     engines: Mutex<Option<(Arc<Engines>, Instant)>>,
     /// The running call (one per computer).
     active: Mutex<Option<(u64, CancellationToken)>>,
+    /// Where the running call takes news about agents, to say between answers.
+    news: Mutex<Option<(u64, Sender<Say>)>>,
     next: AtomicU64,
 }
 
@@ -194,6 +196,14 @@ impl Core {
         Ok(b64(&pcm))
     }
 
+    /// An agent finished, needs the user or failed: the running call says so when Neural is
+    /// not talking (the chat gets a notice either way).
+    pub fn call_news(&self, kind: AttentionKind, workspace: String, agent: String) {
+        if let Some((_, tx)) = self.calls.news.lock().as_ref() {
+            let _ = tx.send(Say::News { kind, workspace, agent });
+        }
+    }
+
     /// Starts a call for the client behind `out`. A running call elsewhere ends.
     pub fn call_start(self: &Arc<Self>, out: mpsc::Sender<ServerMsg>) -> CallHandle {
         let (audio, rx) = channel::<Vec<f32>>();
@@ -211,7 +221,7 @@ impl Core {
                 let send = |ev: CallEvent| {
                     let _ = out.blocking_send(ServerMsg::Call { ev });
                 };
-                let r = run(&core, &rt, rx, &token, &out);
+                let r = run(&core, &rt, rx, &token, &out, id);
                 let error = r.err().map(|e| format!("{e:#}"));
                 if let Some(e) = &error {
                     tracing::warn!("call: {e}");
@@ -221,6 +231,10 @@ impl Core {
                 let mut a = core.calls.active.lock();
                 if a.as_ref().is_some_and(|(x, _)| *x == id) {
                     *a = None;
+                }
+                let mut n = core.calls.news.lock();
+                if n.as_ref().is_some_and(|(x, _)| *x == id) {
+                    *n = None;
                 }
             })
             .expect("call thread");
@@ -273,6 +287,25 @@ enum Say {
     Done {
         turn: u64,
     },
+    /// Something happened to an agent.
+    News {
+        kind: AttentionKind,
+        workspace: String,
+        agent: String,
+    },
+}
+
+/// One spoken sentence about an agent, in the call's language.
+fn news_text(kind: AttentionKind, workspace: &str, agent: &str, lang: &str) -> String {
+    let who = if workspace.is_empty() { agent.to_string() } else { format!("{agent} in {workspace}") };
+    match (lang, kind) {
+        ("de", AttentionKind::Done) => format!("Übrigens: {who} ist fertig."),
+        ("de", AttentionKind::Waiting) => format!("Übrigens: {who} braucht dich."),
+        ("de", AttentionKind::Error) => format!("Übrigens: {who} ist mit einem Fehler gestoppt."),
+        (_, AttentionKind::Done) => format!("By the way, {who} is done."),
+        (_, AttentionKind::Waiting) => format!("By the way, {who} needs you."),
+        (_, AttentionKind::Error) => format!("By the way, {who} stopped with an error."),
+    }
 }
 
 /// Shared between the listener and the speaker.
@@ -308,6 +341,7 @@ fn run(
     rx: Receiver<Vec<f32>>,
     stop: &CancellationToken,
     out: &mpsc::Sender<ServerMsg>,
+    id: u64,
 ) -> Result<()> {
     let line = Arc::new(Line { out: out.clone(), turn: AtomicU64::new(0), playing_until: Mutex::new(Instant::now()) });
     line.send(CallEvent::State { state: CallState::Connecting, error: None });
@@ -325,6 +359,7 @@ fn run(
         std::thread::Builder::new().name("call-speaker".into()).spawn(move || speak(&line, &engines, said, &stop, voice, speed))?
     };
 
+    *core.calls.news.lock() = Some((id, say.clone()));
     line.send(CallEvent::State { state: CallState::Listening, error: None });
     let mut lang: &'static str = "de";
     let mut talking_since: Option<Instant> = None;
@@ -407,6 +442,9 @@ fn speak(line: &Line, engines: &Engines, said: Receiver<Say>, stop: &Cancellatio
     }
     let mut cur: Option<Current> = None;
     let mut filler_n = 0usize;
+    // News about agents waits until Neural is quiet; said in the language of the last answer.
+    let mut news = std::collections::VecDeque::new();
+    let mut lang: &'static str = "de";
     while !stop.is_cancelled() {
         let msg = match said.recv_timeout(Duration::from_millis(20)) {
             Ok(m) => Some(m),
@@ -415,8 +453,9 @@ fn speak(line: &Line, engines: &Engines, said: Receiver<Say>, stop: &Cancellatio
         };
         let live = line.turn.load(Ordering::SeqCst);
         match msg {
-            Some(Say::Turn { turn, ended, lang }) => {
-                cur = Some(Current { turn, ended, understood: Instant::now(), lang, first: None, answered: false, done: false });
+            Some(Say::Turn { turn, ended, lang: l }) => {
+                lang = l;
+                cur = Some(Current { turn, ended, understood: Instant::now(), lang: l, first: None, answered: false, done: false });
             }
             Some(Say::Sentence { turn, text }) if turn == live => {
                 let Some(c) = cur.as_mut().filter(|c| c.turn == turn) else { continue };
@@ -452,8 +491,26 @@ fn speak(line: &Line, engines: &Engines, said: Receiver<Say>, stop: &Cancellatio
                     c.done = true;
                 }
             }
+            Some(Say::News { kind, workspace, agent }) => news.push_back(news_text(kind, &workspace, &agent, lang)),
             Some(Say::Sentence { .. }) => {}
             None => {}
+        }
+        if cur.is_none()
+            && !line.playing()
+            && let Some(text) = news.pop_front()
+        {
+            match synth(&engines.tts.lock(), &text, lang, voice, speed) {
+                Ok(pcm) => {
+                    let turn = line.turn.load(Ordering::SeqCst);
+                    line.send(CallEvent::State { state: CallState::Speaking, error: None });
+                    line.send(CallEvent::Say { text });
+                    line.play(&pcm);
+                    // Ends like an answer: listening again once it has played.
+                    let now = Instant::now();
+                    cur = Some(Current { turn, ended: now, understood: now, lang, first: Some((0, false)), answered: true, done: true });
+                }
+                Err(e) => tracing::warn!("call: speech synthesis: {e:#}"),
+            }
         }
         // The answer is complete and has played: listening again.
         if let Some(c) = cur.as_ref()
@@ -487,6 +544,12 @@ fn speak(line: &Line, engines: &Engines, said: Receiver<Say>, stop: &Cancellatio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn news_is_one_sentence_in_the_callers_language() {
+        assert_eq!(news_text(AttentionKind::Done, "Japan-Map", "Testbot", "de"), "Übrigens: Testbot in Japan-Map ist fertig.");
+        assert_eq!(news_text(AttentionKind::Waiting, "", "Claude", "en"), "By the way, Claude needs you.");
+    }
 
     #[test]
     fn language_from_words() {
