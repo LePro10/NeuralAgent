@@ -15,6 +15,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 - Interface size on the desktop: make text and controls bigger or smaller in Settings → Appearance (80% to 150%), or with ⌘+ and ⌘− (Ctrl on Windows and Linux), ⌘0 for 100%, ⌘ with the scroll wheel, or a pinch. The app remembers the size and opens with it.
 
 ### Improved
+- Opening the app is one calm motion on the Mac, in the browser and on Android: the NeuralAgent mark appears in your light or dark look right away, lights up once and fades into the app. No more black or white flashes, spinners or "not connected" screens in between; only if your computer really does not answer after a few seconds does it say so, with Try again.
 - Settings looks like the rest of the app: the same large title, background light and widths, with the section list on the left and the chosen section on the right. Remote access and MCP servers now sit inside it in the same style.
 - The closed sidebar opens sooner when you rest the pointer on it, and stays closed when you just move across it.
 - The update button in the closed sidebar is centred exactly under the other icons and grows smoothly into the "Update" button.

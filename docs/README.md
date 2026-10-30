@@ -25,4 +25,5 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/remote-host-control.md`](notes/remote-host-control.md) | Host settings, updates, models and calls from remotes (D42). |
 | [`notes/website.md`](notes/website.md) | The agent.neuralhub.dev website. |
 | [`notes/mobile-polish.md`](notes/mobile-polish.md) | The phone/Android polish round. |
+| [`notes/launch.md`](notes/launch.md) | The launch screen on desktop, web and Android: one frame, one motion (D49). |
 | [`notes/design-system.md`](notes/design-system.md) | Design-system rules (D45): tokens, phone navigation, overlays, activity marks, page checklist. Read before building a screen. |

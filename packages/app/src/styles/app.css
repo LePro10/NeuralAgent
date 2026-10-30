@@ -8,6 +8,8 @@
 @import "@fontsource-variable/source-serif-4/opsz.css";
 @import "@fontsource-variable/source-serif-4/opsz-italic.css";
 @import "@neuralagent/ui/styles/claude.css";
+/* Launch screen (lib/launch.ts). */
+@import "./launch.css";
 
 @source "../";
 @source "../../../ui/ui";

@@ -8,8 +8,6 @@
     <script>document.getElementById("embed-color").remove()</script>
     <meta name="theme-color" content="#131a3d" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#131a3d" media="(prefers-color-scheme: light)" />
-    <!-- Appearance before first paint (lib/theme.ts takes over). -->
-    <script>try{var t=(JSON.parse(localStorage.getItem("neuralagent.theme")||"{}").state)||{},a=t.appearance||"system",h=document.documentElement;h.dataset.appearance=a==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):a;if(t.scheme)h.dataset.scheme=t.scheme}catch(e){}</script>
     <meta name="robots" content="noindex" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -40,6 +38,8 @@
     <meta name="twitter:image:alt" content="NeuralAgent app icon next to the line: Your agents, from any screen." />
   </head>
   <body data-page="app">
+    <!-- Appearance and the launch screen's first frame, before any JS (packages/app/src/lib/launchFrame.ts). -->
+    <!--launch-->
     <div id="root"></div>
     <script type="module" src="/src/remote/main.tsx"></script>
   </body>

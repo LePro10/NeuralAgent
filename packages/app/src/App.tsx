@@ -130,8 +130,16 @@ export function App() {
   const more = workspace === MORE;
   const current = neural || dashboard || swarmPage || settingsOpen || history || usage || wsList || more ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
-  // "Hey Neural, …": until the orchestrator exists, show what was heard.
-  useEffect(() => platform.voice?.onCommand((text) => toast(`Heard: ${text}`)), [platform.voice]);
+  // "Hey Neural, …": hand what was heard to Neural and show the conversation.
+  useEffect(
+    () =>
+      platform.voice?.onCommand((text) => {
+        if (!text.trim()) return;
+        setWorkspace(NEURAL);
+        client.req({ m: "orch_send", p: { text } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+      }),
+    [platform.voice, client, setWorkspace],
+  );
 
   // Notify when an agent finishes or needs input while the window is in the background.
   useEffect(() => {

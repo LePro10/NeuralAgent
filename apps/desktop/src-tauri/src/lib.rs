@@ -128,6 +128,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _, event| voice::on_shortcut(app, event.state)).build())
         .setup(|app| {
+            // Launch: before the page paints, the window shows its own colour. The config's is the
+            // dark launch screen's; in light mode use the light one (packages/app lib/launchFrame.ts).
+            if let Some(w) = app.get_webview_window("main")
+                && matches!(w.theme(), Ok(tauri::Theme::Light))
+            {
+                let _ = w.set_background_color(Some(tauri::window::Color(0xf2, 0xf3, 0xf5, 0xff)));
+            }
             // Update tests: install a waiting update right away, without the UI.
             if std::env::var("NEURALAGENT_UPDATE_NOW").as_deref() == Ok("1") {
                 let handle = app.handle().clone();

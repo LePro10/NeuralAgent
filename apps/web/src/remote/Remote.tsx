@@ -1,4 +1,4 @@
-import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, useClient, useDaemon, type Platform } from "@neuralagent/app";
+import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, launch as launchScreen, LaunchNote, useClient, useDaemon, useLaunch, type Platform } from "@neuralagent/app";
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
 import { Avatar, Button, Callout, ConfirmSheet, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
@@ -12,16 +12,24 @@ import { webUpdate } from "./webUpdate";
 startWorker();
 const launch = takeLaunchRequest();
 
-/** Centered column for everything before a computer is open. */
-function Screen({ children }: { children: React.ReactNode }) {
+/**
+ * Centered column for everything before a computer is open, on the same ground as the launch
+ * screen. Showing it lifts the launch screen (once `ready`, e.g. the sign-in buttons are known).
+ */
+function Screen({ children, ready = true }: { children: React.ReactNode; ready?: boolean }) {
+  useEffect(() => {
+    if (ready) launchScreen.done();
+  }, [ready]);
   return (
-    <main
-      className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-7 px-4"
-      style={{ paddingTop: "calc(var(--safe-top) + 40px)", paddingBottom: "calc(var(--safe-bottom) + 40px)" }}
-    >
-      <Brand />
-      {children}
-    </main>
+    <div className="ground min-h-full">
+      <main
+        className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-7 px-4"
+        style={{ paddingTop: "calc(var(--safe-top) + 40px)", paddingBottom: "calc(var(--safe-bottom) + 40px)" }}
+      >
+        <Brand />
+        {children}
+      </main>
+    </div>
   );
 }
 
@@ -83,6 +91,9 @@ function useApkUpdate() {
 
 export function Remote() {
   const l = useLink();
+  // While the launch screen is up and within its grace time, in-between states (connecting, the
+  // computer list not known yet, the computer just reconnecting) keep it up instead of showing.
+  const { settling } = useLaunch();
   const [pair, setPair] = useState(() => (location.pathname.startsWith("/app/pair") ? parsePairLink(location.hash) : null));
   const [signInError, setSignInError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(() => new URLSearchParams(location.search).has("state"));
@@ -138,7 +149,7 @@ export function Remote() {
     setHost(id);
   };
 
-  if (finishing) return <Loading label="Signing in…" />;
+  if (finishing) return settling ? null : <LaunchNote title="Signing in…" />;
   if (pair) {
     return (
       <Pair
@@ -157,23 +168,26 @@ export function Remote() {
     );
   }
   if (!account.signedIn) return <SignIn error={signInError} />;
-  if (l.status === "connecting" && !l.devices.length) return <Loading label="Connecting…" />;
   if (l.status === "waiting" || l.status === "blocked") return <Waiting />;
+  // Devices arrive with the relay's first presence message.
+  if (!l.devices.length && l.status !== "online") {
+    if (settling) return null;
+    if (l.status === "connecting") {
+      return (
+        <LaunchNote title="Still connecting…" detail="Check this device's internet connection. NeuralAgent keeps trying by itself.">
+          <Button variant="glass" Icon={RefreshCw} onClick={() => link.wake()}>
+            Try again
+          </Button>
+        </LaunchNote>
+      );
+    }
+  }
+  if (!l.devices.length && settling) return null;
 
   const hosts = l.hosts;
   const chosen = host && hosts.find((h) => h.id === host);
   if (chosen) return <Connected key={chosen.id} host={chosen} onSwitch={() => choose(null)} />;
   return <Hosts hosts={hosts} onPick={choose} />;
-}
-
-function Loading({ label }: { label: string }) {
-  return (
-    <Screen>
-      <div className="flex items-center gap-3 text-meta text-dim">
-        <Spinner /> {label}
-      </div>
-    </Screen>
-  );
 }
 
 const LABEL: Record<string, string> = { google: "Continue with Google", github: "Continue with GitHub" };
@@ -182,6 +196,8 @@ function SignIn({ error }: { error: string | null }) {
   const [providers, setProviders] = useState<string[] | null>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  // The launch screen waits for the sign-in options, so the buttons do not pop in after it.
+  const { late } = useLaunch();
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
@@ -199,7 +215,7 @@ function SignIn({ error }: { error: string | null }) {
     }
   };
   return (
-    <Screen>
+    <Screen ready={!!providers || late}>
       <div className="flex flex-col gap-2">
         <h1 className="display text-display">{native ? "NeuralAgent" : "Web remote"}</h1>
         <p className="text-body text-dim">See and steer the agents on your computer. Sign in with the account you use in NeuralAgent on the computer.</p>
@@ -354,6 +370,8 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       });
   }, [host.id]);
   const client = useMemo(() => new DaemonClient(connect, { kind: "web", name: deviceName }), [connect]);
+  // A computer that is just reconnecting to the relay gets the launch screen's grace time.
+  const { settling } = useLaunch();
   useEffect(() => () => client.close(), [client]);
   // Come back quickly when the computer reappears or the tab is shown again.
   useEffect(() => {
@@ -435,7 +453,7 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
   return (
     <DaemonProvider client={client} platform={platform}>
       {!host.online && !client.state ? (
-        <Offline host={host} onSwitch={onSwitch} />
+        settling ? null : <Offline host={host} onSwitch={onSwitch} />
       ) : (
         <>
           <AgentApp />

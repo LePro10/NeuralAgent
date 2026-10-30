@@ -545,3 +545,24 @@ dialog with Cancel/Start reads better than a side panel over a busy conversation
 list → pushed detail; the goal is the inline title so it stays visible at the end of the feed.
 Rejected: a colour per member in a softer tint (still decoration), and the team as a second
 scrolling row above the feed on wide windows (costs the feed height on 800 px laptops).
+
+## D49 — One launch frame and one launch motion on every surface (2026-10-30)
+Opening the app showed different screens one after another: on Android a large native splash, a
+black WebView, "NeuralAgent · Connecting…" with a spinner and then the small mark assembling; in
+the web remote a spinner, sometimes an empty computer list or "offline", then the mark; on the
+desktop a white or black window before the app. Now one element (`#na-launch`, markup in
+`lib/launchFrame.ts`, injected into every entry page by a Vite plugin before any script) shows the
+mark at 64 px on the ground colour from the first paint; the theme script before it sets
+appearance/scheme/accent from localStorage. The Android splash (core-splashscreen, light/dark
+vectors at the same size, theme switched on Android 13+ from the app's appearance) and the Tauri
+window colour draw the same frame, and the native splash leaves only once the page has painted it.
+`lib/launch.ts` then plays one motion (lights and bloom fade in, the panes pulse once, ≥640 ms)
+and dissolves into the app when it is ready. Screens render nothing while the launch screen is up
+and not late; only after 7 s (`GRACE_MS`) does a calm note under the mark say what is wrong, with
+Try again. Signed-out users go straight to sign-in. Constraints learned: no inline `<style>` or
+`style=` (Tauri's CSP nonce would disable `unsafe-inline` for the page), the mark's panes are HTML
+elements (SVG child animations run on the main thread and stuttered or tore on Android while the
+bundle started), one fading layer with only a transform inside (nested opacity animations
+composited wrongly), and the Android activity theme is DayNight so the WebView's
+`prefers-color-scheme` follows the phone. Rejected: keeping the native splash until React is ready
+(no motion, and a blank gap if the page is slow) and a progress spinner.

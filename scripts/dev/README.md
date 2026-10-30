@@ -47,6 +47,10 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
   where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the More
   page / sidebar / account menu. Write a new scene for a new screen instead of a one-off script.
 - `--hash` passes fake update states to `apps/desktop/src/dev-browser.tsx` (its header lists them).
+- `launch.mjs [--targets desk,phone,remote-out,remote-in] [--schemes] [--slow] [--label]`: frame
+  series of a cold start per surface (CDP screencast in Chromium, screenshot polling in WebKit;
+  `--slow` throttles network and CPU) plus a montage each → `research-local/polish/launch-shots/`.
+  Needs the web build and the daemon/relay (`--features test-login`) binaries; header has details.
 - `montage.mjs out.png [--tile 240] a.png b.png …`: one labelled contact sheet. Review the
   montage first (cheap), open single shots only where something looks off.
 

@@ -82,9 +82,10 @@ exists as a generic red dot for non-agent things; prefer `activity`.
 Springs live in `lib/motion` (`SPRING.snap/pop/sheet/goo`, `PUSH` for navigation). Press feedback:
 `.pressable` (scale .965) for buttons, `.press-row` (background) for rows. Animate only
 `transform` and `opacity`, and respect reduced motion (`prefersReducedMotion()`;
-`useReducedMotion()` in motion/react). The launch screen (`LaunchScreen`) assembles the mark in
-≤1.2 s. It never blocks: it lifts the moment the daemon state arrives, and only after 1.2 s does
-it say "Connecting…".
+`useReducedMotion()` in motion/react). The launch screen is one element on every surface (D49,
+[`launch.md`](launch.md)): the mark on the ground colour from the first paint, one ~0.6 s motion,
+then it dissolves into the app. Nothing in between: no "Connecting…", no spinner, no empty list;
+only after 7 s does it say what is wrong, with Try again.
 
 ## 7. Checklist for a page
 1. `<Page title>` (or a full-bleed view that pads `var(--safe-top)` and `var(--tabbar-space)`).

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch screen's mark (light appearance), drawn as the splash icon. The system shows the
+     splash icon 288dp large, so this 108-unit viewport puts the mark at exactly 64dp in the middle
+     of the screen: the size and place of the web launch screen's mark (packages/app
+     lib/launchFrame.ts), so the hand-off to the page is invisible. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="@color/na_light_ink" android:pathData="M43.5,42 H45.5 A1.5,1.5 0 0 1 47,43.5 V64.5 A1.5,1.5 0 0 1 45.5,66 H43.5 A1.5,1.5 0 0 1 42,64.5 V43.5 A1.5,1.5 0 0 1 43.5,42 Z" />
+    <path android:fillColor="@color/na_light_ink" android:pathData="M49.5,42.5 H52.5 A1.5,1.5 0 0 1 54,44 V48 A1.5,1.5 0 0 1 52.5,49.5 H49.5 A1.5,1.5 0 0 1 48,48 V44 A1.5,1.5 0 0 1 49.5,42.5 Z" />
+    <path android:fillColor="@color/na_light_accent" android:pathData="M52.5,50.5 H55.5 A1.5,1.5 0 0 1 57,52 V56 A1.5,1.5 0 0 1 55.5,57.5 H52.5 A1.5,1.5 0 0 1 51,56 V52 A1.5,1.5 0 0 1 52.5,50.5 Z" />
+    <path android:fillColor="@color/na_light_ink" android:pathData="M55.5,58.5 H58.5 A1.5,1.5 0 0 1 60,60 V64 A1.5,1.5 0 0 1 58.5,65.5 H55.5 A1.5,1.5 0 0 1 54,64 V60 A1.5,1.5 0 0 1 55.5,58.5 Z" />
+    <path android:fillColor="@color/na_light_ink" android:pathData="M62.5,42 H64.5 A1.5,1.5 0 0 1 66,43.5 V64.5 A1.5,1.5 0 0 1 64.5,66 H62.5 A1.5,1.5 0 0 1 61,64.5 V43.5 A1.5,1.5 0 0 1 62.5,42 Z" />
+</vector>

@@ -1,29 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Dark like the app itself, so the system bars never flash white. -->
-    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">@color/na_bg</item>
-        <item name="colorPrimaryDark">@color/na_bg</item>
+    <!-- The app background follows the phone's light/dark setting (values-night), so the system
+         bars and the window never flash the wrong colour before the page paints. -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/na_launch_bg</item>
+        <item name="colorPrimaryDark">@color/na_launch_bg</item>
         <item name="colorAccent">@color/na_accent</item>
-        <item name="android:windowBackground">@color/na_bg</item>
+        <item name="android:windowBackground">@color/na_launch_bg</item>
     </style>
 
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar">
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <item name="android:windowBackground">@color/na_bg</item>
-        <item name="android:statusBarColor">@color/na_bg</item>
-        <item name="android:navigationBarColor">@color/na_bg</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">@color/na_launch_bg</item>
+        <item name="android:statusBarColor">@color/na_launch_bg</item>
+        <item name="android:navigationBarColor">@color/na_launch_bg</item>
+        <item name="android:windowLightStatusBar">@bool/na_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/na_light_bars</item>
     </style>
 
+    <!-- Splash: the web launch screen's first frame (mark 64dp, centred, on the ground colour).
+         MainActivity keeps it until the page has painted that same frame, then fades it out. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
-        <item name="windowSplashScreenBackground">@color/na_bg</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_mark</item>
+        <item name="windowSplashScreenBackground">@color/na_launch_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/launch_mark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+    <!-- The same, pinned to one appearance (NativePlugin.launchTheme, Android 13+). -->
+    <style name="AppTheme.Launch.Dark" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/na_dark_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/launch_mark_dark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+    <style name="AppTheme.Launch.Light" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/na_light_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/launch_mark_light</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

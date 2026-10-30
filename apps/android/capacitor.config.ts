@@ -10,6 +10,9 @@ const config: CapacitorConfig = {
   appName: "NeuralAgent",
   webDir: "www",
   server: { url, cleartext: url.startsWith("http://"), androidScheme: "https" },
+  // Tells the page that this shell hands its splash over to the page's launch screen (MainActivity,
+  // packages/app lib/launch.ts), so the page waits for the splash to fade before its motion.
+  appendUserAgent: "NeuralAgentLaunch/1",
   android: { allowMixedContent: false },
 };
 

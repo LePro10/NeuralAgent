@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch screen in both appearances: the first frame of packages/app lib/launchFrame.ts
+     (Night scheme, Ice accent; packages/ui tokens.css + themes.css). values-night/launch.xml
+     switches these to dark with the phone; NativePlugin.launchTheme pins one (Android 13+) when
+     the app's own appearance is not System. -->
+<resources>
+    <color name="na_dark_bg">#080909</color>
+    <color name="na_dark_ink">#eef1ee</color>
+    <color name="na_dark_accent">#b9d3ff</color>
+    <color name="na_light_bg">#f2f3f5</color>
+    <color name="na_light_ink">#0c0e10</color>
+    <color name="na_light_accent">#2557e0</color>
+
+    <color name="na_launch_bg">@color/na_light_bg</color>
+    <item name="launch_mark" type="drawable">@drawable/launch_mark_light</item>
+    <bool name="na_light_bars">true</bool>
+</resources>

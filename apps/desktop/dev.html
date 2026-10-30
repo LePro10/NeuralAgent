@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Appearance before first paint (lib/theme.ts takes over). -->
-    <script>try{var t=(JSON.parse(localStorage.getItem("neuralagent.theme")||"{}").state)||{},a=t.appearance||"system",h=document.documentElement;h.dataset.appearance=a==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):a;if(t.scheme)h.dataset.scheme=t.scheme}catch(e){}</script>
     <title>NeuralAgent (browser dev)</title>
   </head>
   <body>
+    <!-- Appearance and the launch screen's first frame, before any JS (packages/app/src/lib/launchFrame.ts). -->
+    <!--launch-->
     <div id="root"></div>
     <script type="module" src="/src/dev-browser.tsx"></script>
   </body>

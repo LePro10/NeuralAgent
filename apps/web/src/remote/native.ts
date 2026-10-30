@@ -15,6 +15,7 @@ interface NeuralAgentPlugin {
   copyText(o: { text: string }): Promise<void>;
   callActive(o: { on: boolean; route?: string }): Promise<{ output?: string }>;
   callRoute(o: { route: string }): Promise<{ output: string }>;
+  launchTheme(o: { appearance: string }): Promise<void>;
   addListener(event: "dial", cb: (o: { start: boolean }) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", cb: (o: { host: string | null; sid: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "paste", cb: (o: { type: string; data: string }) => void): Promise<PluginListenerHandle>;
@@ -74,3 +75,23 @@ void plugin.addListener("paste", (o) => {
   const f = toFile(o);
   if (f) window.dispatchEvent(new CustomEvent("na-paste-image", { detail: f }));
 });
+
+/**
+ * The next start's splash in the app's own appearance (System, Light or Dark), so it matches the
+ * launch screen the page paints (Android 13+; older APKs lack the method and ignore it).
+ */
+function syncLaunchTheme() {
+  let sent = "";
+  const send = () => {
+    let a = "system";
+    try {
+      a = JSON.parse(localStorage.getItem("neuralagent.theme") ?? "{}").state?.appearance ?? "system";
+    } catch {}
+    if (a === sent) return;
+    sent = a;
+    void plugin.launchTheme({ appearance: a }).catch(() => {});
+  };
+  send();
+  new MutationObserver(send).observe(document.documentElement, { attributes: true, attributeFilter: ["data-appearance"] });
+}
+syncLaunchTheme();

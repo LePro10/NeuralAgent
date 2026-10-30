@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 import { CHANGELOG, readChangelog } from "../../scripts/changelog.mjs";
+import { launchFrame } from "../../packages/app/src/lib/launchFrame";
 
 // One version for everything: the Cargo workspace's (scripts/set-version.mjs).
 const version = readFileSync(new URL("../../Cargo.toml", import.meta.url), "utf8").match(/\[workspace\.package\][^[]*?\nversion = "([^"]+)"/)![1]!;
@@ -34,7 +35,7 @@ function releaseData(): Plugin {
 // Multi-page build. The relay serves dist/ as-is: `/`, `/admin/*`, `/app/*`, `/imprint`, … (see na-relay web.rs).
 export default defineConfig({
   base: "/",
-  plugins: [react(), tailwindcss(), releaseData()],
+  plugins: [react(), tailwindcss(), releaseData(), launchFrame()],
   define: { __NA_WEB__: JSON.stringify({ version, build }) },
   // `pnpm dev` talks to a local relay for the API and the OAuth redirects.
   server: {
@@ -44,6 +45,8 @@ export default defineConfig({
   build: {
     target: "safari16",
     chunkSizeWarningLimit: 1500,
+    // Audio worklets must stay real files: inlined as data: URLs, the CSP (script-src 'self') blocks them.
+    assetsInlineLimit: (file: string) => (file.endsWith("worklet.js") ? false : undefined),
     rollupOptions: {
       input: {
         main: "index.html",

@@ -1,0 +1,111 @@
+/*
+ * Launch screen (lib/launchFrame.ts markup, lib/launch.ts phases, docs/notes/launch.md).
+ * still: the first frame, identical to the native splash and the Tauri window colour: the mark
+ *        on the plain ground colour.
+ * play:  ~0.75 s: the ground's lights and an accent bloom fade in while the mark's panes pulse
+ *        once, left bar to right bar.
+ * wait:  still not ready: the accent pane breathes slowly (no spinner).
+ * out:   the launch layer dissolves into the app while the mark grows towards you.
+ * Only opacity and transform animate. Reduced motion: no pulse or breathing, a plain fade out.
+ */
+#na-launch {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-intro);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--color-bg);
+  contain: strict;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#na-launch .nl-ground {
+  position: absolute;
+  inset: 0;
+  background: var(--ground-lights), var(--ground-wash);
+  opacity: 0;
+}
+#na-launch .nl-bloom {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26rem;
+  height: 26rem;
+  margin: -13rem 0 0 -13rem;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-accent-deep) 26%, transparent), color-mix(in srgb, var(--color-accent-deep) 8%, transparent) 55%, transparent);
+  opacity: 0;
+}
+/* The mark: MARK_PANES (lib/launchFrame.ts) from its 64-unit grid, cropped to 8..56, at 64px. */
+#na-launch .nl-mark {
+  --u: calc(64px / 48);
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+#na-launch .nl-mark i {
+  position: absolute;
+  border-radius: calc(3 * var(--u));
+  background: var(--color-bright);
+}
+#na-launch .nl-mark i:nth-child(1) { left: calc(0 * var(--u)); top: calc(0 * var(--u)); width: calc(10 * var(--u)); height: calc(48 * var(--u)); }
+#na-launch .nl-mark i:nth-child(2) { left: calc(12 * var(--u)); top: calc(1 * var(--u)); width: calc(12 * var(--u)); height: calc(14 * var(--u)); }
+#na-launch .nl-mark i:nth-child(3) { left: calc(18 * var(--u)); top: calc(17 * var(--u)); width: calc(12 * var(--u)); height: calc(14 * var(--u)); }
+#na-launch .nl-mark i:nth-child(4) { left: calc(24 * var(--u)); top: calc(33 * var(--u)); width: calc(12 * var(--u)); height: calc(14 * var(--u)); }
+#na-launch .nl-mark i:nth-child(5) { left: calc(38 * var(--u)); top: calc(0 * var(--u)); width: calc(10 * var(--u)); height: calc(48 * var(--u)); }
+#na-launch .nl-mark .nl-a {
+  background: var(--color-accent);
+}
+/* Text and buttons when the start takes long (LaunchNote): below the mark, the mark stays put. */
+#na-launch .nl-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 64px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  text-align: center;
+  animation: nl-fade 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* play */
+#na-launch[data-phase="play"] .nl-ground { animation: nl-fade 0.7s cubic-bezier(0.25, 0.6, 0.3, 1) both; }
+#na-launch[data-phase="play"] .nl-bloom { animation: nl-bloom 0.9s cubic-bezier(0.16, 0.84, 0.44, 1) both; }
+#na-launch[data-phase="play"] .nl-mark i { animation: nl-pulse 0.56s cubic-bezier(0.34, 1.36, 0.64, 1) both; }
+#na-launch[data-phase="play"] .nl-mark i:nth-child(2) { animation-delay: 0.06s; }
+#na-launch[data-phase="play"] .nl-mark i:nth-child(3) { animation-delay: 0.12s; }
+#na-launch[data-phase="play"] .nl-mark i:nth-child(4) { animation-delay: 0.18s; }
+#na-launch[data-phase="play"] .nl-mark i:nth-child(5) { animation-delay: 0.24s; }
+
+/* wait, out: the lights stay on */
+#na-launch:is([data-phase="wait"], [data-phase="out"]) :is(.nl-ground, .nl-bloom) { opacity: 1; }
+#na-launch[data-phase="wait"] .nl-mark .nl-a { animation: nl-breathe 1.8s ease-in-out infinite; }
+
+/* out: one fading layer; inside it only the mark moves (no nested opacity animations, which some
+   Android WebViews composite wrongly, and nothing on the app itself, which would re-raster it). */
+#na-launch[data-phase="out"] { pointer-events: none; animation: nl-out 0.42s cubic-bezier(0.32, 0.72, 0, 1) both; }
+#na-launch[data-phase="out"] .nl-mark { animation: nl-lift 0.42s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
+@keyframes nl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nl-bloom { from { opacity: 0; transform: scale(0.55); } to { opacity: 1; transform: none; } }
+@keyframes nl-pulse { 0%, 100% { transform: none; } 38% { transform: scale(0.82); } }
+@keyframes nl-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes nl-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes nl-lift { from { transform: none; } to { transform: scale(1.18); } }
+
+/* Reduced motion (system or the in-app switch): no pulse, no breathing; the lights and the exit
+   still fade, briefly. The ID outranks the global `* { animation-duration: .01ms !important }`. */
+@media (prefers-reduced-motion: reduce) {
+  #na-launch[data-phase] .nl-mark i, #na-launch[data-phase] .nl-mark .nl-a, #na-launch[data-phase="out"] .nl-mark { animation: none !important; }
+  #na-launch[data-phase="play"] .nl-bloom { animation-name: nl-fade !important; }
+  #na-launch[data-phase="play"] :is(.nl-ground, .nl-bloom) { animation-duration: 0.4s !important; }
+  #na-launch[data-phase="out"] { animation-duration: 0.22s !important; }
+}
+.reduce-motion #na-launch[data-phase] .nl-mark i, .reduce-motion #na-launch[data-phase] .nl-mark .nl-a, .reduce-motion #na-launch[data-phase="out"] .nl-mark { animation: none !important; }
+.reduce-motion #na-launch[data-phase="play"] .nl-bloom { animation-name: nl-fade !important; }
+.reduce-motion #na-launch[data-phase="play"] :is(.nl-ground, .nl-bloom) { animation-duration: 0.4s !important; }
+.reduce-motion #na-launch[data-phase="out"] { animation-duration: 0.22s !important; }

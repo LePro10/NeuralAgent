@@ -247,4 +247,18 @@ public class NativePlugin extends Plugin {
         Status.names(getContext(), call.getString("json", "{}"));
         call.resolve();
     }
+
+    /**
+     * The app's appearance ("system", "light" or "dark"), so the next start's splash already has
+     * the right colours (Android 13+ remembers it; older versions follow the phone's setting).
+     */
+    @PluginMethod
+    public void launchTheme(PluginCall call) {
+        String a = call.getString("appearance", "system");
+        if (Build.VERSION.SDK_INT >= 33 && getActivity() != null) {
+            int theme = "light".equals(a) ? R.style.AppTheme_Launch_Light : "dark".equals(a) ? R.style.AppTheme_Launch_Dark : R.style.AppTheme_NoActionBarLaunch;
+            getActivity().getSplashScreen().setSplashScreenTheme(theme);
+        }
+        call.resolve();
+    }
 }
