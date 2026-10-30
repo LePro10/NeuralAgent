@@ -23,6 +23,7 @@ export default defineConfig({
         imprint: "imprint/index.html",
         privacy: "privacy/index.html",
         terms: "terms/index.html",
+        download: "download/index.html",
       },
     },
   },
