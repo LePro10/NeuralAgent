@@ -8,26 +8,25 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
 ## Where we are (2026-10-30)
 - M0–M9 done; **M10 (own ideas, polish, final report) is current**.
 - Released: 0.2.0 (design + remote round, D40–D42), installed and deployed.
-- 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, but GitHub Actions
-  refuse to run (billing/spending limit). Not published on agent.neuralhub.dev, no
-  Windows/Linux/Android builds. The owner's Mac runs a locally built 0.2.1.
-- Mobile-first polish round, committed (7534a41), **not released or deployed**: design system
-  (D45, `docs/notes/design-system.md`, `docs/notes/mobile-polish.md`), Claude view rebuilt
-  (`docs/notes/claude-view.md`), all pages, connection fixes (heartbeats, fast reconnect,
-  photo uploads), update UX + `CHANGELOG.md` → dialog, `/changelog`, release notes (D44).
-  Changes are listed in `CHANGELOG.md` under `[Unreleased]`.
-- Docs/workflow round (uncommitted at the time of writing): test tools moved from `/tmp` into
-  `scripts/dev/` (README there), `docs/CODEMAP.md` + `pnpm codemap`, docs guard
-  `pnpm check:docs` (also in CI), skills `deploy-web` and `ui-check`, history moved to
-  `docs/archive/`. `playwright-core` is a pinned root devDependency now.
+- 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, never built.
+- **0.3.0** (mobile-first polish round: design system D45, light mode, Claude view rebuilt,
+  update UX + changelog D44, connection fixes): tag `v0.3.0` pushed 2026-10-30, but GitHub
+  Actions refuse to run (billing/spending limit) → no desktop/Android builds, and
+  `/api/releases/latest` still says 0.2.0. The relay + website **are deployed** with 0.3.0:
+  `/changelog`, `/version.json` (0.3.0), the web remote `/app/` and with it the Android shell
+  show the new UI. The owner's Mac still runs a locally built 0.2.1 (owner asked not to
+  install 0.3.0 by hand; they want to test the auto-update once CI publishes).
+- Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
+  `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
 ## Next
-1. When GitHub billing is fixed: re-run the Release workflow for v0.2.1, check
-   `/api/releases/latest`.
-2. Release the `[Unreleased]` section as the next version (skill `release`), then deploy the
-   relay/website (skill `deploy-web`). Today the live relay serves 0.2.0 and `/version.json`
-   is a 404, so the website changelog is not live yet.
-3. Owner checks on real devices (STATUS checklist), then M10 final report.
+1. When GitHub billing is fixed: re-run the Release workflow for **v0.3.0** (`gh run rerun
+   41071938534` or re-run in the UI; v0.2.1 can be skipped), then check
+   `/api/releases/latest` shows 0.3.0. The owner's Mac 0.2.1 should then offer the update.
+2. Owner checks on real devices (STATUS checklist), then M10 final report.
+3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, Android
+   status bar colour in light mode (needs a new APK), iOS PWA status text stays white in light
+   mode, "done, not seen" is not persisted by the daemon.
 
 ## Open issues
 - "Last seen" for a device that never connected shows its creation date.
