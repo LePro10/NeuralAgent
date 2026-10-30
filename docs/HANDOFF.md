@@ -29,8 +29,8 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
 - macOS signing: from the next release the app is signed with a stable self-signed identity
   (docs/RELEASING.md "macOS signing"), so Accessibility/microphone survive updates. The first
   update onto it still needs one re-grant. Updates now swap `Contents` in place, so the Dock pin
-  survives (from the update after the one that ships it). Unreleased, not deployed:
-  update pill (accent, download icon, clip-path morph), sidebar workspace menu/rename/drag.
+  survives (from the update after the one that ships it). Released in 0.3.4 (relay/web deployed)
+  with the update pill, sidebar workspace menu/rename/drag and per-device notifications.
 - Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
