@@ -182,7 +182,7 @@ function Level({ depth, top, enter, leaving, onGone, finger, instant, children }
   return (
     <motion.div
       ref={el}
-      className="absolute inset-0 bg-bg"
+      className="ground absolute inset-0"
       style={{ zIndex: depth, opacity: layer, visibility: isTop || isUnder || leaving ? 'visible' : 'hidden' }}
       inert={!isTop}
     >

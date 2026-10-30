@@ -15,6 +15,8 @@ export function AccountRow({ open, active, activity, onSettings }: { open: boole
       aria-label={`${name}, settings`}
       aria-current={active ? "page" : undefined}
       title={open ? undefined : "Settings"}
+      // 6.5 px: the avatar's centre on the rail's centre line, like the nav icons above it.
+      style={{ paddingLeft: 6.5 }}
       className={"pressable group flex h-11 w-full items-center gap-2.5 rounded-field px-2 text-left hover:bg-fill-2 " + (active ? "bg-fill-3 shadow-edge" : "")}
     >
       <span className="relative shrink-0">

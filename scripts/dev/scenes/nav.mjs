@@ -37,9 +37,14 @@ export default async ({ p, shot, sleep, go, more, tap, phone }) => {
     return { clip: { x: 0, y, width: 240, height: Math.min(260, 900 - y) } };
   };
   await shot("01-rail-foot", await foot());
-  // Rest on the rail: it opens after 600 ms. Catch it halfway, then open.
+  // Sweeping across the rail toward the page must not open it.
+  await p.mouse.move(2, 300, { steps: 3 });
+  await p.mouse.move(700, 320, { steps: 3 });
+  await sleep(450);
+  await shot("01-sweep-stays-closed-foot", await foot());
+  // Rest on the rail: it opens after 200 ms of stillness. Catch it halfway, then open.
   await p.mouse.move(nav.x + nav.width / 2, nav.y + nav.height - 30, { steps: 6 });
-  await sleep(700);
+  await sleep(300);
   await shot("02-peek-mid-foot", await foot());
   await sleep(800);
   await shot("03-open");

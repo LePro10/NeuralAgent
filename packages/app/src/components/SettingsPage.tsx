@@ -3,12 +3,12 @@
 // a detail of their own (a workspace) through `useSettingsNav`. Remote access and MCP servers live
 // here too (they were top-level pages before); `requestSettingsSection` opens one from anywhere.
 import {
+  BackButton,
   List,
   NavBackProvider,
   Page,
   Row,
   Stack,
-  cn,
   useLayoutMode,
   useStack,
   type Activity,
@@ -21,8 +21,9 @@ import { takeSettingsSection, useSettingsRoute } from "../lib/settingsRoute";
 import { useTheme } from "../lib/theme";
 import { useUpdates } from "../lib/updates";
 import { HostUpdates, HostVoiceSettings, WorkspaceSettings } from "./HostSettings";
-import { McpPage } from "./McpPage";
-import { RemotePage } from "./RemotePage";
+import { Glow } from "./Glow";
+import { McpPanel } from "./McpPage";
+import { RemotePanel } from "./RemotePage";
 import {
   AboutPanel,
   AdvancedPanel,
@@ -46,7 +47,7 @@ interface SectionDef {
   activity?: Activity;
   /** Opens something else (a sheet) instead of a page. */
   action?: () => void;
-  /** A full page of its own (Remote access, MCP servers), not content inside a settings page. */
+  /** A full page of its own (a remote's account page), not content inside a settings page. */
   own?: boolean;
   render?: () => ReactNode;
 }
@@ -75,15 +76,16 @@ function useSections(): SectionGroup[] {
   const appearance: SectionDef = { id: "appearance", title: "Appearance", Icon: Palette, value: appearanceSummary(), render: () => <AppearancePanel /> };
   const pending = remoteStatus === "pending";
   const access: SectionDef = remote
-    ? { id: "remote", title: "Account and devices", Icon: Smartphone, own: true, render: () => (platform.account ? platform.account.render() : <RemotePage />) }
+    ? platform.account
+      ? { id: "remote", title: "Account and devices", Icon: Smartphone, own: true, render: () => platform.account!.render() }
+      : { id: "remote", title: "Account and devices", Icon: Smartphone, render: () => <RemotePanel /> }
     : {
         id: "remote",
         title: "Remote access",
         Icon: Smartphone,
         value: pending ? "Waiting" : paired ? `${paired} paired` : undefined,
         activity: pending ? "waiting" : undefined,
-        own: true,
-        render: () => <RemotePage />,
+        render: () => <RemotePanel />,
       };
   const updates: SectionDef = {
     id: "updates",
@@ -104,7 +106,7 @@ function useSections(): SectionGroup[] {
   ];
   const agents: SectionDef[] = [
     { id: "agents", title: "Agents and profiles", Icon: Bot, action: () => openCatalog(true) },
-    { id: "mcp", title: "MCP servers", Icon: Plug, value: servers ? `${servers} on` : undefined, own: true, render: () => <McpPage /> },
+    { id: "mcp", title: "MCP servers", Icon: Plug, value: servers ? `${servers} on` : undefined, render: () => <McpPanel /> },
     { id: "workspaces", title: "Workspaces", Icon: Folder, value: workspaces ? String(workspaces) : undefined, render: () => <WorkspaceSettings hostName={host} /> },
   ];
   const discord: SectionDef = { id: "discord", title: "Discord", Icon: Gamepad2, value: presenceLabel(settings?.discord_presence), render: () => <DiscordPanel /> };
@@ -159,6 +161,9 @@ export function SettingsPage() {
   return useLayoutMode() === "phone" ? <PhoneSettings /> : <DesktopSettings />;
 }
 
+/** Like every top-level page: the app's ground, a soft light at the top, eyebrow and large title. */
+const EYEBROW = "Preferences";
+
 function PhoneSettings() {
   const groups = useSections();
   const all = groups.flatMap((g) => g.items);
@@ -193,17 +198,25 @@ function PhoneSettings() {
       <Stack
         stack={stack}
         root={
-          <Page title="Settings">
-            <div className="pb-8">
-              <SectionRows groups={groups} onOpen={open} />
-            </div>
-          </Page>
+          <div className="relative h-full">
+            <Glow tint="agents" />
+            <Page title="Settings" eyebrow={EYEBROW}>
+              <div className="pb-8">
+                <SectionRows groups={groups} onOpen={open} />
+              </div>
+            </Page>
+          </div>
         }
       />
     </SettingsNavCtx.Provider>
   );
 }
 
+/**
+ * Desktop: one page like the others (eyebrow, large title, same width and light); below it the
+ * section list on the left (it stays in view while the right side scrolls) and the chosen section
+ * on the right, with its title and, for a detail, a back button to the section.
+ */
 function DesktopSettings() {
   const groups = useSections();
   const all = groups.flatMap((g) => g.items);
@@ -218,27 +231,37 @@ function DesktopSettings() {
     setDetail(null);
   };
   useSectionRequests(all, open);
+  // A section that is a whole page of its own (a remote's account) replaces Settings, with a way back.
+  if (section.own) {
+    return <NavBackProvider value={{ label: "Settings", onBack: () => setId("appearance") }}>{section.render!()}</NavBackProvider>;
+  }
+  const shown = detail ?? { key: section.id, title: section.title, node: section.render!() };
   return (
     <SettingsNavCtx.Provider value={nav}>
-      <div className="flex h-full min-h-0" style={{ paddingLeft: "var(--sidebar-space, 0px)" }}>
-        <aside className="scroller h-full w-80 shrink-0 border-r-hair border-line px-4 pb-8" style={{ paddingTop: "calc(var(--safe-top) + 64px)" }}>
-          <h1 className="mb-6 px-2 text-large-title text-bright">Settings</h1>
-          <SectionRows groups={groups} onOpen={open} selected={id} />
-        </aside>
-        {/* Pages here lay out as if there were no sidebar: the column already clears it. */}
-        <div className={cn("relative min-w-0 flex-1")} style={{ ["--sidebar-space" as string]: "0px" }}>
-          {section.own ? (
-            <NavBackProvider value={null}>{section.render!()}</NavBackProvider>
-          ) : detail ? (
-            <Page key={detail.key} title={detail.title} backLabel={section.title} onBack={() => setDetail(null)}>
-              <div className="max-w-2xl pb-8">{detail.node}</div>
-            </Page>
-          ) : (
-            <Page key={section.id} title={section.title}>
-              <div className="max-w-2xl pb-8">{section.render!()}</div>
-            </Page>
-          )}
-        </div>
+      <div className="relative h-full">
+        <Glow tint="agents" />
+        <Page title="Settings" eyebrow={EYEBROW} wide scrollTopKey={shown.key}>
+          <div className="flex items-start gap-10 pb-8">
+            <nav
+              aria-label="Settings sections"
+              className="scroller sticky w-72 shrink-0 pb-2"
+              style={{ top: "calc(var(--safe-top) + 72px)", maxHeight: "calc(100dvh - var(--safe-top) - 96px)" }}
+            >
+              <SectionRows groups={groups} onOpen={open} selected={id} />
+            </nav>
+            <section aria-label={shown.title} className="min-w-0 max-w-2xl flex-1">
+              {detail && (
+                <div className="-mt-2 mb-1">
+                  <BackButton label={section.title} onBack={() => setDetail(null)} />
+                </div>
+              )}
+              <h2 className="mb-5 flex min-h-6 items-center text-title-2 text-bright">{shown.title}</h2>
+              <div key={shown.key} className="page-in">
+                {shown.node}
+              </div>
+            </section>
+          </div>
+        </Page>
       </div>
     </SettingsNavCtx.Provider>
   );

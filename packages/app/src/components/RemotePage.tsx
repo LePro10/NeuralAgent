@@ -1,19 +1,18 @@
 import type { AuditEntry, RemoteDevice, RemotePairCode, RemoteState } from "@neuralagent/protocol";
-import { Avatar, Button, Callout, ConfirmSheet, Field, List, Page, Pill, Row, Spinner, Switch, TextArea, toast } from "@neuralagent/ui";
+import { Avatar, Button, Callout, ConfirmSheet, Field, List, Pill, Row, Spinner, Switch, TextArea, toast } from "@neuralagent/ui";
 import { Bot, Globe, KeyRound, LogOut, Monitor, QrCode, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
 import { ago } from "../lib/time";
 
-/** Remote access: invite-only sign-in, then this computer's devices and "Add phone". */
-export function RemotePage() {
+/**
+ * Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone".
+ * Content only: Settings gives it its page and title.
+ */
+export function RemotePanel() {
   const remote = useDaemon((c) => c.state?.remote);
   if (!remote) return null;
-  return (
-    <Page title="Remote access">
-      <div className="flex flex-col gap-6 pb-8">{remote.status === "signed_out" ? <SignIn remote={remote} /> : <Account remote={remote} />}</div>
-    </Page>
-  );
+  return <div className="flex flex-col gap-7">{remote.status === "signed_out" ? <SignIn remote={remote} /> : <Account remote={remote} />}</div>;
 }
 
 interface Ask {

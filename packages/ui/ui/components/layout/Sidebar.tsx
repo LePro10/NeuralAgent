@@ -4,7 +4,7 @@
  * with the page's light running underneath it (the twin of the phone's tab
  * bar). Collapsed it is a 60px rail of quiet icons.
  *
- * Peek: rest on it (600 ms) and it opens to 176px *over* the page; a click
+ * Peek: rest on it (200 ms, pointer still) and it opens to 176px *over* the page; a click
  * cancels that until the pointer leaves, so switching places never opens
  * it. Leave and it folds back.
  * Pin: ⌘\ or the small panel icon beside the brand (shown while open) keeps
@@ -16,7 +16,7 @@
  */
 import { motion } from 'motion/react';
 import { PanelLeftClose, PanelLeftOpen, Search, Settings, type LucideIcon } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { haptic } from '../../lib/haptics';
 import { MOD_KEY } from '../../lib/hooks';
@@ -43,11 +43,16 @@ export interface SidebarItem<T extends string = string> {
 }
 
 const RAIL = 60, OPEN = 176, INSET = 8;
-// Resting on it opens it (600 ms by default — long enough to pass by or click,
-// short enough to feel answered); a click never does. Leaving folds it after 240 ms.
+// Hover intent. The pointer has to *rest* on the rail: it opens once the pointer has stayed within
+// REST_SLOP px for `openDelay` (200 ms). Every bigger move restarts the wait, so a pointer that
+// sweeps across on its way to the page never opens it, while a pause answers at about the speed of
+// a tooltip. 200 ms sits just above a deliberate glance (~150 ms) and below the pause before a
+// click on an icon, which cancels the peek anyway. Leaving folds it after 240 ms, so brushing the
+// edge or re-entering right away does not flicker.
 const INTENT_OUT = 240;
+const REST_SLOP = 8;
 
-export function Sidebar<T extends string>({ items, value, onChange, brand, above, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 600, pinned: pinnedProp, onPinnedChange, className }: {
+export function Sidebar<T extends string>({ items, value, onChange, brand, above, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 200, pinned: pinnedProp, onPinnedChange, className }: {
   items: SidebarItem<T>[];
   value: T;
   onChange: (id: T) => void;
@@ -98,6 +103,9 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setPeek(v), v ? openDelay : INTENT_OUT);
   };
+  // Where the pointer started resting; a move beyond REST_SLOP restarts the wait.
+  const rest = useRef({ x: 0, y: 0 });
+  const restAt = (e: ReactPointerEvent) => { rest.current = { x: e.clientX, y: e.clientY }; };
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   useEffect(() => {
@@ -122,7 +130,11 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
     <div ref={frame} className={cn('pointer-events-none absolute inset-y-0 left-0 z-[var(--z-sidebar)] flex items-center', className)} style={{ padding: INSET }}>
       <motion.nav
         aria-label="Main"
-        onPointerEnter={(e) => { if (e.pointerType === 'mouse') { clicked.current = false; intend(true); } }}
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') { clicked.current = false; restAt(e); intend(true); } }}
+        onPointerMove={(e) => {
+          if (e.pointerType !== 'mouse' || peek || clicked.current) return;
+          if (Math.hypot(e.clientX - rest.current.x, e.clientY - rest.current.y) > REST_SLOP) { restAt(e); intend(true); }
+        }}
         onPointerLeave={(e) => { if (e.pointerType === 'mouse') { clicked.current = false; intend(false); } }}
         // A click (switching place) cancels the peek until the pointer leaves.
         onPointerDown={() => { if (!peek) { clicked.current = true; window.clearTimeout(timer.current); } }}
@@ -141,7 +153,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
         {/* Brand, and — only while open — a quiet pin at the far end of the same row. */}
         <div className="mb-3 flex h-10 shrink-0 items-center">
           {brand && (
-            <button type="button" onClick={brand.onClick} className="group flex h-10 min-w-0 flex-1 items-center gap-3 rounded-field px-[11px]" aria-label="Home">
+            <button type="button" onClick={brand.onClick} className="group flex h-10 min-w-0 flex-1 items-center gap-3 rounded-field px-[11.5px]" aria-label="Home">
               <span className="block">{brand.mark}</span>
               {brand.word && <span className={fade} style={show}>{brand.word}</span>}
             </button>
@@ -173,13 +185,13 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
                 {head !== null && i > 0 && (
                   // Open: the group's name. Collapsed: a short hairline. Same height, so nothing jumps.
                   <div className="relative mt-1.5 h-6" aria-hidden={!head || undefined}>
-                    <span className="absolute top-1/2 left-[15px] h-[var(--hair)] w-[14px] bg-line-2 transition-opacity duration-200" style={{ opacity: open && head ? 0 : 1 }} />
-                    {head && <span className={cn('absolute top-1/2 left-[13px] -translate-y-1/2 text-tiny text-faint', fade)} style={show}>{head}</span>}
+                    <span className="absolute top-1/2 left-[14.5px] h-[var(--hair)] w-[14px] bg-line-2 transition-opacity duration-200" style={{ opacity: open && head ? 0 : 1 }} />
+                    {head && <span className={cn('absolute top-1/2 left-[12.5px] -translate-y-1/2 text-tiny text-faint', fade)} style={show}>{head}</span>}
                   </div>
                 )}
                 <button type="button" onClick={() => { haptic('select'); onChange(it.id); }} aria-current={active ? 'page' : undefined} aria-label={it.label}
                   aria-description={it.activity ? ACTIVITY_LABEL[it.activity] : typeof it.badge === 'string' ? it.badge : undefined}
-                  className={cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[13px] text-chip transition-colors duration-200', active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink')}>
+                  className={cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[12.5px] text-chip transition-colors duration-200', active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink')}>
                   {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-lens shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
                   <span className="relative transition-colors duration-300" style={active && sig ? { color: `var(--color-signal-${sig})` } : undefined}>
                     <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />

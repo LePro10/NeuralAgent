@@ -8,11 +8,20 @@
 import { SPRING, cn } from "@neuralagent/ui";
 import { AlertTriangle, ArrowUpCircle } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { openUpdateDialog, useUpdates } from "../lib/updates";
 
 /** Collapsed: a square as tall as the pill. Radii: the sidebar item's corner → a full pill. */
 const SIZE = 32;
 const SQUARE_RADIUS = 10;
+/**
+ * Left offset in the sidebar's content box (43 px wide: the 60 px rail minus padding and its hairline
+ * rim) that puts the 32 px square's centre on the rail's centre, where the nav icons sit. The quiet
+ * version label (no update) starts 1 px further left, so its text lines up with the icons' left edge.
+ */
+const RAIL_INSET = 5.5;
+/** Everything in the open pill besides its label: padding 8 + icon 16 + gap 6 + padding 12. */
+const PILL_CHROME = 42;
 
 /**
  * `open`: the sidebar is expanded (collapsed: only the square icon button). `phone`: the More page
@@ -21,6 +30,18 @@ const SQUARE_RADIUS = 10;
 export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; phone?: boolean; onOpen?: () => void }) {
   const u = useUpdates();
   const reduce = useReducedMotion();
+  // The pill's open width, measured from its label: "auto" would be measured inside the still
+  // narrow rail and jump at the end, so the morph animates between two real numbers instead.
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [labelWidth, setLabelWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = labelRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setLabelWidth(el.offsetWidth));
+    ro.observe(el);
+    setLabelWidth(el.offsetWidth);
+    return () => ro.disconnect();
+  });
   if (!u.kind || !u.current) return null;
   const web = u.kind === "web";
 
@@ -45,22 +66,24 @@ export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; ph
       );
     }
     return (
-      <div className="ml-1.5 mt-2 flex">
+      // Collapsed, the square's centre sits on the rail's centre line, like the icons above it.
+      <div className="mt-2 flex" style={{ marginLeft: RAIL_INSET }}>
         <motion.button
           type="button"
           onClick={() => (onOpen?.(), openUpdateDialog("offer"))}
           aria-label={title}
           title={title}
           initial={false}
-          animate={{ width: open ? "auto" : SIZE, borderRadius: open ? SIZE / 2 : SQUARE_RADIUS }}
+          animate={{ width: open && labelWidth ? labelWidth + PILL_CHROME : SIZE, borderRadius: open ? SIZE / 2 : SQUARE_RADIUS }}
           transition={reduce ? { duration: 0 } : SPRING.sheet}
           style={{ height: SIZE }}
-          className="pressable group relative isolate flex items-center gap-1.5 overflow-hidden pr-3 pl-2 text-chip text-accent"
+          className="pressable group relative isolate flex shrink-0 items-center gap-1.5 overflow-hidden pr-3 pl-2 text-chip text-accent"
         >
           <span aria-hidden className={tint} style={{ borderRadius: "inherit" }} />
           <ArrowUpCircle size={16} strokeWidth={1.9} className="shrink-0" />
           <span
-            className="flex items-baseline gap-1.5 whitespace-nowrap transition-opacity duration-200"
+            ref={labelRef}
+            className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap transition-opacity duration-200"
             style={{ opacity: open ? 1 : 0, transitionDelay: open ? "60ms" : "0ms" }}
           >
             {label}
@@ -78,10 +101,11 @@ export function UpdateBadge({ open = true, phone, onOpen }: { open?: boolean; ph
     <button
       type="button"
       onClick={() => (onOpen?.(), openUpdateDialog("current"))}
+      style={phone ? undefined : { marginLeft: RAIL_INSET - 1 }}
       title={failed ? "The background service did not switch to this version" : u.build ? `Build ${u.build}` : "What's new in this version"}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-item transition-colors",
-        phone ? "h-tap shrink-0 self-start px-4 text-footnote" : "mt-1 ml-1.5 h-6 px-2 text-tiny",
+        phone ? "h-tap shrink-0 self-start px-4 text-footnote" : "mt-1 h-6 px-2 text-tiny",
         failed ? "text-warning hover:text-bright" : "text-faint hover:text-dim",
       )}
     >

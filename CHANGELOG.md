@@ -11,6 +11,11 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Improved
+- Settings looks like the rest of the app: the same large title, background light and widths, with the section list on the left and the chosen section on the right. Remote access and MCP servers now sit inside it in the same style.
+- The closed sidebar opens sooner when you rest the pointer on it, and stays closed when you just move across it.
+- The update button in the closed sidebar is centred exactly under the other icons and grows smoothly into the "Update" button.
+
 ## [0.3.1] - 2026-10-30
 
 Calmer, more colourful: your accent is back, the icons are quiet, and Settings holds everything.

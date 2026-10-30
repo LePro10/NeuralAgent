@@ -1,5 +1,5 @@
 import type { McpServer } from "@neuralagent/protocol";
-import { Button, ConfirmSheet, Empty, Field, IconButton, Input, List, Page, Row, Segmented, Sheet, Spinner, Switch, toast, useLayoutMode } from "@neuralagent/ui";
+import { Button, ConfirmSheet, Empty, Field, IconButton, Input, List, Row, Segmented, Sheet, Spinner, Switch, toast } from "@neuralagent/ui";
 import { Download, Plug, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { joinArgs, splitArgs } from "../lib/profiles";
@@ -14,10 +14,12 @@ interface Secret {
   kept: boolean;
 }
 
-/** MCP servers every agent started here gets; secret values live in the daemon and never come back. */
-export function McpPage() {
+/**
+ * Settings → MCP servers: the servers every agent started here gets; secret values live in the
+ * daemon and never come back. Content only: Settings gives it its page and title.
+ */
+export function McpPanel() {
   const client = useClient();
-  const phone = useLayoutMode() === "phone";
   const servers = useDaemon((c) => c.state?.mcp ?? []);
   const [editing, setEditing] = useState<McpServer | "new" | null>(null);
   const [importing, setImporting] = useState(false);
@@ -44,23 +46,13 @@ export function McpPage() {
     }
   };
 
-  const add = phone ? (
-    <IconButton label="Add server" variant="ghost" onClick={() => setEditing("new")}>
-      <Plus />
-    </IconButton>
-  ) : (
-    <Button size="sm" variant="accent" Icon={Plus} onClick={() => setEditing("new")} className="rounded-full">
-      Add server
-    </Button>
-  );
   const importRow = (
     <Row Icon={Download} title="Import from Claude Code & Codex" detail="Copies the servers you already use there" onClick={() => void importAll()} trailing={importing ? <Spinner size={16} /> : undefined} chevron={!importing} />
   );
 
   return (
-    <div className="relative h-full">
-      <Page title="MCP servers" actions={add}>
-        <div className="flex flex-col gap-7 pb-8">
+    <>
+        <div className="flex flex-col gap-7">
           {servers.length === 0 ? (
             <>
               <Empty
@@ -97,11 +89,13 @@ export function McpPage() {
                   </div>
                 ))}
               </List>
-              <List>{importRow}</List>
+              <List>
+                <Row Icon={Plus} title="Add server" onClick={() => setEditing("new")} />
+                {importRow}
+              </List>
             </>
           )}
         </div>
-      </Page>
       <Sheet
         open={editing !== null}
         onClose={() => setEditing(null)}
@@ -115,7 +109,7 @@ export function McpPage() {
       >
         {editing && <McpEditor key={editing === "new" ? "new" : editing.id} server={editing === "new" ? null : editing} onDone={() => setEditing(null)} expose={setSave} />}
       </Sheet>
-    </div>
+    </>
   );
 }
 
