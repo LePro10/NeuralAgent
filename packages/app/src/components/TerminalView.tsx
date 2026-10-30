@@ -148,6 +148,11 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     t.onSelectionChange(() => setSelected(t.hasSelection()));
 
     let size = { cols: 0, rows: 0 };
+    // xterm reflows wrapped lines on resize, but TUIs like Claude Code redraw by moving the cursor up
+    // as many lines as they printed at the old width, so after a resize the view keeps half-erased
+    // ghosts of the old frame. The daemon's screen does not reflow and stays clean: once resizing
+    // has settled, repaint from its snapshot.
+    let resync = 0;
     // `force`: tell the daemon even if our last report is unchanged (another client, or the Claude
     // view, may have resized the shared PTY since; the client in front wins).
     const refit = (force = false) => {
@@ -158,8 +163,13 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       const rows = Math.max(4, dims.rows);
       if (cols !== t.cols || rows !== t.rows) t.resize(cols, rows);
       if (force || cols !== size.cols || rows !== size.rows) {
+        const moved = size.cols !== 0 && (cols !== size.cols || rows !== size.rows);
         size = { cols, rows };
         client.req({ m: "term_resize", p: { sid, cols, rows } }).catch(() => {});
+        if (moved) {
+          clearTimeout(resync);
+          resync = window.setTimeout(() => !disposed && client.reattach(sid), 400);
+        }
       }
     };
 
@@ -310,6 +320,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
+      clearTimeout(resync);
       ro.disconnect();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVis);
