@@ -426,12 +426,12 @@ function NeuralSettings() {
   );
   return (
     <List label="Neural" footer="Neural, the orchestrator, runs on your own model. Keys stay on this computer (in the system keychain).">
-      <Row
-        title="Provider"
-        trailing={<Segmented<LlmProvider> size="sm" scroll label="Model provider" value={llm.provider} options={PROVIDERS} onChange={switchTo} />}
-      />
-      {llm.provider !== "ollama" && (
-        <div className="flex flex-col gap-2 p-3">
+      {/* Stacked, so the providers get the full width on a phone. */}
+      <div className="flex flex-col gap-2 p-3">
+        <Field label="Provider">
+          <Segmented<LlmProvider> size="sm" scroll label="Model provider" value={llm.provider} options={PROVIDERS} onChange={switchTo} />
+        </Field>
+        {llm.provider !== "ollama" && (
           <Field label="API key" hint={hasKey ? <Pill size="sm" tone="success">Saved</Pill> : undefined}>
             <div className="flex gap-2">
               <Input
@@ -453,8 +453,8 @@ function NeuralSettings() {
               )}
             </div>
           </Field>
-        </div>
-      )}
+        )}
+      </div>
       <div className="flex flex-col gap-3 p-3">
         {text("model", "Chat model", provider.models[0] || "Model name")}
         {text("call_model", "Call model", "Same as chat", "Used in calls, where a fast answer matters most.")}
