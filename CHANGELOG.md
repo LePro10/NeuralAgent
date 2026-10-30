@@ -11,8 +11,13 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-30
+
 ### Improved
 - The listening pill at the bottom of the screen now follows your voice: its bars rise and fall with how loud you speak while you dictate or after "Hey Neural", stay calm when it is quiet, and settle into a gentle shimmer while your words are written out.
+
+### Fixed
+- Dictation into a terminal types the whole text again instead of only the first letter.
 
 ## [0.3.2] - 2026-10-30
 
