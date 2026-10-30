@@ -18,6 +18,9 @@ import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
+import { startTheme } from "./lib/theme";
+
+startTheme();
 
 const ADD = "__add";
 const NEURAL = "__neural";

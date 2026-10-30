@@ -1,9 +1,10 @@
 import type { CallPreviewAudio, CallSettings, DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
-import { Button, Callout, Field, Input, List, Meter, Page, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
-import { AudioLines, Download, Ear, Keyboard, Mic } from "lucide-react";
+import { Button, Callout, Field, Input, List, Menu, Meter, Page, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
+import { AudioLines, Check, ChevronDown, Download, Ear, Keyboard, Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { playPreview } from "../lib/call";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
+import { ACCENTS, accentOf, SCHEMES, useTheme } from "../lib/theme";
 import { HOTKEYS, megabytes, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
 
 export function SettingsPage() {
@@ -11,12 +12,71 @@ export function SettingsPage() {
   return (
     <Page title="Settings" eyebrow="NeuralAgent">
       <div className="flex flex-col gap-6 pb-8">
+        <Appearance />
         {platform.kind === "desktop" && <NeuralSettings />}
         {platform.kind === "desktop" && <CallVoice />}
         {platform.voice && <VoiceSettings voice={platform.voice} mac={!!platform.trafficLights} />}
         <GeneralSettings />
       </div>
     </Page>
+  );
+}
+
+/** Theme of this device: each card is drawn in its own scheme and accent. */
+function Appearance() {
+  const { scheme, accent, setScheme, setAccent } = useTheme();
+  const current = accentOf(scheme, accent);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="eyebrow px-1">Appearance</div>
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-6" role="radiogroup" aria-label="Theme">
+        {SCHEMES.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="radio"
+            aria-checked={s.id === scheme}
+            data-scheme={s.id}
+            data-accent={accentOf(s.id, accent)}
+            onClick={() => setScheme(s.id)}
+            className="hoverable flex flex-col gap-2 rounded-stat bg-bg p-2 text-left shadow-edge"
+          >
+            <div className="flex h-12 flex-col justify-end gap-1 rounded-tile bg-chrome p-1.5">
+              <div className="h-1.5 w-3/4 rounded-full bg-fill-4" />
+              <div className="flex items-center gap-1">
+                <div className="h-1.5 flex-1 rounded-full bg-card-3" />
+                <div className="size-2.5 rounded-full bg-accent" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-detail text-ink">{s.name}</span>
+              {s.id === scheme && <Check size={13} className="text-accent" />}
+            </div>
+          </button>
+        ))}
+      </div>
+      <List footer="Saved on this device only.">
+        <Row
+          title="Accent"
+          trailing={
+            <Menu
+              title="Accent"
+              items={[
+                { label: "Theme's own", checked: accent === null, onSelect: () => setAccent(null) },
+                ...ACCENTS.map((a) => ({ label: a.name, checked: accent === a.id, onSelect: () => setAccent(a.id) })),
+              ]}
+              trigger={(show) => (
+                <Button size="sm" variant="quiet" onClick={show}>
+                  <span className="size-2.5 rounded-full bg-accent" />
+                  {accent ? ACCENTS.find((a) => a.id === accent)?.name : `Theme's own (${ACCENTS.find((a) => a.id === current)?.name})`}
+                  <ChevronDown size={12} />
+                </Button>
+              )}
+            />
+          }
+        />
+      </List>
+    </div>
   );
 }
 

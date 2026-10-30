@@ -5,5 +5,6 @@
  *   @import "./ui/styles/index.css";
  */
 @import "./tokens.css";
+@import "./themes.css";
 @import "./base.css";
 @import "./effects.css";

@@ -1,0 +1,44 @@
+/*
+ * Colour schemes — the ground, surfaces, ink and glass under one name. Set
+ * `data-scheme` on <html> (or any subtree, e.g. a preview card); no attribute
+ * is the default (Night, see tokens.css). Every scheme keeps the same steps and
+ * contrast as Night, so components never need to know which one is on. All of
+ * them are dark: the recipes (lit edges, sunk wells, white fills) assume it.
+ * Accent and signal colours are separate (data-accent, data-signal).
+ */
+/* Night, the default, spelled out so a preview inside another scheme can show it. */
+[data-scheme="night"] {
+  --color-bg: #080909; --color-chrome: #0b0c0c; --color-raised: #0e100f; --color-card: #121413;
+  --color-sheet: #111312; --color-popover: #161817; --color-card-2: #181a19; --color-card-3: #202321;
+  --color-bright: #eef1ee; --color-ink: #c6c9c6; --color-dim: #7d847f; --color-faint: #4a504c;
+  --glass-bg: rgb(28 30 29 / 0.58);
+}
+[data-scheme="graphite"] {
+  --color-bg: #0e0e0f; --color-chrome: #121213; --color-raised: #151516; --color-card: #19191b;
+  --color-sheet: #18181a; --color-popover: #1e1e20; --color-card-2: #202022; --color-card-3: #29292c;
+  --color-bright: #f0f0f2; --color-ink: #cacacd; --color-dim: #85858b; --color-faint: #505055;
+  --glass-bg: rgb(34 34 36 / 0.6);
+}
+[data-scheme="midnight"] {
+  --color-bg: #06080d; --color-chrome: #090b12; --color-raised: #0c0f17; --color-card: #10131d;
+  --color-sheet: #0f121b; --color-popover: #141826; --color-card-2: #161a28; --color-card-3: #1d2233;
+  --color-bright: #ecf0fa; --color-ink: #c3c9d8; --color-dim: #7a8399; --color-faint: #465068;
+  --glass-bg: rgb(22 27 42 / 0.6);
+}
+[data-scheme="black"] {
+  --color-bg: #000000; --color-chrome: #040404; --color-raised: #070707; --color-card: #0c0d0c;
+  --color-sheet: #0b0c0b; --color-popover: #121312; --color-card-2: #141514; --color-card-3: #1b1d1c;
+  --glass-bg: rgb(18 19 19 / 0.62);
+}
+[data-scheme="dusk"] {
+  --color-bg: #0b0908; --color-chrome: #0f0c0b; --color-raised: #13100e; --color-card: #171412;
+  --color-sheet: #161311; --color-popover: #1c1816; --color-card-2: #1e1a18; --color-card-3: #27221f;
+  --color-bright: #f3eee9; --color-ink: #cfc7c0; --color-dim: #8a7f77; --color-faint: #544b45;
+  --glass-bg: rgb(36 31 28 / 0.58);
+}
+[data-scheme="forest"] {
+  --color-bg: #060a08; --color-chrome: #08100c; --color-raised: #0b130f; --color-card: #0f1813;
+  --color-sheet: #0e1612; --color-popover: #131e18; --color-card-2: #15201a; --color-card-3: #1b2a22;
+  --color-bright: #ebf3ee; --color-ink: #c2cdc6; --color-dim: #76877d; --color-faint: #435249;
+  --glass-bg: rgb(22 34 28 / 0.58);
+}

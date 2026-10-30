@@ -9,6 +9,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { useClient, usePlatform } from "../lib/store";
+import { THEME_EVENT } from "../lib/theme";
 
 const FONT = '"IBM Plex Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
 
@@ -79,6 +80,8 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       minimumContrastRatio: 1,
     });
     term.current = t;
+    const retheme = () => (t.options.theme = theme());
+    window.addEventListener(THEME_EVENT, retheme);
     const fit = new FitAddon();
     t.loadAddon(fit);
     const uni = new Unicode11Addon();
@@ -159,6 +162,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       cancelAnimationFrame(raf);
       ro.disconnect();
       el.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener(THEME_EVENT, retheme);
       detach();
       t.dispose();
       term.current = null;

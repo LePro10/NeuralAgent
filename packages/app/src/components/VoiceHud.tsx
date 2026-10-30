@@ -1,5 +1,8 @@
 import { Shimmer, Waveform } from "@neuralagent/ui";
+import { startTheme } from "../lib/theme";
 import type { VoiceStatus } from "../lib/voice";
+
+startTheme();
 
 /** The pill shown at the bottom of the screen while dictating or after "Hey Neural". */
 export function VoiceHud({ status }: { status: VoiceStatus | null }) {
