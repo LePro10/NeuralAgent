@@ -2,6 +2,7 @@
 //!
 //! Models live in a folder per model (see [`stt::SttModel`]); nothing here downloads.
 
+pub mod download;
 pub mod stt;
 pub mod text;
 pub mod tts;

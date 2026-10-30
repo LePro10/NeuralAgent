@@ -1,63 +1,70 @@
 import "./styles.css";
-import { Button } from "@neuralagent/ui";
-import { Download, Globe, LayoutGrid, Lock, Mic, Smartphone } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import "./site/site.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrandMark, Footer } from "./brand";
+import { Hero } from "./site/Hero";
+import { startScroll } from "./site/hooks";
+import { Nav } from "./site/Nav";
+import { DemoSection, Faq, Final, Numbers, Platforms, Security, SiteFooter } from "./site/Sections";
+import { Showcase } from "./site/Showcase";
+import { Story } from "./site/Story";
+import { AGENTS } from "./site/data";
+import { Aurora } from "./site/parts";
 
-const FEATURES: { Icon: LucideIcon; title: string; text: string }[] = [
-  { Icon: LayoutGrid, title: "Agents in a grid", text: "Run Claude Code, Codex and more side by side in a pane grid, each in its own project folder." },
-  { Icon: Mic, title: "Voice", text: "Say “Hey Neural”. Chat with the orchestrator or call it, and let it start and steer your agents." },
-  { Icon: Smartphone, title: "Remote & phone", text: "Check on your agents and answer their questions from your phone, wherever you are." },
-  { Icon: Lock, title: "Private by design", text: "Your code stays on your computer. The relay only passes sealed, end-to-end encrypted messages." },
-];
+function Marquee() {
+  const row = AGENTS.map((a) => <span key={a}>{a}</span>);
+  return (
+    <section className="s-sec" style={{ paddingBlock: "clamp(40px,6vw,72px)" }} aria-label="Supported agents">
+      <div className="s-wrap" style={{ display: "grid", gap: 16, justifyItems: "center" }}>
+        <span className="eyebrow">Runs the agents you already use</span>
+        <div className="s-strip" style={{ width: "100%" }} aria-hidden>
+          <div className="s-strip-in">{row}</div>
+          <div className="s-strip-in">{row}</div>
+        </div>
+        <ul className="sr-only">{AGENTS.map((a) => <li key={a}>{a}</li>)}</ul>
+      </div>
+    </section>
+  );
+}
 
 function Landing() {
   return (
     <>
-      <main className="mx-auto w-full max-w-4xl px-4">
-        <header className="flex items-center justify-between py-5">
-          <span className="inline-flex items-center gap-2 text-bright">
-            <BrandMark size={20} />
-            <span className="text-body font-medium">NeuralAgent</span>
-          </span>
-          <a href="/app/" className="text-detail text-dim hover:text-bright">Web remote</a>
-        </header>
-
-        <section className="flex flex-col items-start gap-6 pb-14 pt-12 sm:pt-20">
-          <span className="grid h-16 w-16 place-items-center rounded-card surface text-bright">
-            <BrandMark size={34} />
-          </span>
-          <h1 className="display text-display sm:text-display-lg">Your AI coding agents, on every screen.</h1>
-          <p className="max-w-xl text-lead text-dim">
-            NeuralAgent runs Claude Code, Codex and other agents in a pane grid on your computer. Talk to them, and reach them from your phone, end-to-end encrypted.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button href="/download" Icon={Download}>Download</Button>
-            <Button href="/app/" variant="glass" Icon={Globe}>Open web remote</Button>
-          </div>
-        </section>
-
-        <section className="grid gap-2 sm:grid-cols-2" aria-label="Features">
-          {FEATURES.map(({ Icon, title, text }) => (
-            <div key={title} className="card !rounded-list p-4">
-              <span className="mb-3 grid h-8 w-8 place-items-center rounded-tile bg-fill-3 text-bright">
-                <Icon size={16} strokeWidth={1.75} />
-              </span>
-              <h2 className="text-title text-bright">{title}</h2>
-              <p className="mt-1 text-small text-dim">{text}</p>
-            </div>
-          ))}
-        </section>
+      <div className="s-fixed" aria-hidden><Aurora /></div>
+      <Nav />
+      <main>
+        <Hero />
+        <Marquee />
+        <Story />
+        <Showcase />
+        <DemoSection />
+        <Numbers />
+        <Security />
+        <Platforms />
+        <Faq />
+        <Final />
       </main>
-      <Footer />
+      <SiteFooter />
     </>
   );
 }
+
+// Pointer light on cards: one listener, two custom properties.
+addEventListener(
+  "pointermove",
+  (e) => {
+    const el = (e.target as HTMLElement).closest?.<HTMLElement>(".s-spot");
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--my", `${e.clientY - r.top}px`);
+  },
+  { passive: true },
+);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Landing />
   </StrictMode>,
 );
+startScroll();

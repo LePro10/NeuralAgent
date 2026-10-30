@@ -1,13 +1,15 @@
 import type { PaneContent, Session } from "@neuralagent/protocol";
-import { IconButton, StatusDot, useLayoutMode } from "@neuralagent/ui";
-import { ArrowUp, Columns2, GitBranch, Globe, Maximize2, Minimize2, Rows2, RotateCw, X } from "lucide-react";
+import { StatusDot, useLayoutMode } from "@neuralagent/ui";
+import { Columns2, GitBranch, Globe, Maximize2, Minimize2, MessageSquareText, Rows2, RotateCw, SquareTerminal, X } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@neuralagent/ui";
 import { STATUS } from "../lib/status";
-import { useChanges, useClient, useDaemon } from "../lib/store";
+import { useChanges, useClient, useDaemon, useUi } from "../lib/store";
 import { AgentGlyph } from "./AgentGlyph";
 import { BrowserPane } from "./BrowserPane";
 import { EmptyPane } from "./EmptyPane";
+import { ClaudeView } from "./claude/ClaudeView";
+import { KeyBar } from "./KeyBar";
 import { TerminalView } from "./TerminalView";
 
 export interface PaneActions {
@@ -55,6 +57,10 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
   const client = useClient();
   const phone = useLayoutMode() === "phone";
   const showChanges = useChanges((c) => c.show);
+  const claudePref = useUi((u) => u.claudeView);
+  const setClaudePref = useUi((u) => u.setClaudeView);
+  const isClaude = profile?.engine === "claude";
+  const claudeView = isClaude && (claudePref ?? phone);
   const [dropTarget, setDropTarget] = useState(false);
   // Closing a pane stops its process; a running one needs a second click within 3 s.
   const [armed, setArmed] = useState(false);
@@ -123,6 +129,11 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
         {session?.last_line && <span className="min-w-0 flex-1 truncate text-meta text-faint">{session.last_line}</span>}
         {!session?.last_line && <span className="flex-1" />}
         <div className={cn("flex items-center gap-0.5 transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+          {isClaude && (
+            <HeaderButton label={claudeView ? "Show the terminal" : "Show the Claude view"} onClick={() => setClaudePref(!claudeView)}>
+              {claudeView ? <SquareTerminal size={13} strokeWidth={1.6} /> : <MessageSquareText size={13} strokeWidth={1.6} />}
+            </HeaderButton>
+          )}
           {session?.preview_url && (
             <HeaderButton label={`Preview ${session.preview_url}`} onClick={() => actions.preview(session.preview_url!)}>
               <Globe size={13} strokeWidth={1.6} />
@@ -154,7 +165,9 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
         </div>
       </div>
       <div className="relative min-h-0 flex-1">
-        {sid && session ? (
+        {sid && session && claudeView ? (
+          <ClaudeView session={session} webgl={webgl} onFocus={actions.focus} />
+        ) : sid && session ? (
           <TerminalView sid={sid} focused={focused} startedAt={session.started_at} webgl={webgl} touch={phone} onFocus={actions.focus} />
         ) : content.kind === "browser" ? (
           <BrowserPane url={content.url} onFocus={actions.focus} onNavigate={(url) => actions.setContent({ kind: "browser", url })} />
@@ -172,7 +185,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
           </div>
         )}
       </div>
-      {phone && sid && session?.alive && <KeyBar sid={sid} />}
+      {phone && sid && session?.alive && !claudeView && <KeyBar sid={sid} />}
     </div>
   );
 }
@@ -183,69 +196,4 @@ function hostOf(url: string): string {
   } catch {
     return "Browser";
   }
-}
-
-// Keys a phone keyboard lacks, for answering agent prompts (menus, approvals, interrupts).
-const KEYS: [string, string][] = [
-  ["Esc", "\x1b"],
-  ["Tab", "\t"],
-  ["⇧Tab", "\x1b[Z"],
-  ["↑", "\x1b[A"],
-  ["↓", "\x1b[B"],
-  ["←", "\x1b[D"],
-  ["→", "\x1b[C"],
-  ["^C", "\x03"],
-  ["Enter", "\r"],
-];
-
-/** Phones: a line to type in (autocorrect and dictation work) and the keys a phone keyboard lacks. */
-function KeyBar({ sid }: { sid: string }) {
-  const client = useClient();
-  const [text, setText] = useState("");
-  const send = () => {
-    // Text first, Enter a moment later: agents read text and CR in one chunk as a paste.
-    if (text) client.write(sid, text);
-    setText("");
-    setTimeout(() => client.write(sid, "\r"), text ? 60 : 0);
-  };
-  return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-t border-line px-2 py-1.5">
-      <form
-        className="flex items-center gap-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type to the agent"
-          enterKeyHint="send"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-label="Type to the agent"
-          className="h-9 min-w-0 flex-1 rounded-field bg-fill-2 px-3 text-input text-bright outline-none placeholder:text-faint"
-        />
-        <IconButton type="submit" size="sm" variant="tint" label="Send">
-          <ArrowUp />
-        </IconButton>
-      </form>
-      <div className="flex gap-1 overflow-x-auto">
-      {KEYS.map(([label, seq]) => (
-        <button
-          key={label}
-          type="button"
-          // Keep the terminal (and the on-screen keyboard) focused.
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => client.write(sid, seq)}
-          className="h-8 min-w-10 shrink-0 rounded-xs bg-fill-2 px-2.5 font-mono text-meta text-ink active:bg-fill-4"
-        >
-          {label}
-        </button>
-      ))}
-      </div>
-    </div>
-  );
 }

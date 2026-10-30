@@ -15,6 +15,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
     }
     let ws_of_session = |sid: &String| core.read(|s| s.sessions.get(sid).map(|x| (x.workspace_id.clone(), x.profile_id.clone())));
     let approved = |ws: &String| core.read(|s| s.workspaces.iter().any(|w| &w.id == ws && w.approved));
+    let remote = matches!(client.kind, ClientKind::Web | ClientKind::Android);
     let needs = |what: &str| Err(err(ErrorCode::NeedsApproval, format!("{what} needs confirmation on the desktop")));
     match req {
         // The emergency switch works from anywhere; everything else about the account is desktop-only.
@@ -41,6 +42,11 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
                 None => Err(err(ErrorCode::NotFound, "no such swarm")),
             }
         }
+        Request::Upload { sid, .. } | Request::CvFiles { sid, .. } => match ws_of_session(sid) {
+            Some((ws, _)) if approved(&ws) => Ok(()),
+            Some(_) => needs("adding files for an agent outside an approved workspace"),
+            None => Err(err(ErrorCode::NotFound, "no such session")),
+        },
         Request::TermWrite { sid, .. } => match ws_of_session(sid) {
             Some((_, profile)) if profile == "shell" && client.kind == ClientKind::Orchestrator => needs("typing into a raw shell"),
             Some((ws, _)) if approved(&ws) => Ok(()),
@@ -55,6 +61,26 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Some(_) => needs("merging or discarding outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
+        // Host settings and updates (D42): the account's own phones and browsers may do these
+        // (the relay only lets the signed-in owner's approved devices connect); Neural may not.
+        Request::SettingsSet { .. } | Request::LlmKeySet { .. } if remote => Ok(()),
+        // Managing workspaces from the owner's own devices: rename, remove, approve.
+        Request::WorkspaceRemove { .. } | Request::WorkspaceUpdate { .. } if remote => Ok(()),
+        Request::HostModels
+        | Request::HostModelDownload { .. }
+        | Request::HostModelDelete { .. }
+        | Request::HostUpdateCheck
+        | Request::HostUi { .. }
+            if remote =>
+        {
+            Ok(())
+        }
+        Request::HostModels
+        | Request::HostModelDownload { .. }
+        | Request::HostModelDelete { .. }
+        | Request::HostUpdateCheck
+        | Request::HostUi { .. }
+        | Request::HostNotice { .. } => Err(err(ErrorCode::Forbidden, "only the owner's devices can change the host")),
         Request::WorkspaceUpdate { approved: Some(_), .. }
         | Request::SettingsSet { .. }
         | Request::ProfileSave { .. }

@@ -99,6 +99,8 @@ pub struct Core {
     pub orch: crate::orch::Orch,
     pub calls: crate::call::Calls,
     pub outbox: crate::swarm::Outbox,
+    pub cv: crate::claude_view::ClaudeView,
+    pub host_ctl: crate::host::Host,
 }
 
 pub struct Subscription {
@@ -165,6 +167,8 @@ impl Core {
             orch: Default::default(),
             calls: Default::default(),
             outbox: Default::default(),
+            cv: Default::default(),
+            host_ctl: Default::default(),
         })
     }
 
@@ -198,7 +202,7 @@ impl Core {
         if g.ring.len() > RING {
             g.ring.pop_front();
         }
-        if !matches!(ev, Event::Attention { .. }) {
+        if !matches!(ev, Event::Attention { .. } | Event::HostNotice { .. }) {
             g.dirty = true;
         }
         let _ = self.events.send((seq, ev));
@@ -323,6 +327,19 @@ impl Core {
                     .await?;
                 Ok(json!(CallPreviewAudio { d, rate: crate::call::OUT_RATE }))
             }
+            Request::HostModels => Ok(json!(self.models_list())),
+            Request::HostModelDownload { id } => self.model_download(&id).map(|_| Value::Null),
+            Request::HostModelDelete { id } => self.model_delete(&id).map(|_| Value::Null),
+            Request::HostUpdateCheck => Ok(json!(self.update_check().await?)),
+            Request::HostUi { op, args } => {
+                // Installing waits for the download; the reply comes when the app is about to restart.
+                let wait = std::time::Duration::from_secs(if op == "update.install" { 1800 } else { 130 });
+                self.host_ctl.call(&op, args, wait).await
+            }
+            Request::HostNotice { topic, data } => {
+                self.emit(Event::HostNotice { topic, data });
+                Ok(Value::Null)
+            }
             Request::AuditList { limit } => Ok(json!(self.audit.list(limit.unwrap_or(200).min(2000) as usize))),
             r @ (Request::RemoteSignIn { .. }
             | Request::RemoteSignOut
@@ -413,7 +430,12 @@ impl Core {
                 Ok(Value::Null)
             }
             // attach/detach are connection-scoped and handled in `server`
-            Request::TermAttach { .. } | Request::TermDetach { .. } => Err(err(ErrorCode::BadRequest, "connection-scoped")),
+            r @ (Request::CvHistory { .. }
+            | Request::CvCommands { .. }
+            | Request::CvFiles { .. }
+            | Request::Upload { .. }
+            | Request::Transcribe { .. }) => self.cv_handle(r).await.unwrap_or(Ok(Value::Null)),
+            Request::CvAttach { .. } | Request::CvDetach { .. } | Request::TermAttach { .. } | Request::TermDetach { .. } => Err(err(ErrorCode::BadRequest, "connection-scoped")),
             Request::ProfileSave { mut profile } => {
                 if profile.builtin || self.read(|s| s.profiles.iter().any(|p| p.id == profile.id && p.builtin)) {
                     return Err(err(ErrorCode::Forbidden, "built-in profiles cannot be changed; duplicate it"));
@@ -456,6 +478,8 @@ impl Core {
                 Ok(Value::Null)
             }
             Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path),
+            Request::FsRoots => Ok(crate::fsbrowse::roots(&self.env.home)),
+            Request::FsMkdir { path, name } => crate::fsbrowse::mkdir(&self.env.home, client, &path, &name),
             Request::GitChanges { workspace_id, session_id } => {
                 let (dir, base) = self.git_target(&workspace_id, session_id.as_ref())?;
                 blocking(move || crate::git::changes(Path::new(&dir), base.as_deref()).map_err(git_err)).await.map(|c| json!(c))
@@ -922,6 +946,7 @@ impl Core {
         {
             self.emit(Event::LayoutSet { workspace_id: ws, layout: l });
         }
+        self.cv_forget(id);
         self.emit(Event::SessionRemoved { id: id.clone() });
     }
 
@@ -1027,6 +1052,7 @@ impl Core {
 
     /// Output-based status for sessions without hooks, plus `last_line` refresh. Runs ~3×/s.
     pub fn tick(&self) {
+        self.cv_tick();
         let ids: Vec<(Id, Option<Instant>, bool, Arc<Pty>)> =
             self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.prompted, l.pty.clone())).collect();
         for (id, last_output, prompted, pty) in ids {
@@ -1072,6 +1098,9 @@ impl Core {
         tracing::debug!(%sid, event, "hook");
         let text = |k: &str| payload.get(k).and_then(Value::as_str).map(|s| s.chars().take(2000).collect::<String>());
         let engine_session = text("session_id").or_else(|| text("thread-id"));
+        if let Some(p) = payload.get("transcript_path").and_then(Value::as_str) {
+            self.cv_note_path(sid, p);
+        }
         let mark = |x: &mut Session| {
             x.status_source = StatusSource::Hooks;
             if let Some(e) = &engine_session {
@@ -1227,7 +1256,7 @@ pub fn apply(s: &mut State, ev: &Event) {
         Event::LimitsSet { limits } => s.limits = limits.clone(),
         Event::CatalogSet { catalog } => s.catalog = catalog.clone(),
         Event::SettingsSet { settings } => s.settings = settings.clone(),
-        Event::Attention { .. } => {}
+        Event::Attention { .. } | Event::HostNotice { .. } => {}
         Event::OrchMessage { message } => {
             let msgs = &mut s.orchestrator.messages;
             match msgs.iter_mut().rev().find(|m| m.id == message.id) {

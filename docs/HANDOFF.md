@@ -4,6 +4,12 @@ Current state for a fresh session. Detailed progress: `STATUS.md`; plan: `PLAN.m
 decisions: `DECISIONS.md`.
 
 ## Where we are (2026-10-30)
+- 0.2.0 (design + remote round): liquid motion/aurora/glass in `packages/ui` (D40,
+  `docs/notes/design-overhaul.md`), Claude view over the real CLI (D41,
+  `crates/na-daemon/src/claude_view.rs`, `packages/app/src/components/claude/`,
+  `docs/notes/claude-view.md`), host settings/updates/models/workspaces from remotes and
+  earpiece calls (D42, `crates/na-daemon/src/host.rs`, `docs/notes/remote-host-control.md`),
+  new website `apps/web/src/landing.tsx` + `src/site/` (`docs/notes/website.md`).
 - M0–M9 done (small leftovers and user checks in STATUS). Next: M10 (own ideas, polish,
   final report). Details:
   - Themes/updates/releases (M9, D38): `packages/app/src/lib/theme.ts`,

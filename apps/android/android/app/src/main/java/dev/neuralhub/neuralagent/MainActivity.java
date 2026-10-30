@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
+import androidx.core.view.ContentInfoCompat;
+import androidx.core.view.ViewCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -23,6 +25,21 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativePlugin.class);
         super.onCreate(savedInstanceState);
         handle(getIntent());
+        // Images the keyboard or a long-press Paste inserts: hand them to the page, keep the rest default.
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            ViewCompat.setOnReceiveContentListener(getBridge().getWebView(), new String[] {"image/*"}, (view, payload) -> {
+                android.util.Pair<ContentInfoCompat, ContentInfoCompat> parts =
+                        payload.partition(item -> item.getUri() != null);
+                ContentInfoCompat uris = parts.first;
+                if (uris != null) {
+                    for (int i = 0; i < uris.getClip().getItemCount(); i++) {
+                        android.net.Uri u = uris.getClip().getItemAt(i).getUri();
+                        NativePlugin.pasted(NativePlugin.imageOf(this, u, null));
+                    }
+                }
+                return parts.second;
+            });
+        }
     }
 
     @Override

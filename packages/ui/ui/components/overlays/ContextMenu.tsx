@@ -143,7 +143,7 @@ function Overlay({ state, items, onClose, children, target, radius }: { state: {
           exit={{ top: rect.top, scale: 1, opacity: 0, transition: { duration: 0.16 } }}
           transition={SPRING.sheet}
         >
-          <div className="bg-card-2 shadow-float" style={{ borderRadius: radius }}>{children}</div>
+          <div className="glass rim" style={{ borderRadius: radius }}>{children}</div>
         </motion.div>
       )}
       <motion.div

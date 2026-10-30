@@ -53,7 +53,7 @@ pub struct Engines {
 pub struct Calls {
     engines: Mutex<Option<(Arc<Engines>, Instant)>>,
     /// The running call (one per computer).
-    active: Mutex<Option<(u64, CancellationToken)>>,
+    pub(crate) active: Mutex<Option<(u64, CancellationToken)>>,
     /// Where the running call takes news about agents, to say between answers.
     news: Mutex<Option<(u64, Sender<Say>)>>,
     next: AtomicU64,

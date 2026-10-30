@@ -2,6 +2,7 @@ import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
 import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AccountRow } from "./components/AccountRow";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
@@ -11,6 +12,7 @@ import { UsagePage } from "./components/UsagePage";
 import { McpPage } from "./components/McpPage";
 import { RemotePage } from "./components/RemotePage";
 import { SettingsPage } from "./components/SettingsPage";
+import { FolderBrowserSheet, pickHostFolder } from "./components/FolderBrowser";
 import { NeuralPage } from "./components/NeuralPage";
 import { SwarmPage } from "./components/SwarmPage";
 import { WorkspaceView } from "./components/WorkspaceView";
@@ -60,6 +62,44 @@ function useUpdateNotice() {
   }, [updates]);
 }
 
+/** Height of the strip along the window's top edge that drags the window (macOS: the title bar's place). */
+const DRAG_STRIP = 40;
+const NO_DRAG = "a,button,input,textarea,select,summary,label,[role=button],[role=tab],[role=menuitem],[contenteditable=true],[data-no-drag],.xterm";
+
+/**
+ * The whole top strip drags the window, not just the few elements that carry `data-tauri-drag-region`:
+ * a press on empty space within DRAG_STRIP px of the top starts the drag, a double click zooms like a native
+ * title bar. Controls (buttons, fields, terminals) keep their clicks. Elements that already carry
+ * `data-tauri-drag-region` are left to Tauri, which handles both gestures for them.
+ */
+function useWindowDrag() {
+  const platform = usePlatform();
+  const startDrag = platform.startDrag;
+  useEffect(() => {
+    if (!startDrag) return;
+    const inStrip = (e: MouseEvent) => {
+      const t = e.target;
+      return e.clientY <= DRAG_STRIP && t instanceof Element && !t.closest(NO_DRAG) && !t.hasAttribute("data-tauri-drag-region");
+    };
+    const down = (e: MouseEvent) => {
+      if (e.button !== 0 || e.detail > 1 || !inStrip(e)) return;
+      startDrag();
+    };
+    const dbl = (e: MouseEvent) => {
+      if (!inStrip(e)) return;
+      // The same command Tauri sends for a double click on a drag region.
+      const tauri = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string) => Promise<unknown> } }).__TAURI_INTERNALS__;
+      void tauri?.invoke("plugin:window|internal_toggle_maximize")?.catch?.(() => {});
+    };
+    window.addEventListener("mousedown", down);
+    window.addEventListener("dblclick", dbl);
+    return () => {
+      window.removeEventListener("mousedown", down);
+      window.removeEventListener("dblclick", dbl);
+    };
+  }, [startDrag]);
+}
+
 export function App() {
   const client = useClient();
   const platform = usePlatform();
@@ -67,6 +107,7 @@ export function App() {
   const state = useDaemon((c) => c.state);
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
   useUpdateNotice();
+  useWindowDrag();
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
   // Neural is the home screen until something else is picked.
@@ -159,7 +200,8 @@ export function App() {
   );
 
   const addWorkspace = async () => {
-    const path = await platform.pickFolder?.();
+    // Computers use the system dialog; phones and browsers browse the host's folders.
+    const path = await (platform.pickFolder ?? pickHostFolder)();
     if (!path) return;
     try {
       const w = (await client.req({ m: "workspace_add", p: { path } })) as Workspace;
@@ -195,7 +237,7 @@ export function App() {
         badge: urgent === "waiting" ? "Needs input" : urgent === "done" ? "Done" : urgent === "error" ? "Error" : undefined,
       };
     }),
-    ...(platform.pickFolder ? [{ id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 }] : []),
+    { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
   ];
 
   const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : mcp ? MCP : usage ? USAGE : remotePage ? REMOTE : settingsOpen ? SETTINGS : (current?.id ?? "");
@@ -218,7 +260,7 @@ export function App() {
   ) : swarmPage ? (
     <SwarmPage />
   ) : neural ? (
-    <NeuralPage onSettings={platform.kind === "desktop" ? () => setWorkspace(SETTINGS) : undefined} />
+    <NeuralPage onSettings={() => setWorkspace(SETTINGS)} />
   ) : settingsOpen ? (
     <SettingsPage />
   ) : dashboard ? (
@@ -240,11 +282,9 @@ export function App() {
         title="Add a workspace"
         detail="A workspace is a project folder. Agents you start there run in panes and keep running when you close the window."
         action={
-          platform.pickFolder && (
-            <Button Icon={FolderPlus} onClick={addWorkspace}>
-              Add workspace
-            </Button>
-          )
+          <Button Icon={FolderPlus} onClick={addWorkspace}>
+            Add workspace
+          </Button>
         }
       />
     </Page>
@@ -252,15 +292,23 @@ export function App() {
 
   return (
     <AppShell
-      nav={{ items: phoneItems, value: selected, onChange: go }}
+      nav={{
+        items: phoneItems,
+        value: selected,
+        onChange: go,
+        moreHeader: (close) => (
+          <AccountRow plain open active={settingsOpen} onSettings={() => { close(); setWorkspace(SETTINGS); }} />
+        ),
+      }}
       sidebar={
         <Sidebar
           items={items}
           value={settingsOpen ? "" : selected}
           onChange={go}
           brand={{ mark: <BrandMark size={20} className="text-ink" />, word: <span className="text-button text-bright">NeuralAgent</span> }}
-          onSettings={() => setWorkspace(SETTINGS)}
-          settingsActive={settingsOpen}
+          footer={(open) => (
+            <AccountRow open={open} active={settingsOpen} onSettings={() => setWorkspace(SETTINGS)} onRemote={byId.has(REMOTE) ? () => setWorkspace(REMOTE) : undefined} />
+          )}
           pinned={sidebarPinned}
           onPinnedChange={setSidebarPinned}
           // macOS draws the window buttons over the top-left corner.
@@ -273,9 +321,12 @@ export function App() {
           <Callout tone="warning">Reconnecting to the daemon…</Callout>
         </div>
       )}
-      {body}
+      <div key={selected} className="page-in h-full">
+        {body}
+      </div>
       {state && <AgentCatalog />}
       {state && <ChangesSheet />}
+      {state && <FolderBrowserSheet />}
       <Toaster />
     </AppShell>
   );

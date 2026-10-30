@@ -7,6 +7,7 @@
 mod audit;
 mod awake;
 mod call;
+mod claude_view;
 mod catalog;
 mod core;
 mod discord;
@@ -14,6 +15,7 @@ mod env;
 mod fsbrowse;
 mod git;
 mod history;
+mod host;
 mod hooks;
 mod layout;
 mod llm;

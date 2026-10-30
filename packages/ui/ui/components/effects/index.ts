@@ -13,3 +13,4 @@ export * from './TextScramble';
 export * from './LogoIntro';
 export * from './LogoLoader';
 export * from './RevealText';
+export * from './AuroraField';

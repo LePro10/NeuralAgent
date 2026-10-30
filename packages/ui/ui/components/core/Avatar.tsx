@@ -3,13 +3,17 @@
  * glossy disc in that colour (accounts, people in a thread) — a soft top-left
  * highlight over the colour, like a lit bead.
  */
+import { useState } from 'react';
 import { cn } from '../../lib/cn';
 
 export function Avatar({ name, src, size = 32, color, ring, className }: { name: string; src?: string; size?: number; color?: string; ring?: boolean; className?: string }) {
+  // A photo that does not load (offline, blocked) falls back to the initials.
+  const [broken, setBroken] = useState<string | undefined>();
+  const photo = src && broken !== src ? src : undefined;
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
   const style = {
     width: size, height: size, fontSize: Math.round(size * 0.38),
-    background: src ? undefined : color
+    background: photo ? undefined : color
       ? `radial-gradient(120% 120% at 28% 18%, rgb(255 255 255 / .4), transparent 45%), ${color}`
       : 'var(--color-card-3)',
   };
@@ -20,7 +24,7 @@ export function Avatar({ name, src, size = 32, color, ring, className }: { name:
       role="img"
       aria-label={name}
     >
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initials}
+      {photo ? <img src={photo} alt="" referrerPolicy="no-referrer" onError={() => setBroken(photo)} className="h-full w-full object-cover" /> : initials}
       <i aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full border-hair border-white/10" />
     </span>
   );

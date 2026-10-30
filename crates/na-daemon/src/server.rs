@@ -61,6 +61,7 @@ struct WsQuery {
 async fn ws_upgrade(AxState(app): AxState<App>, Query(q): Query<WsQuery>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
     if let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok())
         && !ALLOWED_ORIGINS.contains(&origin)
+        && !(cfg!(debug_assertions) && std::env::var("NEURALAGENT_DEV_ORIGIN").is_ok_and(|o| o == origin))
     {
         return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
     }
@@ -119,7 +120,7 @@ pub async fn run_client(
     out: mpsc::Sender<ServerMsg>,
     stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
 ) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), call: None };
+    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), cv: Arc::new(Mutex::new(HashMap::new())), call: None, id: next_conn_id() };
     while let Some(msg) = next_msg(stream).await {
         conn.on_msg(msg).await;
     }
@@ -128,7 +129,7 @@ pub async fn run_client(
 
 /// The same loop for clients that arrive over another channel (remote devices via the relay).
 pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, rx: &mut mpsc::Receiver<ClientMsg>) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), call: None };
+    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), cv: Arc::new(Mutex::new(HashMap::new())), call: None, id: next_conn_id() };
     while let Some(msg) = rx.recv().await {
         conn.on_msg(msg).await;
     }
@@ -141,7 +142,14 @@ pub struct Conn {
     pub out: mpsc::Sender<ServerMsg>,
     state_task: Option<JoinHandle<()>>,
     attached: Arc<Mutex<HashMap<Id, JoinHandle<()>>>>,
+    cv: Arc<Mutex<HashMap<Id, JoinHandle<()>>>>,
     call: Option<crate::call::CallHandle>,
+    id: u64,
+}
+
+fn next_conn_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Conn {
@@ -161,6 +169,17 @@ impl Conn {
                 }
             }
             ClientMsg::CallEnd => self.call = None,
+            ClientMsg::HostUiRegister { on } => {
+                if self.client.kind == ClientKind::Desktop {
+                    self.core.host_ctl.register(self.id, self.out.clone(), on);
+                }
+            }
+            ClientMsg::HostUiReply { call, ok, r, error } => {
+                if self.client.kind == ClientKind::Desktop {
+                    let reply = if ok { Ok(r.unwrap_or(serde_json::Value::Null)) } else { Err(error.unwrap_or_else(|| "failed".into())) };
+                    self.core.host_ctl.reply(call, reply);
+                }
+            }
             ClientMsg::Ping { at } => {
                 let _ = self.out.send(ServerMsg::Pong { at }).await;
             }
@@ -201,6 +220,25 @@ impl Conn {
                     };
                     let _ = self.out.send(ServerMsg::Res { id, ok: false, r: None, err: Some(res) }).await;
                 }
+                Request::CvAttach { sid } => {
+                    let msg = match self.core.cv_attach(&sid) {
+                        Ok((res, rx)) => {
+                            let task = tokio::spawn(forward_cv(self.core.clone(), sid.clone(), rx, self.out.clone()));
+                            if let Some(old) = self.cv.lock().insert(sid, task) {
+                                old.abort();
+                            }
+                            ServerMsg::Res { id, ok: true, r: Some(json!(res)), err: None }
+                        }
+                        Err(e) => ServerMsg::Res { id, ok: false, r: None, err: Some(e) },
+                    };
+                    let _ = self.out.send(msg).await;
+                }
+                Request::CvDetach { sid } => {
+                    if let Some(t) = self.cv.lock().remove(&sid) {
+                        t.abort();
+                    }
+                    let _ = self.out.send(ServerMsg::Res { id, ok: true, r: None, err: None }).await;
+                }
                 Request::TermDetach { sid } => {
                     if let Some(t) = self.attached.lock().remove(&sid) {
                         t.abort();
@@ -225,10 +263,14 @@ impl Conn {
 
     pub fn close(&mut self) {
         self.call = None;
+        self.core.host_ctl.register(self.id, self.out.clone(), false);
         if let Some(t) = self.state_task.take() {
             t.abort();
         }
         for (_, t) in self.attached.lock().drain() {
+            t.abort();
+        }
+        for (_, t) in self.cv.lock().drain() {
             t.abort();
         }
     }
@@ -296,6 +338,26 @@ async fn forward_term(sid: Id, pty: Arc<crate::pty::Pty>, mut rx: broadcast::Rec
             if out.send(ServerMsg::TermReset { sid: sid.clone(), snapshot, seq, cols, rows }).await.is_err() {
                 return;
             }
+        }
+    }
+}
+
+/// Claude view events of one session. A client that falls behind gets a fresh attach result as a reset.
+async fn forward_cv(core: Arc<Core>, sid: Id, mut rx: broadcast::Receiver<CvEvent>, out: mpsc::Sender<ServerMsg>) {
+    loop {
+        let ev = match rx.recv().await {
+            Ok(ev) => ev,
+            Err(broadcast::error::RecvError::Lagged(_)) => match core.cv_attach(&sid) {
+                Ok((res, new_rx)) => {
+                    rx = new_rx;
+                    CvEvent::Reset { messages: res.messages, more: res.more, meta: res.meta }
+                }
+                Err(_) => return,
+            },
+            Err(broadcast::error::RecvError::Closed) => return,
+        };
+        if out.send(ServerMsg::Cv { sid: sid.clone(), ev }).await.is_err() {
+            return;
         }
     }
 }

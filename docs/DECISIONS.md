@@ -417,3 +417,45 @@ start. Updates are verified by the updater signature either way.
 The user found the passkey step annoying and asked for it to go. The admin area now needs only
 a sign-in (Google/GitHub) with an address in `ADMIN_EMAILS`; the provider's own 2FA protects it.
 WebAuthn code, the admin cookie and the `passkeys` table are gone (dropped on start).
+
+## D40 — Design: liquid motion and glass background
+The app gets a calm colour field (`AuroraField`: three drifting radial-gradient lights, transform-only, tinted per scheme and accent) behind the existing glass surfaces, and a jelly feel from fluid-goo's springs (`SPRING.goo`) on every moving indicator, menu hover lens, toasts, pages and button presses. fluid-goo (MIT) is not a dependency: only its spring constants and ideas were re-implemented in `packages/ui` to keep the NeuralHub base and the bundle small; no blur filters or canvases run continuously, so terminals stay smooth. The sidebar foot shows the signed-in account (photo, name, email) with a small menu. The whole top 40 px of the window drags on macOS. Details: `docs/notes/design-overhaul.md`.
+
+## D41 — Claude view over the real CLI
+The real `claude` CLI keeps running in its PTY. The daemon tails its transcript JSONL (path from the hook payload, so /clear, /resume and compaction follow) and streams structured `Cv` events; input, slash commands and keys go into the PTY. The UI (`components/claude/**`) shows bubbles, markdown, tool cards, native permission/question buttons, a composer with `/`, `@`, model, mode, context meter, images and dictation. Pane header toggles CLI vs Claude view (phone default: Claude view). Images upload to `<data>/uploads/<session>/` (12 MB, 7 days) and the host path is inserted. Details: `docs/notes/claude-view.md`.
+
+## D42 — Host settings and updates from remotes (2026-10-30)
+
+**Goal.** Everything about the host computer is reachable from any of the owner's devices (web
+remote, Android, a desktop acting as remote): Neural and call voice, voice models, dictation and
+wake word, app updates, workspaces. Settings are split into "This device" (theme, call audio) and
+the host's own sections, labelled with the host's name.
+
+**Where it lives.** Voice models moved from the Tauri app into `na_voice::download` and are
+managed by the daemon (`host_models`, `host_model_download/delete`, progress as `host_notice`
+events), so they work with the app closed and calls use them directly. The update check
+(`host_update_check`) is also the daemon's: it asks the same `/api/update/...` endpoint
+(`NEURALAGENT_UPDATE_URL` for tests). What only the app can do (dictation hotkey, wake word, learn
+voice, install an update) stays in the app: it registers as "host UI" (`host_ui_register`) and the
+daemon forwards `host_ui` requests to it as `host_call`, answered by `host_ui_reply`; with no app
+the remote gets "the app is not open" and the UI says so. Not chosen: a second Tauri updater in
+the daemon (needs the app bundle to replace itself), or a relay for host commands (the sealed
+transport already carries requests).
+
+**Permissions.** Remote kinds `web`/`android` may use these requests, edit settings and keys,
+rename, approve and remove workspaces (the relay only admits the signed-in owner's approved
+devices; every call is in the audit log). `host_notice` can only be sent by the desktop app; Neural
+(orchestrator) may do none of it. Changing remote access itself stays desktop-only.
+Remote folder browsing/creation stays inside the host's home folder.
+
+**Update flow.** The remote shows a toast "NeuralAgent X is available on <host>" (once per
+version, checked at start and every 6 h) and Settings -> Updates on <host>. Install tells the
+host's app to download and restart; progress arrives as notices; the daemon and agents keep
+running (D38). When the service version changes (hello after reconnect) the remote page reloads
+itself; the web bundle and APK shell come fresh from the relay as before.
+
+**Calls on phones.** Earpiece (quiet) is the default, speaker is a toggle in the call screen and
+a setting under "This device". Android sets `MODE_IN_COMMUNICATION` and picks the communication
+device (API 31+) or `setSpeakerphoneOn`; a headset always wins; the proximity sensor blanks the
+screen at the ear. The choice is stored natively, so the quick tile and the notification start
+calls the same way. Browsers only get it where `setSinkId` lists an earpiece output.

@@ -1,4 +1,4 @@
-import { App as AgentApp, DaemonProvider, useClient, useDaemon, type Platform } from "@neuralagent/app";
+import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, useClient, useDaemon, type Platform } from "@neuralagent/app";
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
 import { Avatar, Button, Callout, ConfirmButton, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
@@ -348,6 +348,7 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       clientName: deviceName,
       connect,
       openExternal: (url) => void window.open(url, "_blank", "noopener"),
+      readClipboardImage: native ? () => native!.clipboardImage() : undefined,
       focused: () => document.visibilityState === "visible" && document.hasFocus(),
       notify: (title, body) => {
         if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "/logo.png" });
@@ -355,6 +356,9 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       call: native
         ? {
             active: (on) => void native?.plugin.callActive({ on }).catch(() => {}),
+            // Earpiece or speaker: the phone's audio route, kept natively too so the quick tile
+            // and the notification start calls the same way.
+            audio: { set: (route) => native!.plugin.callRoute({ route }).then((r) => r.output) },
             onDial: (cb) => {
               const h = native!.plugin.addListener("dial", (o) => cb(o.start));
               return () => void h.then((x) => x.remove());
@@ -372,9 +376,19 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
     [host, onSwitch, connect],
   );
 
+  // Tell the Android side which route this device chose, before any call starts.
+  useEffect(() => bindCallAudio(platform.call?.audio), [platform]);
+
   return (
     <DaemonProvider client={client} platform={platform}>
-      {!host.online && !client.state ? <Offline host={host} onSwitch={onSwitch} /> : <AgentApp />}
+      {!host.online && !client.state ? (
+        <Offline host={host} onSwitch={onSwitch} />
+      ) : (
+        <>
+          <AgentApp />
+          <HostUpdateWatcher />
+        </>
+      )}
     </DaemonProvider>
   );
 }

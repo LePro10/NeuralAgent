@@ -8,6 +8,7 @@ import type { CallEvent, CallState, DaemonClient } from "@neuralagent/protocol";
 import type { VoiceState } from "@neuralagent/ui";
 import { motionValue } from "motion/react";
 import { create } from "zustand";
+import { applyWebRoute, useCallRoute } from "./callaudio";
 
 interface CallView {
   on: boolean;
@@ -67,6 +68,7 @@ class Session {
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
   private off: (() => void) | null = null;
+  private offRoute: (() => void) | null = null;
   /** When the queued speech ends, on the audio clock. */
   private playhead = 0;
   private sources = new Set<AudioBufferSourceNode>();
@@ -88,6 +90,8 @@ class Session {
     this.stream = stream;
     const ctx = new AudioContext({ latencyHint: "interactive" });
     this.ctx = ctx;
+    void applyWebRoute(ctx);
+    this.offRoute = useCallRoute.subscribe((v, old) => v.route !== old.route && this.ctx && void applyWebRoute(this.ctx));
     await ctx.audioWorklet.addModule(new URL("./mic-worklet.js", import.meta.url));
     if (this.closed) return;
     const node = new AudioWorkletNode(ctx, "neural-mic");
@@ -104,6 +108,7 @@ class Session {
   close() {
     this.closed = true;
     this.off?.();
+    this.offRoute?.();
     this.client.callEnd();
     this.flush();
     this.node?.disconnect();

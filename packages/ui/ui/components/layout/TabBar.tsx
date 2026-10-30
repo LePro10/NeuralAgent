@@ -22,7 +22,7 @@
  */
 import { animate, motion, useMotionValue, useMotionValueEvent, useSpring, useTransform, useVelocity, type MotionValue } from 'motion/react';
 import { ChevronDown, LayoutGrid, type LucideIcon } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
 import { useFocusTrap } from '../../lib/focus-trap';
@@ -52,8 +52,9 @@ const BAR = 58;
 // so a pull can open it before it is ever measured.
 const COLS = 4, TILE = 68, GAP = 2, PAD_T = 12, PAD_B = 2;
 const MORE = '\u0000more';
+const HEAD = 56;
 
-export function TabBar<T extends string>({ items, more, value, onChange, position, floating = true, moreLabel = 'More', className }: {
+export function TabBar<T extends string>({ items, more, value, onChange, position, floating = true, moreLabel = 'More', moreHeader, className }: {
   items: TabItem<T>[];
   /** Places that do not fit: they open from the last cell. */
   more?: TabItem<T>[];
@@ -64,6 +65,8 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
   /** Fixed to the bottom of its surface (default) or in flow. */
   floating?: boolean;
   moreLabel?: string;
+  /** A row at the top of the More grid (the account); it fades in with it. */
+  moreHeader?: (close: () => void) => ReactNode;
   className?: string;
 }) {
   const extra = more?.length ? more : null;
@@ -86,7 +89,10 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
   const [open, setOpen] = useState(false);
   const prog = useMotionValue(0);
   const rows = extra ? Math.ceil(extra.length / COLS) : 0;
-  const grow = rows ? PAD_T + rows * TILE + (rows - 1) * GAP + PAD_B : 0;
+  const head = moreHeader ? HEAD : 0;
+  const grid = rows ? PAD_T + rows * TILE + (rows - 1) * GAP + PAD_B : 0;
+  const grow = grid ? grid + head : 0;
+  const headOpacity = useTransform(prog, [0.2, 0.8], [0, 1]);
   const height = useTransform(prog, (p) => BAR + Math.max(0, p) * grow);
   const radius = useTransform(prog, [0, 0.3], [BAR / 2, 26]);
   const [shown, setShown] = useState(false); // grid mounted while any of it is visible
@@ -94,7 +100,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
   const setMore = (v: boolean) => {
     setOpen(v);
     animate(prog, v ? 1 : 0, { ...SPRING.sheet, velocity: prog.getVelocity() });
-    animate(lens, v ? n - 1 : index, SPRING.snap);
+    animate(lens, v ? n - 1 : index, SPRING.goo);
     if (v) haptic('select');
   };
   useLayer(open, () => setMore(false));
@@ -109,7 +115,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
   }, [n]);
 
   // Follow the value when it changes from outside (unless a pager drives the lens).
-  useEffect(() => { if (!position && !open) animate(own, index, SPRING.snap); }, [index, own, position]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!position && !open) animate(own, index, SPRING.goo); }, [index, own, position]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const x = useTransform(lens, (p) => 6 + p * cell);
   const innerX = useTransform(x, (v) => -v);
@@ -146,7 +152,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
     const idx = indexAt(e.clientX, k);
     gesture.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: idx, moved: false, idx, base: open ? 1 : 0, k };
     // The lens slides under the finger on touch-down, like iOS.
-    animate(lens, idx, SPRING.snap);
+    animate(lens, idx, SPRING.goo);
     press.set(1);
   };
   const move = (e: React.PointerEvent) => {
@@ -157,7 +163,7 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 6) return;
       // Up (or down while open) pulls the bar; sideways drags the lens.
       g.moved = extra && Math.abs(dy) > Math.abs(dx) * 1.2 && (dy < 0 || open) ? 'y' : 'x';
-      if (g.moved === 'y') { press.set(0); animate(lens, open ? n - 1 : index, SPRING.snap); prog.stop(); } else lens.stop();
+      if (g.moved === 'y') { press.set(0); animate(lens, open ? n - 1 : index, SPRING.goo); prog.stop(); } else lens.stop();
     }
     if (g.moved === 'y') {
       const p = g.base - dy / grow;
@@ -184,11 +190,11 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
       setMore(cancelled ? open : v > 1.2 ? true : v < -1.2 ? false : prog.get() > 0.4);
       return;
     }
-    if (cancelled) { animate(lens, open ? n - 1 : index, SPRING.snap); return; }
+    if (cancelled) { animate(lens, open ? n - 1 : index, SPRING.goo); return; }
     const target = g.moved ? Math.max(0, Math.min(n - 1, Math.round(lens.get()))) : g.idx;
     haptic('select');
     // Velocity carries into the spring; it never skips a tab.
-    if (cells[target].id !== MORE) animate(lens, target, { ...SPRING.snap, velocity: speed.get() });
+    if (cells[target].id !== MORE) animate(lens, target, { ...SPRING.goo, velocity: speed.get() });
     pick(target);
   };
 
@@ -221,15 +227,18 @@ export function TabBar<T extends string>({ items, more, value, onChange, positio
         data-signal={activeSignal}
         role={open ? 'dialog' : undefined}
         aria-label={open ? moreLabel : undefined}
-        className="glass relative mx-auto max-w-[400px] overflow-hidden outline-none"
+        className="glass rim relative mx-auto max-w-[400px] overflow-hidden outline-none"
         style={{ height, borderRadius: radius }}
       >
         {/* Open, the glass thickens a little, so the grid reads over busy content. */}
-        {extra && shown && <motion.div aria-hidden="true" className="absolute inset-0 bg-[rgb(14_16_15/.55)]" style={{ opacity: scrimOpacity }} />}
+        {extra && shown && <motion.div aria-hidden="true" className="absolute inset-0 glass-thick" style={{ opacity: scrimOpacity }} />}
+        {extra && shown && moreHeader && (
+          <motion.div className="absolute inset-x-0 top-0 px-2 pt-2" style={{ height: HEAD, opacity: headOpacity }}>{moreHeader(() => setMore(false))}</motion.div>
+        )}
         {/* More: the grid above the row, rising as the glass grows. */}
         {extra && shown && (
           // Anchored to the row, so a half-open pull shows the row nearest the bar, never an overlap.
-          <div className="absolute inset-x-0 grid grid-cols-4 content-start gap-x-1 px-2" style={{ bottom: BAR, height: grow, paddingTop: PAD_T, rowGap: GAP }}>
+          <div className="absolute inset-x-0 grid grid-cols-4 content-start gap-x-1 px-2" style={{ bottom: BAR, height: grid, paddingTop: PAD_T, rowGap: GAP }}>
             {extra.map((t, i) => <MoreTile key={t.id} item={t} i={i} active={t.id === value} prog={prog} onPick={() => choose(t.id)} />)}
           </div>
         )}

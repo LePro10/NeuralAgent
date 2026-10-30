@@ -80,6 +80,22 @@ async fn voice_learn(voice: State<'_, Arc<Voice>>) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || voice.learn().map_err(|e| format!("{e:#}"))).await.map_err(|e| e.to_string())?
 }
 
+/// The image on the system clipboard (a screenshot), PNG as base64, or None. WebViews do not always
+/// hand screenshots to the page on paste.
+#[tauri::command]
+fn clipboard_image() -> Option<String> {
+    let img = arboard::Clipboard::new().ok()?.get_image().ok()?;
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, img.width as u32, img.height as u32);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().ok()?.write_image_data(&img.bytes).ok()?;
+    }
+    use base64::Engine;
+    Some(base64::engine::general_purpose::STANDARD.encode(out))
+}
+
 /// Dev builds: the webview's console errors end up in the terminal running `tauri dev`.
 #[tauri::command]
 fn dev_log(level: String, message: String) {
@@ -149,6 +165,7 @@ pub fn run() {
             update::update_check,
             update::update_install,
             dev_log,
+            clipboard_image,
             tray_update,
             voice_status,
             voice_set,

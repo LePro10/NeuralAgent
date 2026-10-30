@@ -111,8 +111,8 @@ function Header({ title, eyebrow, onClose, hideClose, action }: { title?: string
 
 // Frosted by default (reads like a surface, still shows the light behind); `glass` for clear glass.
 const surfaceCls = (glass?: boolean) => glass
-  ? 'glass !shadow-dialog'
-  : 'bg-[rgb(22_24_23/.84)] shadow-[var(--shadow-edge),var(--shadow-dialog)] backdrop-blur-[30px] backdrop-saturate-[160%]';
+  ? 'glass rim !shadow-dialog'
+  : 'glass glass-thick rim !shadow-dialog';
 
 /** Space between the floating card and the screen edges. */
 const GAP = 8;
@@ -134,6 +134,8 @@ function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, ac
   const opened = yFor(snaps[0]);
   const dim = (v: number) => Math.min(1, Math.max(0, (off() - v) / (off() - opened || 1)));
   const backdrop = useTransform(y, dim);
+  // Liquid: it grows out of the edge — a little smaller while it is down, full size once up (also while dragged).
+  const grow = useTransform(y, (v) => 1 - 0.07 * Math.min(1, Math.max(0, v / (off() || 1))));
   const scrollRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLDivElement>(null);
@@ -306,6 +308,8 @@ function Drawer({ onClose, title, eyebrow, snaps: snapProp, children, footer, ac
         ref={(n: HTMLDivElement | null) => { sheetRef.current = n; boxRef.current = n; }}
         style={{
           y,
+          scale: grow,
+          transformOrigin: '50% 100%',
           bottom: `max(${GAP}px, calc(var(--safe-bottom) - 12px))`,
           ...(kb ? { bottom: kb.bottom + GAP } : {}),
           ...(fit ? { maxHeight: kb ? Math.min(cap, kb.h - GAP * 2) : cap } : { height: kb ? Math.min(height, kb.h - GAP * 2) : height }),
@@ -343,10 +347,10 @@ function SidePanel({ onClose, title, eyebrow, children, footer, action, size = '
         role="dialog"
         aria-label={title}
         className={cn('absolute top-2 right-2 bottom-2 flex max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-dialog pt-3 outline-none', PANEL_W[size], surfaceCls(glass))}
-        initial={{ opacity: 0, x: 28 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
-        transition={OPEN}
+        initial={{ opacity: 0, x: 40, scale: 0.97, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
+        exit={{ opacity: 0, x: 24, filter: 'blur(4px)', transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+        transition={SPRING.goo}
       >
         <Header title={title} eyebrow={eyebrow} onClose={onClose} hideClose={hideClose} action={action} />
         <div className={cn('scroller min-h-0 flex-1 px-4 pt-1 pb-5', bodyClassName)}>{children}</div>
@@ -361,17 +365,17 @@ const DIALOG_W = { sm: 'max-w-[380px]', md: 'max-w-[500px]', lg: 'max-w-[1000px]
 function Dialog({ onClose, title, eyebrow, children, footer, action, size = 'md', boxRef, glass, hideClose, bodyClassName }: Inner) {
   return (
     <div className="fixed inset-0 z-[var(--z-sheet)] flex items-center justify-center p-6">
-      <motion.div className="absolute inset-0 bg-black/45" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
+      <motion.div className="absolute inset-0 bg-black/45 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
       <motion.div
         ref={boxRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={cn('relative flex max-h-[86%] w-full flex-col overflow-hidden rounded-dialog pt-3 outline-none', DIALOG_W[size], surfaceCls(glass))}
-        initial={{ opacity: 0, scale: 0.97, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.98, y: 4, transition: { duration: 0.14 } }}
-        transition={OPEN}
+        initial={{ opacity: 0, scale: 0.9, y: 14, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
+        exit={{ opacity: 0, scale: 0.96, y: 6, filter: 'blur(4px)', transition: { duration: 0.15 } }}
+        transition={SPRING.goo}
       >
         <Header title={title} eyebrow={eyebrow} onClose={onClose} hideClose={hideClose} action={action} />
         <div className={cn('scroller min-h-0 flex-1 px-5 pt-1 pb-5', bodyClassName)}>{children}</div>

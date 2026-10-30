@@ -163,7 +163,7 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ paddingLeft: "var(--sidebar-space)", paddingBottom: "var(--tabbar-space)" }}>
-      <div data-tauri-drag-region className="flex h-10 shrink-0 items-center gap-1 pr-2 pl-1">
+      <div data-tauri-drag-region className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-1">
         <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto" data-tauri-drag-region>
           {layout.tabs.map((t) => {
             const urgent = mostUrgent(sessionsOf(t.root).flatMap((s) => (sessions?.[s] ? [sessions[s].status] : [])));

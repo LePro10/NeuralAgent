@@ -164,7 +164,7 @@ function Panel({ box, phone, onClose, groups, recent, placeholder, empty }: {
                 onMouseEnter={() => { if (pointerMoved.current) setActive(i); }}
                 onClick={() => run(c)}
                 className={cn('relative flex w-full items-center gap-2.5 rounded-field px-2.5 text-left transition-colors', phone ? 'min-h-[46px] py-1.5' : 'h-10', on ? 'text-bright' : 'text-ink')}>
-                {on && <motion.span layoutId="cmd-active" className="absolute inset-0 rounded-field bg-fill-3" transition={SPRING.snap} />}
+                {on && <motion.span layoutId="cmd-active" className="absolute inset-0 rounded-field bg-fill-3" transition={SPRING.goo} />}
                 <span className="relative grid h-[26px] w-[26px] shrink-0 place-items-center rounded-tile bg-fill-3 text-ink">
                   {c.glyph ?? (c.Icon && <c.Icon size={14} strokeWidth={1.7} />)}
                 </span>
@@ -195,7 +195,7 @@ function Panel({ box, phone, onClose, groups, recent, placeholder, empty }: {
   if (phone) {
     return (
       <motion.div ref={box} role="dialog" aria-modal="true" aria-label="Command palette"
-        className="fixed inset-0 z-[var(--z-search)] flex flex-col bg-bg/90 backdrop-blur-xl outline-none"
+        className="fixed inset-0 z-[var(--z-search)] glass glass-thick flex flex-col !rounded-none !border-0 outline-none"
         style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8, transition: { duration: 0.14 } }} transition={SPRING.sheet}>
         {input}
@@ -207,8 +207,8 @@ function Panel({ box, phone, onClose, groups, recent, placeholder, empty }: {
     <div className="fixed inset-0 z-[var(--z-search)] flex justify-center px-6 pt-[12vh]">
       <motion.div className="absolute inset-0 bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.14 } }} onClick={onClose} />
       <motion.div ref={box} role="dialog" aria-modal="true" aria-label="Command palette"
-        className="glass relative flex max-h-[min(520px,72vh)] w-full max-w-[600px] flex-col overflow-hidden !rounded-dialog outline-none"
-        initial={{ opacity: 0, scale: 0.97, y: -6 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12 } }} transition={{ ...SPRING.snap, damping: 38 }}>
+        className="glass glass-thick rim relative flex max-h-[min(520px,72vh)] w-full max-w-[600px] flex-col overflow-hidden !rounded-dialog outline-none"
+        initial={{ opacity: 0, scale: 0.92, y: -10, filter: 'blur(8px)' }} animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }} exit={{ opacity: 0, scale: 0.97, filter: 'blur(4px)', transition: { duration: 0.12 } }} transition={SPRING.goo}>
         {input}
         {body}
         <div className="flex shrink-0 items-center gap-4 border-t-hair border-line px-4 py-2 text-meta text-faint">

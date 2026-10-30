@@ -4,14 +4,16 @@
  * labels in a soft tone.
  */
 import type { LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { haptic } from '../../lib/haptics';
+import { SPRING } from '../../lib/motion';
 
-const chipCls = (on: boolean) => cn(
-  'pressable relative flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-chip',
+const chipCls = (on: boolean, own = true) => cn(
+  'pressable relative isolate flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-chip',
   'after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-[""]',
-  on ? 'bg-bright text-bg shadow-lit' : 'bg-fill-1 text-ink shadow-edge hover:bg-fill-2 hover:text-bright',
+  on ? cn('text-bg', own && 'bg-bright shadow-lit') : 'bg-fill-1 text-ink shadow-edge hover:bg-fill-2 hover:text-bright',
 );
 
 export interface ChipOption<T extends string> { value: T; label: string; count?: number; dot?: string; Icon?: LucideIcon; }
@@ -25,13 +27,15 @@ export function Chips<T extends string>({ value, options, onChange, lead, nowrap
   nowrap?: boolean;
   className?: string;
 }) {
+  const id = useId();
   return (
     <div data-no-swipe className={cn('rail -mx-4 gap-1.5 px-4 @[700px]:mx-0 @[700px]:px-0', !nowrap && '@[700px]:flex-wrap', className)}>
       {lead && <>{lead}<span aria-hidden="true" className="mx-1 w-[var(--hair)] shrink-0 self-stretch bg-line-2 [scroll-snap-align:none]" /></>}
       {options.map((o) => {
         const on = o.value === value;
         return (
-          <button key={o.value} type="button" aria-pressed={on} onClick={() => { if (!on) { haptic('select'); onChange(o.value); } }} className={chipCls(on)}>
+          <button key={o.value} type="button" aria-pressed={on} onClick={() => { if (!on) { haptic('select'); onChange(o.value); } }} className={chipCls(on, false)}>
+            {on && <motion.span aria-hidden="true" layoutId={`chip-${id}`} className="absolute inset-0 -z-10 rounded-full bg-bright shadow-lit" transition={SPRING.goo} />}
             {o.dot && <i className="h-1.5 w-1.5 rounded-full" style={{ background: o.dot }} />}
             {o.Icon && <o.Icon size={13} strokeWidth={1.75} />}
             {o.label}

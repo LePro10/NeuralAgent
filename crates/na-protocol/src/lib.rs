@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
+mod claude;
+pub use claude::*;
+
 pub const PROTOCOL_VERSION: u32 = 1;
 
 pub type Id = String;
@@ -55,6 +58,23 @@ pub enum ClientMsg {
         d: String,
     },
     CallEnd,
+    /// The desktop app announces (`on`) or withdraws itself as the host's UI: the daemon
+    /// forwards `Request::HostUi` calls to it (voice settings, installing an update).
+    HostUiRegister {
+        on: bool,
+    },
+    /// The host UI's answer to a `HostCall`.
+    HostUiReply {
+        #[ts(type = "number")]
+        call: u64,
+        ok: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        r: Option<Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        error: Option<String>,
+    },
 }
 
 /// Daemon → client.
@@ -110,6 +130,20 @@ pub enum ServerMsg {
     },
     Call {
         ev: CallEvent,
+    },
+    /// Claude view: a change in the conversation of an attached Claude session.
+    Cv {
+        sid: Id,
+        ev: CvEvent,
+    },
+    /// To the host UI: do `op` and answer with `ClientMsg::HostUiReply`.
+    HostCall {
+        #[ts(type = "number")]
+        call: u64,
+        op: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        args: Option<Value>,
     },
 }
 
@@ -934,6 +968,13 @@ pub enum Event {
         kind: AttentionKind,
         text: String,
     },
+    /// Live information about the host that is not part of the state (voice model
+    /// downloads, update progress, voice activity). Topics: `models`, `voice`, `update`.
+    HostNotice {
+        topic: String,
+        #[ts(type = "unknown")]
+        data: Value,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1013,6 +1054,43 @@ pub enum Request {
         sid: Id,
         data: String,
     },
+    // Claude view (the structured conversation of a Claude Code session)
+    /// Start streaming the conversation → `CvAttachResult`, then `ServerMsg::Cv` events.
+    CvAttach {
+        sid: Id,
+    },
+    CvDetach {
+        sid: Id,
+    },
+    /// Messages before position `before` → `CvHistoryResult`.
+    CvHistory {
+        sid: Id,
+        #[ts(type = "number")]
+        before: u64,
+    },
+    /// Slash commands the session can run now (built-ins, custom commands, skills) → `Vec<CvCommand>`.
+    CvCommands {
+        sid: Id,
+    },
+    /// Files under the session's folder matching `query` (for `@`) → `Vec<String>` (relative paths).
+    CvFiles {
+        sid: Id,
+        query: String,
+    },
+    /// Stores a file (an image) on the host for this session → `UploadResult`.
+    Upload {
+        sid: Id,
+        name: String,
+        /// Base64.
+        data: String,
+    },
+    /// Speech to text on the host: base64 of 16-bit little-endian mono PCM at 16 kHz → `TranscribeResult`.
+    Transcribe {
+        audio: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        lang: Option<String>,
+    },
     TermResize {
         sid: Id,
         cols: u16,
@@ -1033,6 +1111,13 @@ pub enum Request {
     // filesystem (read-only browsing, for picking folders)
     FsList {
         path: String,
+    },
+    /// Starting points for the folder browser → `FsRoots`.
+    FsRoots,
+    /// Creates `name` inside `path` (one level, no slashes) → `FsEntry`.
+    FsMkdir {
+        path: String,
+        name: String,
     },
     // git: a workspace, or with `session_id` that agent's worktree
     GitChanges {
@@ -1124,6 +1209,32 @@ pub enum Request {
         /// `de` or `en`.
         lang: String,
     },
+    // the host itself (settings and updates from any of the account's devices)
+    /// Voice models of this computer → `Vec<ModelInfo>`; progress arrives as `HostNotice("models")`.
+    HostModels,
+    HostModelDownload {
+        id: String,
+    },
+    HostModelDelete {
+        id: String,
+    },
+    /// Is a newer app version available? Works without the desktop app → `HostUpdate`.
+    HostUpdateCheck,
+    /// Asks the desktop app on the host to do something (`voice.status`, `voice.set`,
+    /// `voice.learn`, `update.install`); fails when the app is closed.
+    HostUi {
+        op: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        #[ts(type = "unknown")]
+        args: Option<Value>,
+    },
+    /// The desktop app reports live information (forwarded to every client as `HostNotice`).
+    HostNotice {
+        topic: String,
+        #[ts(type = "unknown")]
+        data: Value,
+    },
     // swarms
     /// Start a team on `goal` in the workspace. `members` defaults to Coordinator, Scout,
     /// Builder and Reviewer with the default agent. Returns `Swarm`.
@@ -1199,6 +1310,43 @@ pub struct StartSession {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    pub purpose: String,
+    #[ts(type = "number")]
+    pub size: u64,
+    pub installed: bool,
+    /// 0..1 while downloading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub progress: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
+}
+
+/// Answer of `HostUpdateCheck`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct HostUpdate {
+    /// The newer version, if there is one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub available: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notes: Option<String>,
+    /// The version of the installed app (the service's if the app is closed).
+    pub current: String,
+    /// The running service (older than the app until no agent is working after an update).
+    pub service: String,
+    /// The desktop app is open, so it can install.
+    pub app_running: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CallPreviewAudio {
     /// Base64 of 16-bit little-endian mono PCM.
     pub d: String,
@@ -1265,6 +1413,15 @@ pub struct AuditEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub error: Option<String>,
+}
+
+/// Answer of `FsRoots`: where the folder browser starts.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FsRoots {
+    pub home: String,
+    /// Usual project folders that exist (Projects, Developer, Code, …), then Documents/Desktop.
+    pub projects: Vec<FsEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

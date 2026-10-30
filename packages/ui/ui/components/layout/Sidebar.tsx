@@ -124,7 +124,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
         onFocus={(e) => { if ((e.target as HTMLElement).matches(':focus-visible')) { window.clearTimeout(timer.current); setPeek(true); } }}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setPeek(false); }}
         // Collapsed it is barely there: thin, clear glass with a faint rim. Opened (peek or pin) it fills in.
-        className={cn('glass pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
+        className={cn('glass rim pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
           !open && '!border-white/[.05] !bg-[rgb(22_24_23/.22)]')}
         initial={false}
         animate={{ width: open ? OPEN : RAIL, height: open && full ? full : 'auto' }}
@@ -174,7 +174,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
                 <button type="button" onClick={() => { haptic('select'); onChange(it.id); }} aria-current={active ? 'page' : undefined} aria-label={it.label}
                   aria-description={typeof it.badge === 'string' ? it.badge : undefined}
                   className={cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[13px] text-chip transition-colors duration-200', active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink')}>
-                  {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-white/[.075] shadow-edge" transition={SPRING.snap} />}
+                  {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-white/[.09] shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
                   <span className="relative transition-colors duration-300" style={active && sig ? { color: `var(--color-signal-${sig})` } : undefined}>
                     <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />
                     {it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-ember ring-[1.5px] ring-chrome" />}

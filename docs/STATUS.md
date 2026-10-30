@@ -4,6 +4,21 @@
 
 Open items first. Everything else keeps going locally until these are done.
 
+- [ ] **0.2.0 checks on real devices** (15 min, after installing 0.2.0):
+  - macOS: drag the window by the top strip anywhere (also next to the traffic lights),
+    double-click it to zoom. Paste a screenshot (Cmd+V) and drop a file into a Claude pane
+    and into the Claude view composer.
+  - Android: in a Claude session the Claude view opens by default. Copy an image, then paste
+    it into the composer (long-press → Paste and via the Gboard clipboard chip); also the
+    paste/photo buttons in the key bar. Call Neural: audio comes from the earpiece, the
+    speaker button switches, Bluetooth headset wins, screen turns off at the ear.
+  - iPhone (home-screen app): open a session, Claude view, paste an image.
+  - Remote → Settings → host section: download a voice model, see "Update available on
+    <host>", install it, the page reloads by itself afterwards.
+- [ ] **Website legal data**: add your postal address to the imprint, confirm Swiss law /
+  private operator in the terms, and the server location if you want it stated
+  (`apps/web/src/legal.tsx`). Have the three pages checked before inviting people.
+
 - [ ] **GHCR read token for .96** (pull deployment). `gh` cannot create personal access
       tokens. Steps: github.com → Settings → Developer settings → Personal access tokens →
       Tokens (classic) → *Generate new token (classic)* → note `neuralagent-96-pull`,

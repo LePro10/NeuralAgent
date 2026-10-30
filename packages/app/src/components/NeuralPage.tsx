@@ -22,10 +22,11 @@ import { Activity, Bell, Check, Eraser, Phone, Play, X } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { CallAudioToggle } from "./CallAudioToggle";
 import { callLevel, endCall, interruptCall, muteCall, startCall, useCall } from "../lib/call";
 import { frontTabFor } from "../lib/layout";
 import { STATUS } from "../lib/status";
-import { useClient, useDaemon, usePlatform, useUi } from "../lib/store";
+import { useClient, useDaemon, useUi } from "../lib/store";
 import { AgentGlyph } from "./AgentGlyph";
 
 const SUGGESTIONS: Suggestion[] = [
@@ -39,7 +40,6 @@ const SUGGESTIONS: Suggestion[] = [
  */
 export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   const client = useClient();
-  const platform = usePlatform();
   const orch = useDaemon((c) => c.state?.orchestrator);
   const scroller = useRef<HTMLDivElement>(null);
   const messages = orch?.messages ?? [];
@@ -111,7 +111,7 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
                 )
               }
             >
-              {platform.kind === "desktop" ? "Add your NeuralHub, Anthropic or OpenAI key, or use a local Ollama model." : "Add a key in Settings → Neural on your computer."}
+              Add your NeuralHub, Anthropic or OpenAI key, or use a local Ollama model.
             </Callout>
           )}
           {empty ? (
@@ -176,6 +176,7 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
         </AnimatePresence>,
         document.body,
       )}
+      {call.on && <CallAudioToggle />}
     </div>
   );
 }

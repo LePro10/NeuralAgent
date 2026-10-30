@@ -4,6 +4,7 @@ import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -54,6 +55,22 @@ const platform: Platform = {
   onTrayRemote: (cb) => subscribe<null>("tray-remote", cb),
   trafficLights: mac,
   startDrag: () => void getCurrentWindow().startDragging(),
+  readClipboardImage: async () => {
+    const b64 = await invoke<string | null>("clipboard_image");
+    if (!b64) return null;
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new File([bytes], "screenshot.png", { type: "image/png" });
+  },
+  // Tauri swallows OS file drops; it hands over local paths (the host is this machine).
+  onFileDrop: (cb) => {
+    const off = getCurrentWebview().onDragDropEvent((e) => {
+      if (e.payload.type !== "drop") return;
+      const r = window.devicePixelRatio || 1;
+      cb({ paths: e.payload.paths, x: e.payload.position.x / r, y: e.payload.position.y / r });
+    });
+    return () => void off.then((f) => f());
+  },
   voice: {
     status: () => invoke<VoiceStatus>("voice_status"),
     set: (config) => invoke("voice_set", { config }),
@@ -96,6 +113,30 @@ void getVersion().then((app) => {
     );
   });
 });
+
+// This app is the host's UI for remote devices (D42): the daemon forwards voice settings and
+// "install the update" to it, and shows the voice and update progress we report to every client.
+client.serveHost(async (op, args) => {
+  switch (op) {
+    case "voice.status":
+      return invoke<VoiceStatus>("voice_status");
+    case "voice.set":
+      return invoke("voice_set", { config: args });
+    case "voice.learn":
+      return invoke<string>("voice_learn");
+    case "update.versions":
+      return { app: await getVersion(), service: serviceVersion };
+    case "update.install":
+      // Answers at once: the app restarts when done. Progress and failures go out as notices.
+      void invoke("update_install").catch((e) => notice("update", { error: String(e) }));
+      return { started: true };
+    default:
+      throw new Error(`unknown operation ${op}`);
+  }
+});
+const notice = (topic: string, data: unknown) => void client.req({ m: "host_notice", p: { topic, data } }).catch(() => {});
+void listen<VoiceStatus>("voice", (e) => notice("voice", e.payload));
+void listen<{ done: number; total: number | null }>("update-progress", (e) => notice("update", e.payload));
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

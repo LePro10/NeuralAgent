@@ -10,6 +10,7 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { useClient, usePlatform } from "../lib/store";
 import { THEME_EVENT } from "../lib/theme";
+import { filesOf, isImage, pathToken, uploadFile } from "./claude/files";
 
 const FONT = '"IBM Plex Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
 
@@ -102,14 +103,16 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     t.onBinary((d) => client.write(sid, d));
 
     let size = { cols: 0, rows: 0 };
-    const refit = () => {
+    // `force`: tell the daemon even if our last report is unchanged (another client, or the Claude
+    // view, may have resized the shared PTY since; the client in front wins).
+    const refit = (force = false) => {
       if (disposed || el.clientWidth < 20 || el.clientHeight < 20) return;
       const dims = fit.proposeDimensions();
       if (!dims || !Number.isFinite(dims.cols)) return;
       const cols = Math.max(20, dims.cols);
       const rows = Math.max(4, dims.rows);
       if (cols !== t.cols || rows !== t.rows) t.resize(cols, rows);
-      if (cols !== size.cols || rows !== size.rows) {
+      if (force || cols !== size.cols || rows !== size.rows) {
         size = { cols, rows };
         client.req({ m: "term_resize", p: { sid, cols, rows } }).catch(() => {});
       }
@@ -134,7 +137,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
           console.warn("WebGL renderer unavailable, using DOM renderer", e);
         }
       }
-      refit();
+      refit(true);
       if (focusedRef.current) t.focus();
       detach = client.attach(sid, {
         reset(snapshot) {
@@ -151,9 +154,78 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     let raf = 0;
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(refit);
+      raf = requestAnimationFrame(() => refit());
     });
     ro.observe(el);
+    // Coming back to the page re-claims the PTY size (another client may have set it meanwhile);
+    // layout changes only report when the size really changed.
+    const kick = (force = false) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => refit(force));
+    };
+    const reclaim = () => kick(focusedRef.current);
+    const soft = () => kick();
+    const onVis = () => document.visibilityState === "visible" && reclaim();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", reclaim);
+    window.addEventListener("pageshow", reclaim);
+    window.addEventListener("resize", soft);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", soft);
+    let dpr = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
+    const onDpr = () => {
+      dpr.removeEventListener("change", onDpr);
+      dpr = matchMedia(`(resolution: ${devicePixelRatio}dppx)`);
+      dpr.addEventListener("change", onDpr);
+      t.clearTextureAtlas?.();
+      soft();
+    };
+    dpr.addEventListener("change", onDpr);
+    void document.fonts?.ready.then(soft);
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && soft());
+    io.observe(el);
+
+    // Images: paste or drop uploads to the host and types the path, like Claude Code's own paste.
+    const sendImages = async (files: File[]) => {
+      const imgs = files.filter(isImage);
+      if (!imgs.length) return false;
+      const paths = await Promise.all(imgs.map((f) => uploadFile(client, sid, f).catch(() => "")));
+      const text = paths.filter(Boolean).map(pathToken).join(" ");
+      if (text) client.write(sid, text + " ");
+      return true;
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      const files = filesOf(e.clipboardData).filter(isImage);
+      if (!files.length) {
+        if (platform.readClipboardImage && !e.clipboardData?.getData("text/plain")) {
+          e.preventDefault();
+          e.stopPropagation();
+          void platform.readClipboardImage().then((f) => f && sendImages([f])).catch(() => {});
+        }
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      void sendImages(files);
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      const files = filesOf(e.dataTransfer).filter(isImage);
+      if (!files.length) return;
+      e.preventDefault();
+      void sendImages(files);
+    };
+    el.addEventListener("paste", onPaste, true);
+    el.addEventListener("dragover", onDragOver);
+    el.addEventListener("drop", onDrop);
+    const offDrop = platform.onFileDrop?.((d) => {
+      if (!focusedRef.current) return;
+      const r = el.getBoundingClientRect();
+      if (d.x < r.left || d.x > r.right || d.y < r.top || d.y > r.bottom) return;
+      client.write(sid, d.paths.map(pathToken).join(" ") + " ");
+    });
     const onFocusIn = () => onFocusRef.current();
     el.addEventListener("focusin", onFocusIn);
 
@@ -161,6 +233,17 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       disposed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", reclaim);
+      window.removeEventListener("resize", soft);
+      window.removeEventListener("pageshow", reclaim);
+      vv?.removeEventListener("resize", soft);
+      dpr.removeEventListener("change", onDpr);
+      el.removeEventListener("paste", onPaste, true);
+      el.removeEventListener("dragover", onDragOver);
+      el.removeEventListener("drop", onDrop);
+      offDrop?.();
       el.removeEventListener("focusin", onFocusIn);
       window.removeEventListener(THEME_EVENT, retheme);
       detach();

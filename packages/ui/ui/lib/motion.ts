@@ -18,7 +18,16 @@ export const SPRING = {
   soft: { type: 'spring', stiffness: 300, damping: 30, mass: 1 },
   grow: { type: 'spring', stiffness: 220, damping: 26, mass: 1 },
   bouncy: { type: 'spring', stiffness: 260, damping: 22, mass: 1 },
+  /** Jelly: quick with a visible overshoot — liquid indicators (segmented pill, sidebar lens). Spring values after fluid-goo (MIT, (c) 2026 Frech-Dachs). */
+  goo: { type: 'spring', stiffness: 380, damping: 24, mass: 1 },
+  /** Trailing edge of a stretch: softer than `goo`. */
+  drag: { type: 'spring', stiffness: 210, damping: 22, mass: 1 },
 } as const;
+
+/** Squash of a stretching element (after fluid-goo's squashFor): 1 at rest, down to 1 - max when stretched. */
+export function squashFor(stretch: number, strength = 0.5, max = 0.22) {
+  return 1 - Math.min(max, Math.max(0, stretch - 1) * strength);
+}
 
 export type SpringName = keyof typeof SPRING;
 

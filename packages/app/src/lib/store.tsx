@@ -42,6 +42,9 @@ interface UiState {
   setWorkspace: (id: string | null) => void;
   setSidebarPinned: (v: boolean) => void;
   setWorktrees: (v: boolean) => void;
+  /** Claude sessions show the Claude view (true) or the terminal (false); null = the layout's default (phone: view, desktop: terminal). */
+  claudeView: boolean | null;
+  setClaudeView: (v: boolean) => void;
 }
 
 export const useUi = create<UiState>()(
@@ -53,6 +56,8 @@ export const useUi = create<UiState>()(
       setWorkspace: (workspace) => set({ workspace }),
       setSidebarPinned: (sidebarPinned) => set({ sidebarPinned }),
       setWorktrees: (worktrees) => set({ worktrees }),
+      claudeView: null,
+      setClaudeView: (claudeView) => set({ claudeView }),
     }),
     { name: "neuralagent.ui" },
   ),

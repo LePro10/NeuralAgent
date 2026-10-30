@@ -120,12 +120,12 @@ export function Toaster({ channel = 'main', position = 'bottom' }: { channel?: s
             <motion.div
               key={t.id}
               layout
-              initial={{ opacity: 0, y: top ? -8 : 8, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.14 } }}
-              transition={{ ...SPRING.snap, damping: 38 }}
+              initial={{ opacity: 0, y: top ? -14 : 14, scale: 0.86, filter: 'blur(6px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
+              exit={{ opacity: 0, scale: 0.94, filter: 'blur(4px)', transition: { duration: 0.16 } }}
+              transition={{ ...SPRING.goo, damping: 26 }}
               // Long messages wrap instead of running off screen; one line stays a pill.
-              className="pointer-events-auto flex min-h-9 max-w-[min(100%,460px)] items-center gap-2 rounded-card border-hair border-white/[.1] bg-[rgb(30_32_31/.74)] py-1.5 pr-1.5 pl-3.5 text-chip leading-snug text-bright shadow-menu backdrop-blur-[20px] backdrop-saturate-[160%]"
+              className="pointer-events-auto flex min-h-9 max-w-[min(100%,460px)] items-center gap-2 glass rim rounded-card py-1.5 pr-1.5 pl-3.5 text-chip leading-snug text-bright"
             >
               {t.tone === 'loading'
                 ? <i className="spinner shrink-0" style={{ ['--size' as string]: '13px' }} />

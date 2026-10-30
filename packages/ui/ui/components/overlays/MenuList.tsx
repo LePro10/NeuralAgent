@@ -9,19 +9,19 @@
  */
 import { motion, type Variants } from 'motion/react';
 import { Check } from 'lucide-react';
+import { useId, useState } from 'react';
 import { cn } from '../../lib/cn';
+import { SPRING } from '../../lib/motion';
 import type { MenuEntry } from './Menu';
 
 /** Glass of small menus: the same light glass as a glass button — a faint white veil, strong blur,
  *  a rim lit from the top. Never a dark box. */
-export const MENU_SURFACE =
-  'rounded-menu bg-[linear-gradient(180deg,rgb(255_255_255/.1),rgb(255_255_255/.055))] p-1 backdrop-blur-[24px] backdrop-saturate-[180%] ' +
-  'shadow-[inset_0_var(--hair)_0_rgb(255_255_255/.2),inset_0_0_0_var(--hair)_rgb(255_255_255/.08),0_8px_24px_-12px_rgb(0_0_0/.45)]';
+export const MENU_SURFACE = 'glass rim rounded-menu p-1';
 
 const list: Variants = { show: { transition: { staggerChildren: 0.018, delayChildren: 0.03 } } };
 const row: Variants = {
-  hide: { opacity: 0, y: -3 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
+  hide: { opacity: 0, y: -4, filter: 'blur(3px)' },
+  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.26, ease: [0.22, 1, 0.36, 1] } },
 };
 
 /** Approximate height of a list, for placing it above or below its trigger. */
@@ -40,10 +40,14 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
 }) {
   const choices = items.some((e) => e.checked !== undefined);
   const rich = items.some((e) => e.glyph && e.detail);
+  // The hover light is one liquid lens that glides from row to row (fluid-goo's menu feel), not a fill per row.
+  const lens = useId();
+  const [hot, setHot] = useState<number | null>(null);
   return (
-    <motion.div variants={list} initial={animate ? 'hide' : false} animate="show">
+    <motion.div variants={list} initial={animate ? 'hide' : false} animate="show" onPointerLeave={() => setHot(null)}>
       {items.map((e, i) => (
-        <motion.div key={`${e.id ?? e.label}-${i}`} variants={row} role="none">
+        <motion.div key={`${e.id ?? e.label}-${i}`} variants={row} role="none"
+          onPointerEnter={(ev) => { if (ev.pointerType === 'mouse' && !e.disabled) setHot(i); }} onFocusCapture={() => setHot(i)}>
           {e.divider && !e.section && i > 0 && <div className="mx-2.5 my-1 h-[var(--hair)] bg-white/[.07]" />}
           {e.section && <div className={cn('px-2.5 pb-0.5 text-tiny text-faint', i > 0 ? 'mt-1 border-t-hair border-white/[.06] pt-2' : 'pt-1')}>{e.section}</div>}
           <button
@@ -53,12 +57,15 @@ export function MenuItems({ items, touch, onChoose, animate = true }: {
             aria-checked={e.checked}
             onClick={() => onChoose(e)}
             className={cn(
-              'flex w-full items-center gap-2 rounded-item px-2.5 text-left text-chip outline-none transition-colors duration-100',
-              'hover:bg-white/[.06] focus-visible:bg-white/[.06] active:bg-white/[.1] disabled:opacity-35',
+              'relative isolate flex w-full items-center gap-2 rounded-item px-2.5 text-left text-chip outline-none transition-colors duration-100',
+              'active:bg-white/[.06] disabled:opacity-35',
               rich ? (touch ? 'min-h-[46px] py-1' : 'min-h-10 py-1') : touch ? 'h-[38px]' : 'h-[30px]',
               e.destructive ? 'text-danger' : 'text-bright',
             )}
           >
+            {hot === i && (
+              <motion.span aria-hidden="true" layoutId={`mh-${lens}`} className="absolute inset-0 -z-10 rounded-item bg-white/[.09] shadow-[inset_0_var(--hair)_0_rgb(255_255_255/.12)]" transition={SPRING.goo} />
+            )}
             {choices && (
               <span className="grid w-3.5 shrink-0 place-items-center text-bright">
                 {e.checked && <Check size={12} strokeWidth={2.2} />}

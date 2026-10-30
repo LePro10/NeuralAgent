@@ -29,8 +29,9 @@ export function Switch({ checked, onChange, label, size = 'md', disabled }: { ch
           style={{ height: t, originX: checked ? 1 : 0 }}
           initial={false}
           animate={{ x: checked ? w - t - 4 : 0, width: t }}
-          whileTap={{ width: t + 5, x: checked ? w - t - 9 : 0 }}
-          transition={SPRING.toggle}
+          // Pressed, the thumb swells into a glass lens and stretches towards where it is going (squash), then springs back.
+          whileTap={{ width: t + 12, x: checked ? w - t - 16 : 0, scaleY: 0.9, backgroundColor: 'rgb(255 255 255 / 0.78)', boxShadow: '0 2px 8px rgb(0 0 0 / .35), inset 0 0 0 1px rgb(255 255 255 / .6), inset 0 -3px 5px rgb(255 255 255 / .25)' }}
+          transition={SPRING.goo}
         />
       </span>
     </button>

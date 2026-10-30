@@ -1,5 +1,6 @@
 import type { Connect } from "@neuralagent/protocol";
 import type { ReactNode } from "react";
+import type { CallAudioApi } from "./callaudio";
 import type { VoiceApi } from "./voice";
 
 /** What the shell around the shared app provides (Tauri window, browser/PWA, Android). */
@@ -28,6 +29,8 @@ export interface Platform {
   onOpenSession?: (cb: (sid: string) => void) => () => void;
   /** Phones: a call with Neural keeps the microphone on with the screen locked (Android). */
   call?: {
+    /** Android: earpiece/speaker control; absent in browsers (they use `setSinkId` where possible). */
+    audio?: CallAudioApi;
     /** The call has the microphone (true) or ended (false). */
     active: (on: boolean) => void;
     /** "Call Neural" was picked outside the page (quick tile, notification): start or end a call. */
@@ -37,6 +40,13 @@ export interface Platform {
   voice?: VoiceApi;
   /** App updates (desktop only). */
   updates?: UpdateApi;
+  /** Native shells: the image on the system clipboard (the WebView cannot always read it), or null. */
+  readClipboardImage?: () => Promise<File | null>;
+  /**
+   * Desktop (Tauri swallows OS file drops before the page sees them): files dropped on the window,
+   * as local paths with the drop position in CSS pixels.
+   */
+  onFileDrop?: (cb: (drop: { paths: string[]; x: number; y: number }) => void) => () => void;
 }
 
 export interface UpdateInfo {

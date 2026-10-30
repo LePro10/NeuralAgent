@@ -1,7 +1,14 @@
 package dev.neuralhub.neuralagent;
 
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import android.os.Build;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
@@ -50,10 +57,78 @@ public class NativePlugin extends Plugin {
     @PluginMethod
     public void callActive(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
-        if (on) CallService.start(getContext());
-        else CallService.stop(getContext());
+        JSObject r = new JSObject();
+        if (on) {
+            CallService.start(getContext());
+            if (call.getString("route") != null) CallAudio.save(getContext(), call.getString("route"));
+            r.put("output", CallAudio.start(getContext(), CallAudio.saved(getContext())));
+        } else {
+            CallService.stop(getContext());
+            CallAudio.stop(getContext());
+        }
         getActivity().runOnUiThread(() -> ((MainActivity) getActivity()).calling(on));
-        call.resolve();
+        call.resolve(r);
+    }
+
+    private static final int MAX_IMAGE = 12 * 1024 * 1024;
+
+    /** An image behind a content URI (clipboard, keyboard insert) as base64, or null. */
+    static JSObject imageOf(Context c, Uri uri, String hint) {
+        try {
+            if (!"content".equals(uri.getScheme())) return null; // never a file:// path into our own data
+            String type = c.getContentResolver().getType(uri);
+            if (type == null) type = hint;
+            if (type == null || !type.startsWith("image/")) return null;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (InputStream in = c.getContentResolver().openInputStream(uri)) {
+                if (in == null) return null;
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (out.size() > MAX_IMAGE) return null;
+                }
+            }
+            JSObject r = new JSObject();
+            r.put("type", type);
+            r.put("data", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+            return r;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** The image on the system clipboard (WebViews cannot read it), or {} when there is none. */
+    @PluginMethod
+    public void readClipboardImage(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            JSObject r = null;
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = cm == null ? null : cm.getPrimaryClip();
+                for (int i = 0; clip != null && r == null && i < clip.getItemCount(); i++) {
+                    Uri uri = clip.getItemAt(i).getUri();
+                    String hint = clip.getDescription().getMimeTypeCount() > 0 ? clip.getDescription().getMimeType(0) : null;
+                    if (uri != null) r = imageOf(getContext(), uri, hint);
+                }
+            } catch (Exception ignored) {
+            }
+            call.resolve(r == null ? new JSObject() : r);
+        });
+    }
+
+    /** An image the keyboard inserted (Gboard clipboard chip, stickers, GIFs) into the page. */
+    static void pasted(JSObject image) {
+        if (instance != null && image != null) instance.notifyListeners("paste", image, true);
+    }
+
+    /** Earpiece (quiet, at the ear) or speaker; resolves with where the sound goes now. */
+    @PluginMethod
+    public void callRoute(PluginCall call) {
+        CallAudio.save(getContext(), call.getString("route", CallAudio.EARPIECE));
+        JSObject r = new JSObject();
+        r.put("output", CallAudio.route(getContext(), CallAudio.saved(getContext())));
+        call.resolve(r);
     }
 
     /** Open one agent; kept until the page listens when the app was cold-started by the tap. */

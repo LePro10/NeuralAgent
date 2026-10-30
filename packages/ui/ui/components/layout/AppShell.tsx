@@ -17,6 +17,7 @@ import { MotionConfig } from 'motion/react';
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { ShellProvider, Surface, useWidthMode, type LayoutMode } from '../../lib/surface';
+import { AuroraField } from '../effects/AuroraField';
 import { Sidebar, type SidebarItem } from './Sidebar';
 import { TabBar } from './TabBar';
 
@@ -33,6 +34,8 @@ export interface Nav<T extends string = string> {
   /** Sidebar extras. */
   brand?: { mark: ReactNode; word?: ReactNode; onClick?: () => void };
   account?: (open: boolean) => ReactNode;
+  /** Phones: a row at the top of the tab bar's More grid. */
+  moreHeader?: (close: () => void) => ReactNode;
   settings?: () => void;
   settingsActive?: boolean;
   search?: () => void;
@@ -40,13 +43,15 @@ export interface Nav<T extends string = string> {
   onPinnedChange?: (v: boolean) => void;
 }
 
-export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mode: forced, className, style }: {
+export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mode: forced, aurora = true, className, style }: {
   nav?: Nav<T>;
   sidebar?: ReactNode;
   tabbar?: ReactNode;
   children: ReactNode;
   /** Force a mode (previews); otherwise measured. */
   mode?: LayoutMode;
+  /** The colour field behind everything (default on). */
+  aurora?: boolean;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -60,7 +65,7 @@ export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mod
   let side = sidebar, bar = tabbar;
   if (nav) {
     const k = nav.items.length <= Math.max(5, (nav.tabs ?? 4) + 1) ? nav.items.length : nav.tabs ?? 4;
-    bar ??= <TabBar items={nav.items.slice(0, k)} more={nav.items.slice(k)} value={nav.value} onChange={nav.onChange} />;
+    bar ??= <TabBar items={nav.items.slice(0, k)} more={nav.items.slice(k)} value={nav.value} onChange={nav.onChange} moreHeader={nav.moreHeader} />;
     side ??= <Sidebar items={nav.items} value={nav.value} onChange={nav.onChange} brand={nav.brand} footer={nav.account} onSettings={nav.settings} settingsActive={nav.settingsActive} search={nav.search} pinned={nav.pinned} onPinnedChange={nav.onPinnedChange} />;
   }
 
@@ -76,6 +81,7 @@ export function AppShell<T extends string>({ nav, sidebar, tabbar, children, mod
       }}
     >
       {/* Reduced motion reaches every motion component inside, not only CSS. */}
+      {aurora && <AuroraField />}
       <MotionConfig reducedMotion="user">
         <Surface portal={ref} mode={mode}>
           <ShellProvider value={shell}>

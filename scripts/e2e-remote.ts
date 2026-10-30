@@ -89,8 +89,21 @@ startRelay();
 await until(() => fetch(`${RELAY}/api/health`).then((r) => r.ok).catch(() => false), "relay up");
 ok(true, "relay running");
 
+// Update server stand-in: always offers 9.9.9 (what the host reports to remotes).
+const updates = createServer((req, res) => {
+  if (req.url?.startsWith("/api/update/")) res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ version: "9.9.9", notes: "e2e" }));
+  else res.writeHead(404).end();
+}).listen(0, "127.0.0.1");
+await new Promise((r) => updates.once("listening", r));
+
+mkdirSync(join(tmp, "hosthome"), { recursive: true });
 const home = join(tmp, "home");
-const daemonOut = run("neuralagentd", ["serve"], { NEURALAGENT_HOME: home, NEURALAGENT_RELAY: RELAY });
+const daemonOut = run("neuralagentd", ["serve"], {
+  NEURALAGENT_HOME: home,
+  HOME: join(tmp, "hosthome"),
+  NEURALAGENT_RELAY: RELAY,
+  NEURALAGENT_UPDATE_URL: `http://127.0.0.1:${(updates.address() as any).port}`,
+});
 // The daemon logs to a file in its home; stderr only has what came before logging started.
 daemonLog = () => {
   let f = "";
@@ -297,6 +310,59 @@ await web.req({ m: "term_write", p: { sid: s.id, data: "echo web-$((20+3))\r" } 
 await until(() => webOut.includes("web-23"), "web terminal output");
 ok(true, "browser types into the shell and sees the output");
 detach();
+
+// Workspaces from a remote: browse the host's folders, make one, add it, rename, approve, remove.
+const roots = await web.req({ m: "fs_roots" } as any);
+ok(typeof roots.home === "string" && Array.isArray(roots.projects), "remote gets folder browser start points");
+const made = await web.req({ m: "fs_mkdir", p: { path: "~", name: "from-phone" } } as any).catch((e) => e);
+ok(made.name === "from-phone", "remote makes a folder in the host's home");
+const outside = await web.req({ m: "fs_mkdir", p: { path: "/tmp", name: "nope" } } as any).catch((e) => e);
+ok(outside.code === "forbidden", "remote cannot make folders outside the home folder");
+{
+  const added = await web.req({ m: "workspace_add", p: { path: made.path } } as any);
+  await web.req({ m: "workspace_update", p: { id: added.id, name: "Renamed", approved: false } } as any);
+  await until(() => web.state?.workspaces.find((w) => w.id === added.id && w.name === "Renamed" && !w.approved), "rename and approval reach the state");
+  await web.req({ m: "workspace_remove", p: { id: added.id } } as any);
+  await until(() => !web.state?.workspaces.some((w) => w.id === added.id), "remote removes the workspace");
+  ok(true, "remote renames, un-approves and removes a workspace");
+}
+
+// Host settings from a remote (D42): voice models and updates live in the daemon; the desktop app
+// (here: the `desk` connection) answers what only it can do.
+const hostEvents: any[] = [];
+web.onEvent((ev) => hostEvents.push(ev));
+const models: any[] = await web.req({ m: "host_models" } as any);
+ok(models.length === 4 && models.every((m) => !m.installed && m.size > 0), "remote lists the host's voice models");
+await web.req({ m: "host_model_download", p: { id: "vad" } } as any);
+await until(() => hostEvents.find((e) => e.e === "host_notice" && e.topic === "models"), "download progress reaches the remote");
+const vad = await until(async () => {
+  const l: any[] = await web.req({ m: "host_models" } as any);
+  const m = l.find((x) => x.id === "vad");
+  return m.installed || m.error ? m : undefined;
+}, "model download finished", 90000);
+ok(vad.installed, `remote downloaded a voice model onto the host (${vad.error ?? "ok"})`);
+await web.req({ m: "host_model_delete", p: { id: "vad" } } as any);
+ok(!(await web.req({ m: "host_models" } as any)).find((m: any) => m.id === "vad").installed, "remote deleted it again");
+const upd = await web.req({ m: "host_update_check" } as any);
+ok(upd.available === "9.9.9" && upd.app_running === false, "remote sees 'update available' without the host app open");
+await web.req({ m: "host_ui", p: { op: "update.install" } } as any).then(
+  () => ok(false, "install without the host app"),
+  (e) => ok(/not open/.test(e.message), "installing says the host app must be open"),
+);
+desk.send({ t: "host_ui_register", on: true });
+const installing = web.req({ m: "host_ui", p: { op: "update.install" } } as any);
+const hc = await desk.waitFor((m) => m.t === "host_call" && m.op === "update.install", "host app gets the install call");
+desk.send({ t: "host_ui_reply", call: hc.call, ok: true, r: { started: true } });
+ok((await installing).started === true, "remote's install request is answered by the host app");
+await desk.req("host_notice", { topic: "update", data: { done: 5, total: 10 } });
+await until(() => hostEvents.find((e) => e.e === "host_notice" && e.topic === "update"), "update progress reaches the remote");
+ok(true, "update progress is shown on the remote");
+desk.send({ t: "host_ui_register", on: false });
+ok((await web.req({ m: "host_update_check" } as any)).app_running === false, "host app gone: remote knows");
+await web.req({ m: "host_notice", p: { topic: "x", data: 1 } } as any).then(
+  () => ok(false, "remote may not forge host notices"),
+  (e) => ok(e.code === "forbidden", "only the host app can publish host notices"),
+);
 
 // Web Push: a mock push service stands in for Apple/Google and decrypts like a browser (RFC 8291).
 const pushes: { auth: string; body: Buffer; path: string }[] = [];

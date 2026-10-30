@@ -70,6 +70,7 @@ export function apply(s: State, ev: Event): State {
       return { ...s, swarm_messages: msgs };
     }
     case "attention":
+    case "host_notice":
       return s;
   }
 }

@@ -11,9 +11,12 @@ interface NeuralAgentPlugin {
   setStatus(o: { computer: string; running: number; working: number; waiting: number }): Promise<void>;
   setNames(o: { json: string }): Promise<void>;
   pinWidget(): Promise<{ ok: boolean }>;
-  callActive(o: { on: boolean }): Promise<void>;
+  readClipboardImage(): Promise<{ type?: string; data?: string }>;
+  callActive(o: { on: boolean; route?: string }): Promise<{ output?: string }>;
+  callRoute(o: { route: string }): Promise<{ output: string }>;
   addListener(event: "dial", cb: (o: { start: boolean }) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", cb: (o: { host: string | null; sid: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: "paste", cb: (o: { type: string; data: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "token", cb: (o: { token: string }) => void): Promise<PluginListenerHandle>;
 }
 
@@ -46,3 +49,20 @@ void App.getLaunchUrl().then((l) => {
 });
 
 export const onActive = (cb: (active: boolean) => void) => void App.addListener("appStateChange", (s) => cb(s.isActive));
+
+const toFile = (o: { type?: string; data?: string }): File | null => {
+  if (!o.data || !o.type) return null;
+  const bin = atob(o.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], `clipboard.${o.type.split("/")[1]?.replace("jpeg", "jpg") ?? "png"}`, { type: o.type });
+};
+
+/** The image on the Android clipboard (the WebView cannot read it itself). */
+export const clipboardImage = () => plugin.readClipboardImage().then(toFile);
+
+/** Images the keyboard inserts straight into the page; the composer and the terminal pick them up. */
+void plugin.addListener("paste", (o) => {
+  const f = toFile(o);
+  if (f) window.dispatchEvent(new CustomEvent("na-paste-image", { detail: f }));
+});

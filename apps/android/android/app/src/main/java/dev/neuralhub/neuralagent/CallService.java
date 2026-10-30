@@ -53,7 +53,14 @@ public class CallService extends Service {
                 .build();
         if (Build.VERSION.SDK_INT >= 30) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
         else startForeground(ID, n);
+        CallAudio.start(this, CallAudio.saved(this));
         return START_NOT_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        CallAudio.stop(this);
+        super.onDestroy();
     }
 
     @Override

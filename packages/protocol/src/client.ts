@@ -1,5 +1,5 @@
 import { apply } from "./apply.ts";
-import type { ApiError, AttachResult, CallEvent, ClientInfo, Event, HostInfo, Request, ServerMsg, State } from "./gen/index.ts";
+import type { ApiError, AttachResult, CallEvent, CvAttachResult, CvEvent, ClientInfo, Event, HostInfo, Request, ServerMsg, State } from "./gen/index.ts";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -30,6 +30,13 @@ export interface TermSink {
   data(bytes: Uint8Array): void;
 }
 
+/** A view of a Claude session's conversation. */
+export interface CvSink {
+  /** The conversation (attach, reconnect, or the transcript changed). */
+  reset(res: CvAttachResult): void;
+  event(ev: CvEvent): void;
+}
+
 interface Attached {
   sinks: Set<TermSink>;
   seq: number;
@@ -53,9 +60,16 @@ export class DaemonClient {
   private listeners = new Set<Listener>();
   private eventListeners = new Set<(ev: Event) => void>();
   private callListeners = new Set<(ev: CallEvent) => void>();
+  /** The desktop app answers `host_call`s from the daemon (remote clients asking the host's app). */
+  private hostUi: ((op: string, args: unknown) => Promise<unknown>) | null = null;
+  /** Fired each time the connection (re)opens and the daemon says hello: its version and host. */
+  private helloListeners = new Set<(daemonVersion: string) => void>();
+  /** Version of the daemon we are talking to. */
+  daemonVersion = "";
   /** A call is on: started again after a reconnect (the conversation lives in the daemon). */
   private calling = false;
   private terms = new Map<string, Attached>();
+  private cvs = new Map<string, { sinks: Set<CvSink>; gen: number }>();
   private retry = 0;
   private closed = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -81,6 +95,17 @@ export class DaemonClient {
   onCall(l: (ev: CallEvent) => void) {
     this.callListeners.add(l);
     return () => this.callListeners.delete(l);
+  }
+
+  onHello(l: (daemonVersion: string) => void) {
+    this.helloListeners.add(l);
+    return () => void this.helloListeners.delete(l);
+  }
+
+  /** Desktop app: act as the host's UI for remote clients (see `Request` `host_ui`). */
+  serveHost(handler: ((op: string, args: unknown) => Promise<unknown>) | null) {
+    this.hostUi = handler;
+    this.t?.send(JSON.stringify({ t: "host_ui_register", on: !!handler }));
   }
 
   // ── calls with Neural: microphone audio in, speech out (PCM16 base64) ──
@@ -144,7 +169,10 @@ export class DaemonClient {
         if (m.t !== "hello_ok") return;
         helloDone = true;
         this.host = m.host;
+        this.daemonVersion = m.daemon_version;
         this.retry = 0;
+        if (this.hostUi) t.send(JSON.stringify({ t: "host_ui_register", on: true }));
+        for (const l of this.helloListeners) l(m.daemon_version);
         // Resume where we were; the daemon answers with replayed events or a snapshot.
         t.send(JSON.stringify(this.state ? { t: "sub", since: this.seq } : { t: "sub" }));
         if (this.calling) t.send(JSON.stringify({ t: "call_start" }));
@@ -221,9 +249,24 @@ export class DaemonClient {
         for (const s of a.sinks) s.reset(m.snapshot, m.cols, m.rows);
         break;
       }
+      case "cv": {
+        const a = this.cvs.get(m.sid);
+        if (!a) return;
+        for (const s of a.sinks) s.event(m.ev);
+        break;
+      }
       case "call":
         for (const l of this.callListeners) l(m.ev);
         break;
+      case "host_call": {
+        const reply = (body: object) => this.t?.send(JSON.stringify({ t: "host_ui_reply", call: m.call, ...body }));
+        if (!this.hostUi) return reply({ ok: false, error: "no host UI" });
+        this.hostUi(m.op, m.args).then(
+          (r) => reply({ ok: true, r: r ?? null }),
+          (e) => reply({ ok: false, error: String(e instanceof Error ? e.message : e) }),
+        );
+        break;
+      }
       case "hello_ok":
         break;
     }
@@ -270,6 +313,40 @@ export class DaemonClient {
 
   private reattachAll() {
     for (const sid of this.terms.keys()) void this.doAttach(sid);
+    for (const sid of this.cvs.keys()) void this.doAttachCv(sid);
+  }
+
+  /** Streams a Claude session's conversation into `sink` until the returned function is called. */
+  attachCv(sid: string, sink: CvSink): () => void {
+    let a = this.cvs.get(sid);
+    if (!a) {
+      a = { sinks: new Set(), gen: 0 };
+      this.cvs.set(sid, a);
+    }
+    a.sinks.add(sink);
+    void this.doAttachCv(sid, sink);
+    return () => {
+      const cur = this.cvs.get(sid);
+      if (!cur) return;
+      cur.sinks.delete(sink);
+      if (cur.sinks.size === 0) {
+        this.cvs.delete(sid);
+        this.req({ m: "cv_detach", p: { sid } }).catch(() => {});
+      }
+    };
+  }
+
+  private async doAttachCv(sid: string, only?: CvSink) {
+    const a = this.cvs.get(sid);
+    if (!a) return;
+    const gen = ++a.gen;
+    try {
+      const r = await this.req<CvAttachResult>({ m: "cv_attach", p: { sid } });
+      if (this.cvs.get(sid) !== a || a.gen !== gen) return;
+      for (const s of only && a.sinks.has(only) ? [only] : a.sinks) s.reset(r);
+    } catch {
+      // retried on the next reconnect
+    }
   }
 
   private async doAttach(sid: string) {

@@ -77,8 +77,8 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, label, f
         <motion.div className="absolute top-1/2" style={{ left }}>
           <motion.span
             className="thumb absolute block h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgb(0_0_0/.4),0_0_0_.5px_rgb(0_0_0/.15)]"
-            animate={{ scale: drag ? 1.18 : 1 }}
-            transition={SPRING.toggle}
+            animate={{ scale: drag ? 1.5 : 1, backgroundColor: drag ? 'rgb(255 255 255 / 0.78)' : 'rgb(255 255 255 / 1)', boxShadow: drag ? '0 2px 10px rgb(0 0 0 / .35), inset 0 0 0 1px rgb(255 255 255 / .6)' : '0 1px 4px rgb(0 0 0 / .4), 0 0 0 .5px rgb(0 0 0 / .15)' }}
+            transition={SPRING.goo}
           />
           {bubble && (
             <motion.span

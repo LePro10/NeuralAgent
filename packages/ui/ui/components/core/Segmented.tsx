@@ -37,8 +37,8 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
             {active && (
               <motion.span
                 layoutId={`seg-${id}`}
-                className="absolute inset-0 -z-10 rounded-full bg-white/[.12] shadow-raise"
-                transition={SPRING.snap}
+                className="absolute inset-0 -z-10 rounded-full bg-white/[.14] shadow-[var(--shadow-raise),inset_0_var(--hair)_0_rgb(255_255_255/.2),0_0_14px_-4px_color-mix(in_oklab,var(--color-accent)_55%,transparent)]"
+                transition={SPRING.goo}
               />
             )}
             {o.Icon && <o.Icon size={sm ? 12 : 13} strokeWidth={1.75} />}
