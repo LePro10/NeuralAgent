@@ -114,9 +114,9 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
   const fade = 'whitespace-nowrap transition-opacity duration-200';
   const show = { opacity: open ? 1 : 0, transitionDelay: open ? '60ms' : '0ms' };
   return (
-    // The island always spans the full height, collapsed or open, so that peeking only widens it:
-    // an icon never moves away from under the pointer (a centred rail that grew up and down made
-    // a click after the peek delay land on a different item).
+    // Collapsed, the island hugs its icons and floats at the middle of the edge; opened it grows
+    // up and down to the full height (both ways at once, from the centre). Owner's choice: keep
+    // this even though icons shift a little while it grows.
     <div ref={frame} className={cn('pointer-events-none absolute inset-y-0 left-0 z-[var(--z-sidebar)] flex items-center', className)} style={{ padding: INSET }}>
       <motion.nav
         aria-label="Main"
@@ -131,7 +131,7 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, foote
         className={cn('glass rim pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
           !open && '!border-[rgb(var(--fg-rgb)/.05)] !bg-[color-mix(in_srgb,var(--color-chrome)_24%,transparent)]')}
         initial={false}
-        animate={{ width: open ? OPEN : RAIL, height: full || 'auto' }}
+        animate={{ width: open ? OPEN : RAIL, height: open && full ? full : 'auto' }}
         // A peeking island floats over the page; a pinned one sits in its place.
         style={{ boxShadow: peek && !pinned ? 'var(--shadow-dialog), inset 0 1px 0 var(--glass-hi)' : open ? undefined : 'inset 0 1px 0 rgb(255 255 255 / .04)' }}
         transition={SPRING.sheet}

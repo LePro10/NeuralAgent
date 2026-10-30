@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Improved
+- The desktop sidebar is short again when closed and grows to full height when you point at it.
+
 ## [0.3.0] - 2026-10-30
 
 The phone round: NeuralAgent now feels made for phones, on the desktop too.
