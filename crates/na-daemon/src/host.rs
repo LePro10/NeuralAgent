@@ -150,7 +150,13 @@ impl Core {
             return Err(err(ErrorCode::Conflict, "A call is running"));
         }
         let p = self.paths.root.join("models").join(spec.folder);
-        let r = if p.is_dir() { std::fs::remove_dir_all(&p) } else if p.exists() { std::fs::remove_file(&p) } else { Ok(()) };
+        let r = if p.is_dir() {
+            std::fs::remove_dir_all(&p)
+        } else if p.exists() {
+            std::fs::remove_file(&p)
+        } else {
+            Ok(())
+        };
         r.map_err(|e| err(ErrorCode::Internal, format!("could not delete: {e}")))?;
         self.host_ctl.models.lock().remove(id);
         self.call_reload();
@@ -170,7 +176,8 @@ impl Core {
         } else {
             service.clone()
         };
-        let base = std::env::var("NEURALAGENT_UPDATE_URL").ok().filter(|u| !u.is_empty()).unwrap_or_else(|| "https://agent.neuralhub.dev".into());
+        let base =
+            std::env::var("NEURALAGENT_UPDATE_URL").ok().filter(|u| !u.is_empty()).unwrap_or_else(|| "https://agent.neuralhub.dev".into());
         let target = match std::env::consts::OS {
             "macos" => "darwin",
             o => o,

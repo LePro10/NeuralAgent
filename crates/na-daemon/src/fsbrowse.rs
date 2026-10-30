@@ -44,7 +44,9 @@ pub fn list(home: &Path, client: &ClientInfo, path: &str) -> Result<Value, ApiEr
         })
         .collect();
     entries.sort_by(|a, b| b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
-    Ok(json!({ "path": dir.to_string_lossy(), "git": dir.join(".git").exists(), "parent": dir.parent().map(|p| p.to_string_lossy().into_owned()), "entries": entries }))
+    Ok(
+        json!({ "path": dir.to_string_lossy(), "git": dir.join(".git").exists(), "parent": dir.parent().map(|p| p.to_string_lossy().into_owned()), "entries": entries }),
+    )
 }
 
 /// Where to start: the home folder and the places projects usually live.

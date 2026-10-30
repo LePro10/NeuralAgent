@@ -113,11 +113,21 @@ pub struct CvPrompt {
 #[ts(export)]
 pub enum CvEvent {
     /// New or changed message (same `id` replaces).
-    Upsert { message: CvMessage },
+    Upsert {
+        message: CvMessage,
+    },
     /// The transcript changed (`/clear`, `/resume`): start over with these.
-    Reset { messages: Vec<CvMessage>, more: bool, meta: CvMeta },
-    Meta { meta: CvMeta },
-    Prompt { prompt: Option<CvPrompt> },
+    Reset {
+        messages: Vec<CvMessage>,
+        more: bool,
+        meta: CvMeta,
+    },
+    Meta {
+        meta: CvMeta,
+    },
+    Prompt {
+        prompt: Option<CvPrompt>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

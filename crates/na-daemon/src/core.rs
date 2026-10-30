@@ -435,7 +435,9 @@ impl Core {
             | Request::CvFiles { .. }
             | Request::Upload { .. }
             | Request::Transcribe { .. }) => self.cv_handle(r).await.unwrap_or(Ok(Value::Null)),
-            Request::CvAttach { .. } | Request::CvDetach { .. } | Request::TermAttach { .. } | Request::TermDetach { .. } => Err(err(ErrorCode::BadRequest, "connection-scoped")),
+            Request::CvAttach { .. } | Request::CvDetach { .. } | Request::TermAttach { .. } | Request::TermDetach { .. } => {
+                Err(err(ErrorCode::BadRequest, "connection-scoped"))
+            }
             Request::ProfileSave { mut profile } => {
                 if profile.builtin || self.read(|s| s.profiles.iter().any(|p| p.id == profile.id && p.builtin)) {
                     return Err(err(ErrorCode::Forbidden, "built-in profiles cannot be changed; duplicate it"));

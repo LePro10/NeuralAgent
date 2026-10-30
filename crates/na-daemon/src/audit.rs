@@ -93,8 +93,20 @@ impl Audit {
 }
 
 /// Requests that only read, or are too frequent to matter.
-const SKIP: &[&str] =
-    &["fs_list", "fs_roots", "git_changes", "git_diff", "usage_report", "history_search", "term_resize", "catalog_refresh", "audit_list", "host_models", "host_update_check", "host_notice"];
+const SKIP: &[&str] = &[
+    "fs_list",
+    "fs_roots",
+    "git_changes",
+    "git_diff",
+    "usage_report",
+    "history_search",
+    "term_resize",
+    "catalog_refresh",
+    "audit_list",
+    "host_models",
+    "host_update_check",
+    "host_notice",
+];
 
 /// "Japan Map — Claude" for a session, the workspace name, or a path.
 fn describe(state: &State, p: &Value) -> Option<String> {

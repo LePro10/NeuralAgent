@@ -170,8 +170,14 @@ export function Showcase() {
     const id = setTimeout(() => setGo(true), 60);
     return () => clearTimeout(id);
   }, [tab]);
+  const first = useRef(true);
   useEffect(() => {
-    list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ inline: "center", block: "nearest", behavior: reduced() ? "auto" : "smooth" });
+    // Centre the active tab inside its own strip. Never scrollIntoView: it also scrolls the page.
+    if (first.current) return void (first.current = false);
+    const box = list.current;
+    const el = box?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!box || !el) return;
+    box.scrollTo({ left: el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2, behavior: reduced() ? "auto" : "smooth" });
   }, [tab]);
   const key = (e: KeyboardEvent) => {
     const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -179,7 +185,7 @@ export function Showcase() {
     e.preventDefault();
     const n = (tab + d + TABS.length) % TABS.length;
     setTab(n);
-    list.current?.querySelectorAll<HTMLElement>('[role="tab"]')[n]?.focus();
+    list.current?.querySelectorAll<HTMLElement>('[role="tab"]')[n]?.focus({ preventScroll: true });
   };
   const t = TABS[tab]!;
   return (

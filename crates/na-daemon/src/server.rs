@@ -120,7 +120,16 @@ pub async fn run_client(
     out: mpsc::Sender<ServerMsg>,
     stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
 ) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), cv: Arc::new(Mutex::new(HashMap::new())), call: None, id: next_conn_id() };
+    let mut conn = Conn {
+        core,
+        client,
+        out,
+        state_task: None,
+        attached: Arc::new(Mutex::new(HashMap::new())),
+        cv: Arc::new(Mutex::new(HashMap::new())),
+        call: None,
+        id: next_conn_id(),
+    };
     while let Some(msg) = next_msg(stream).await {
         conn.on_msg(msg).await;
     }
@@ -129,7 +138,16 @@ pub async fn run_client(
 
 /// The same loop for clients that arrive over another channel (remote devices via the relay).
 pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, rx: &mut mpsc::Receiver<ClientMsg>) {
-    let mut conn = Conn { core, client, out, state_task: None, attached: Arc::new(Mutex::new(HashMap::new())), cv: Arc::new(Mutex::new(HashMap::new())), call: None, id: next_conn_id() };
+    let mut conn = Conn {
+        core,
+        client,
+        out,
+        state_task: None,
+        attached: Arc::new(Mutex::new(HashMap::new())),
+        cv: Arc::new(Mutex::new(HashMap::new())),
+        call: None,
+        id: next_conn_id(),
+    };
     while let Some(msg) = rx.recv().await {
         conn.on_msg(msg).await;
     }

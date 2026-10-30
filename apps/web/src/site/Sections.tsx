@@ -17,7 +17,7 @@ export function DemoSection() {
           <h2 className="s-h2">Try it. Right here.</h2>
           <p className="s-lead">A small NeuralAgent running in your browser. Approve what the agents ask, call Neural, check your phone. Nothing leaves this page.</p>
         </div>
-        <div ref={ref} data-reveal style={{ minHeight: 560 }}>
+        <div ref={ref} data-reveal style={{ minHeight: 640 }}>
           {seen ? <Suspense fallback={<div className="s-win" style={{ minHeight: 540 }} />}><Demo /></Suspense> : null}
         </div>
       </div>

@@ -20,4 +20,4 @@
 ## Not done / notes
 - No real app screenshots (design in flux); the demo is a simulation.
 - Lighthouse not run (no tool available offline); structure is static, lazy demo, no web fonts beyond the existing two.
-- Reference site bridgemind.ai was behind a Cloudflare check, so no screenshot; structure follows the brief.
+- The reference site from the brief was behind a Cloudflare check, so no screenshot; structure follows the brief.

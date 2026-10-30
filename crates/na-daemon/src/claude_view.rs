@@ -165,7 +165,8 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                     ("notice", text.to_string())
                 }
                 "local_command" => {
-                    let out = strip_ansi(between(text, "<local-command-stdout>", "</local-command-stdout>").unwrap_or(text)).trim().to_string();
+                    let out =
+                        strip_ansi(between(text, "<local-command-stdout>", "</local-command-stdout>").unwrap_or(text)).trim().to_string();
                     if out.is_empty() {
                         return p;
                     }
@@ -272,7 +273,9 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                                 return p;
                             }
                         }
-                        Some("image") => blocks.push(CvBlock::Image { media_type: b["source"]["media_type"].as_str().unwrap_or("image").to_string() }),
+                        Some("image") => {
+                            blocks.push(CvBlock::Image { media_type: b["source"]["media_type"].as_str().unwrap_or("image").to_string() })
+                        }
                         Some("tool_result") => {
                             let text = tool_result_text(&b["content"]);
                             let stopped = text.starts_with("[Tool call interrupted") || text.starts_with("[Request interrupted");
@@ -459,7 +462,8 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
     let mut start = end;
     while start > from {
         let prev = lines[start - 1];
-        if menu_line(prev).is_some() || (start >= 2 && menu_line(lines[start - 2]).is_some() && !is_border(prev) && prev.starts_with("   ")) {
+        if menu_line(prev).is_some() || (start >= 2 && menu_line(lines[start - 2]).is_some() && !is_border(prev) && prev.starts_with("   "))
+        {
             start -= 1;
         } else {
             break;
@@ -650,7 +654,13 @@ fn list_files(root: &Path) -> Vec<String> {
         && out.status.success()
         && !out.stdout.is_empty()
     {
-        return out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).take(60_000).map(|s| String::from_utf8_lossy(s).into_owned()).collect();
+        return out
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|s| !s.is_empty())
+            .take(60_000)
+            .map(|s| String::from_utf8_lossy(s).into_owned())
+            .collect();
     }
     let mut out = vec![];
     let mut stack = vec![(root.to_path_buf(), 0usize)];
@@ -706,7 +716,8 @@ pub fn match_files(files: &[String], query: &str, limit: usize) -> Vec<String> {
 
 fn safe_name(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("file");
-    let cleaned: String = base.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' }).collect();
+    let cleaned: String =
+        base.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' }).collect();
     let cleaned = cleaned.trim_start_matches('.');
     let cleaned: String = cleaned.chars().take(80).collect();
     if cleaned.is_empty() { "file".into() } else { cleaned }
@@ -877,7 +888,8 @@ impl Core {
     }
 
     pub fn cv_commands(&self, sid: &Id) -> Vec<CvCommand> {
-        let mut out: Vec<CvCommand> = BUILTIN.iter().map(|(n, d)| CvCommand { name: (*n).into(), description: (*d).into(), source: "builtin".into() }).collect();
+        let mut out: Vec<CvCommand> =
+            BUILTIN.iter().map(|(n, d)| CvCommand { name: (*n).into(), description: (*d).into(), source: "builtin".into() }).collect();
         let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())).unwrap_or_default();
         if let Some(c) = claude_dir() {
             collect_commands(&c.join("commands"), "", "user", &mut out, 0);
@@ -892,7 +904,11 @@ impl Core {
             let have: HashSet<String> = out.iter().map(|c| c.name.clone()).collect();
             for (n, d) in t.st.lock().skills.iter() {
                 if !have.contains(n) {
-                    out.push(CvCommand { name: n.clone(), description: d.chars().take(160).collect(), source: if n.contains(':') { "plugin" } else { "skill" }.into() });
+                    out.push(CvCommand {
+                        name: n.clone(),
+                        description: d.chars().take(160).collect(),
+                        source: if n.contains(':') { "plugin" } else { "skill" }.into(),
+                    });
                 }
             }
         }
@@ -919,9 +935,8 @@ impl Core {
         if audio.len() > 16_000 * 2 * 120 * 4 / 3 + 16 {
             return Err(err(ErrorCode::BadRequest, "recording is longer than two minutes"));
         }
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(audio.trim())
-            .map_err(|_| err(ErrorCode::BadRequest, "not valid base64"))?;
+        let bytes =
+            base64::engine::general_purpose::STANDARD.decode(audio.trim()).map_err(|_| err(ErrorCode::BadRequest, "not valid base64"))?;
         if bytes.len() > 16_000 * 2 * 120 {
             return Err(err(ErrorCode::BadRequest, "recording is longer than two minutes"));
         }
@@ -939,7 +954,10 @@ impl Core {
                 None => {
                     let dir = self.paths.root.join("models").join(na_voice::models::PARAKEET);
                     if !dir.exists() {
-                        return Err(err(ErrorCode::NotFound, "Speech to text needs the voice models: download them in Settings → Voice on the computer."));
+                        return Err(err(
+                            ErrorCode::NotFound,
+                            "Speech to text needs the voice models: download them in Settings → Voice on the computer.",
+                        ));
                     }
                     let threads = std::thread::available_parallelism().map(|n| n.get().clamp(2, 4) as i32).unwrap_or(2);
                     let s = Arc::new(
@@ -971,11 +989,15 @@ impl Core {
             }
             Request::CvCommands { sid } => {
                 let core = self.clone();
-                tokio::task::spawn_blocking(move || json!(core.cv_commands(&sid))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))
+                tokio::task::spawn_blocking(move || json!(core.cv_commands(&sid)))
+                    .await
+                    .map_err(|e| err(ErrorCode::Internal, e.to_string()))
             }
             Request::CvFiles { sid, query } => {
                 let core = self.clone();
-                tokio::task::spawn_blocking(move || json!(core.cv_files(&sid, &query))).await.map_err(|e| err(ErrorCode::Internal, e.to_string()))
+                tokio::task::spawn_blocking(move || json!(core.cv_files(&sid, &query)))
+                    .await
+                    .map_err(|e| err(ErrorCode::Internal, e.to_string()))
             }
             Request::Upload { sid, name, data } => {
                 let core = self.clone();
@@ -1003,7 +1025,12 @@ fn prune_uploads(root: &Path) {
         let Ok(files) = std::fs::read_dir(d.path()) else { continue };
         let mut empty = true;
         for f in files.flatten() {
-            let old = f.metadata().and_then(|m| m.modified()).ok().and_then(|t| SystemTime::now().duration_since(t).ok()).is_some_and(|age| age > UPLOAD_TTL);
+            let old = f
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| SystemTime::now().duration_since(t).ok())
+                .is_some_and(|age| age > UPLOAD_TTL);
             if old {
                 let _ = std::fs::remove_file(f.path());
             } else {
@@ -1016,31 +1043,29 @@ fn prune_uploads(root: &Path) {
     }
 }
 
-
 /// Validates and writes one uploaded file under `<root>/uploads/<session>/`.
 fn store_upload(root_dir: &std::path::Path, sid: &str, name: &str, data: &str) -> Result<UploadResult, na_protocol::ApiError> {
-        let name = safe_name(name);
-        let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-        if !UPLOAD_EXT.contains(&ext.as_str()) {
-            return Err(err(ErrorCode::BadRequest, "only images (and PDF or text files) can be added"));
-        }
-        if data.len() > MAX_UPLOAD * 4 / 3 + 16 {
-            return Err(err(ErrorCode::BadRequest, "file is larger than 12 MB"));
-        }
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(data.trim())
-            .map_err(|_| err(ErrorCode::BadRequest, "not valid base64"))?;
-        if bytes.is_empty() || bytes.len() > MAX_UPLOAD {
-            return Err(err(ErrorCode::BadRequest, "file is empty or larger than 12 MB"));
-        }
-        let root = root_dir.join("uploads");
-        let dir = root.join(safe_name(sid));
-        std::fs::create_dir_all(&dir).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
-        prune_uploads(&root);
-        let stamp = crate::core::now_ms();
-        let path = dir.join(format!("{stamp}-{name}"));
-        crate::paths::write_private(&path, &bytes).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
-        Ok(UploadResult { path: path.to_string_lossy().into_owned() })
+    let name = safe_name(name);
+    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
+    if !UPLOAD_EXT.contains(&ext.as_str()) {
+        return Err(err(ErrorCode::BadRequest, "only images (and PDF or text files) can be added"));
+    }
+    if data.len() > MAX_UPLOAD * 4 / 3 + 16 {
+        return Err(err(ErrorCode::BadRequest, "file is larger than 12 MB"));
+    }
+    let bytes =
+        base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| err(ErrorCode::BadRequest, "not valid base64"))?;
+    if bytes.is_empty() || bytes.len() > MAX_UPLOAD {
+        return Err(err(ErrorCode::BadRequest, "file is empty or larger than 12 MB"));
+    }
+    let root = root_dir.join("uploads");
+    let dir = root.join(safe_name(sid));
+    std::fs::create_dir_all(&dir).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+    prune_uploads(&root);
+    let stamp = crate::core::now_ms();
+    let path = dir.join(format!("{stamp}-{name}"));
+    crate::paths::write_private(&path, &bytes).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+    Ok(UploadResult { path: path.to_string_lossy().into_owned() })
 }
 
 #[cfg(test)]
@@ -1072,7 +1097,9 @@ mod tests {
         assert_eq!(st.msgs.len(), 4);
         assert_eq!(st.msgs[1].blocks.len(), 2);
         assert!(matches!(&st.msgs[1].blocks[1], CvBlock::ToolUse { name, .. } if name == "Bash"));
-        assert!(matches!(&st.msgs[2].blocks[0], CvBlock::ToolResult { tool_use_id, text, .. } if tool_use_id == "toolu_1" && text.starts_with("a.txt")));
+        assert!(
+            matches!(&st.msgs[2].blocks[0], CvBlock::ToolResult { tool_use_id, text, .. } if tool_use_id == "toolu_1" && text.starts_with("a.txt"))
+        );
         assert_eq!(st.meta.model.as_deref(), Some("claude-haiku-5-5"));
         assert_eq!(st.meta.context_tokens, Some(123));
         // the merged assistant message is announced twice (once per block), the second with both blocks
@@ -1153,7 +1180,8 @@ mod tests {
 
     #[test]
     fn file_matching_prefers_names() {
-        let files: Vec<String> = ["src/main.rs", "docs/README.md", "src/readme_helper.rs", "a/b/c/main_test.rs"].iter().map(|s| s.to_string()).collect();
+        let files: Vec<String> =
+            ["src/main.rs", "docs/README.md", "src/readme_helper.rs", "a/b/c/main_test.rs"].iter().map(|s| s.to_string()).collect();
         let m = match_files(&files, "readme", 5);
         assert_eq!(m[0], "docs/README.md");
         assert_eq!(match_files(&files, "mnrs", 5)[0], "src/main.rs");

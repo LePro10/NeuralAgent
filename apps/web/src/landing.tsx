@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Hero } from "./site/Hero";
 import { startScroll } from "./site/hooks";
-import { Nav } from "./site/Nav";
+import { Nav, goTo } from "./site/Nav";
 import { DemoSection, Faq, Final, Numbers, Platforms, Security, SiteFooter } from "./site/Sections";
 import { Showcase } from "./site/Showcase";
 import { Story } from "./site/Story";
@@ -67,4 +67,22 @@ createRoot(document.getElementById("root")!).render(
     <Landing />
   </StrictMode>,
 );
+// A fresh load starts at the top; reload and back/forward keep the browser's own restore.
+const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+if (nav?.type !== "back_forward") {
+  history.scrollRestoration = "manual";
+  history.replaceState(null, "", location.pathname + location.search);
+  scrollTo(0, 0);
+} else history.scrollRestoration = "auto";
 startScroll();
+
+// Every other in-page link (hero, footer) lands the same way.
+addEventListener("click", (e) => {
+  if (e.defaultPrevented) return;
+  const a = (e.target as HTMLElement).closest?.<HTMLAnchorElement>('a[href^="#"]');
+  const id = a?.getAttribute("href")?.slice(1);
+  if (id && document.getElementById(id)) {
+    e.preventDefault();
+    goTo(id);
+  }
+});
