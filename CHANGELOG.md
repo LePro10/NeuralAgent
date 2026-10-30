@@ -13,6 +13,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ### New
 - Interface size on the desktop: make text and controls bigger or smaller in Settings → Appearance (80% to 150%), or with ⌘+ and ⌘− (Ctrl on Windows and Linux), ⌘0 for 100%, ⌘ with the scroll wheel, or a pinch. The app remembers the size and opens with it.
+- The Claude view shows the pictures Claude looks at: when it reads an image or a tool takes a screenshot, you see the picture right under the step instead of "[image]", and images you pasted show above your message. Tap one to see it full screen, zoom in (pinch, double tap or scroll wheel), copy or save it; swipe down or press Esc to close. On your phone the pictures load only when you scroll to them and come in a smaller size, so long conversations stay quick.
 
 ### Improved
 - Opening the app is one calm motion on the Mac, in the browser and on Android: the NeuralAgent mark appears in your light or dark look right away, lights up once and fades into the app. No more black or white flashes, spinners or "not connected" screens in between; only if your computer really does not answer after a few seconds does it say so, with Try again.

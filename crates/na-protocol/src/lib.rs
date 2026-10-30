@@ -1068,6 +1068,15 @@ pub enum Request {
         #[ts(type = "number")]
         before: u64,
     },
+    /// The bytes of an image in the transcript (`CvImage.id`) → `CvImageData`. `max`: longest
+    /// edge wanted (remote clients ask for less); big pictures are scaled down and re-encoded.
+    CvImage {
+        sid: Id,
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        max: Option<u32>,
+    },
     /// Slash commands the session can run now (built-ins, custom commands, skills) → `Vec<CvCommand>`.
     CvCommands {
         sid: Id,

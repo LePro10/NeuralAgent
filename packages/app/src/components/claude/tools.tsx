@@ -7,6 +7,8 @@ import type { CvBlock } from "@neuralagent/protocol";
 import { cn } from "@neuralagent/ui";
 import { Check, ChevronRight, Circle, LoaderCircle } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { sourceOf, withoutSources } from "../../lib/cvImages";
+import { Pictures, type Pic } from "./Images";
 import { CodeBlock, CopyButton, Markdown } from "./Markdown";
 
 export type Use = Extract<CvBlock, { k: "tool_use" }>;
@@ -223,11 +225,24 @@ function Todos({ todos }: { todos: Todo[] }) {
   );
 }
 
+/** The pictures a call returned, named by the file it read or the source the tool gave. */
+export function picsOf(use: Use, res?: Res): Pic[] {
+  const images = res?.images ?? [];
+  if (!images.length) return [];
+  const input = inputOf(use);
+  const caption = use.name === "Read" ? str(input.file_path) : (sourceOf(res!.text) ?? undefined);
+  return images.map((img) => ({ img, caption }));
+}
+
+/** The result text to show: without the "[Image: source: …]" lines when the picture is shown. */
+const resultText = (res: Res) => (res.images?.length ? withoutSources(res.text) : res.text);
+
 /** What a call shows when opened. */
 function Body({ use, res }: { use: Use; res?: Res }) {
   const rel = useRel();
   const input = inputOf(use);
-  const result = res ? <Output text={res.text} error={res.is_error} /> : null;
+  const text = res ? resultText(res) : "";
+  const result = res && (text || !res.images?.length) ? <Output text={text} error={res.is_error} /> : null;
   const rows = changeRows(use);
   if (rows) {
     return (
@@ -257,7 +272,7 @@ function Body({ use, res }: { use: Use; res?: Res }) {
     case "WebSearch":
     case "WebFetch":
     case "ToolSearch":
-      return result ?? <Output text="Waiting for the result…" />;
+      return result ?? (res ? null : <Output text="Waiting for the result…" />);
     default:
       return (
         <>
@@ -316,6 +331,9 @@ export function ToolCall({ use, res, running, nested }: { use: Use; res?: Res; r
   const pending = !res && running;
   const issue = problem(res);
   const text = rowText(use);
+  const pics = picsOf(use, res);
+  // A read that only returned a picture has nothing more to open: the picture is shown.
+  const bare = pics.length > 0 && !resultText(res!) && isExplore(use.name);
 
   if (use.name === "ExitPlanMode") {
     return (
@@ -332,9 +350,9 @@ export function ToolCall({ use, res, running, nested }: { use: Use; res?: Res; r
       <div className="-mx-2">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="group flex min-h-9 w-full min-w-0 items-center gap-2 rounded-cv-sm px-2 py-1 text-left text-cv-ui transition-colors hover:bg-cv-hover [[data-mode=phone]_&]:min-h-11"
+        onClick={() => !bare && setOpen(!open)}
+        aria-expanded={bare ? undefined : open}
+        className={cn("group flex min-h-9 w-full min-w-0 items-center gap-2 rounded-cv-sm px-2 py-1 text-left text-cv-ui transition-colors [[data-mode=phone]_&]:min-h-11", bare ? "cursor-default" : "hover:bg-cv-hover")}
       >
         {pending && <LoaderCircle size={14} className="shrink-0 animate-spin text-cv-clay [animation-duration:1.2s]" />}
         {issue?.error && <span className="size-1.5 shrink-0 rounded-full bg-cv-danger" />}
@@ -354,9 +372,10 @@ export function ToolCall({ use, res, running, nested }: { use: Use; res?: Res; r
           )}
           {rows && !issue && <DiffStat rows={rows} />}
         </span>
-        <Chevron open={open} />
+        {!bare && <Chevron open={open} />}
       </button>
       </div>
+      {pics.length > 0 && <Pictures pics={pics} size="lg" className="mt-1 mb-2" />}
       {issue && !open && <div className={cn("ml-0.5 flex gap-1.5 pt-0.5 text-cv-meta", issue.error ? "text-cv-danger" : "text-cv-muted")}><span className="select-none">└</span><span className="min-w-0 [overflow-wrap:anywhere]">{issue.text}</span></div>}
       <Fold open={open}>
         <Body use={use} res={res} />
@@ -413,6 +432,7 @@ export function ToolGroup({ uses, results, running }: { uses: Use[]; results: Ma
   const [open, setOpen] = useState(false);
   const pending = uses.some((u) => u.id === running && !results.has(u.id));
   const failed = uses.filter((u) => results.get(u.id)?.is_error).length;
+  const pics = uses.flatMap((u) => picsOf(u, results.get(u.id)));
   return (
     <div className="my-1.5 font-cv-sans">
       <div className="-mx-2">
@@ -428,6 +448,7 @@ export function ToolGroup({ uses, results, running }: { uses: Use[]; results: Ma
         <Chevron open={open} />
       </button>
       </div>
+      {!open && pics.length > 0 && <Pictures pics={pics} size="sm" className="mt-1 mb-1" />}
       <Fold open={open}>
         <div className="ml-1 border-l border-cv-line pl-3.5">
           {uses.map((u) => (

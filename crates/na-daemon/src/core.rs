@@ -431,6 +431,7 @@ impl Core {
             }
             // attach/detach are connection-scoped and handled in `server`
             r @ (Request::CvHistory { .. }
+            | Request::CvImage { .. }
             | Request::CvCommands { .. }
             | Request::CvFiles { .. }
             | Request::Upload { .. }

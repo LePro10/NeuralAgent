@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
 use crate::core::{Core, err};
+use crate::cv_image;
 
 /// How much of the end of a big transcript is read at first.
 const INITIAL_BYTES: u64 = 3 << 20;
@@ -160,22 +161,32 @@ fn between<'a>(s: &'a str, open: &str, close: &str) -> Option<&'a str> {
     Some(&s[a..b])
 }
 
-fn tool_result_text(c: &Value) -> String {
+/// A tool result's text and its images (by reference, see `cv_image`). `images`: the line's
+/// image blocks (`cv_image::images_in`), `off`: the line's position.
+fn tool_result_content(c: &Value, images: &[&Value], off: u64) -> (String, Vec<CvImage>) {
     match c {
-        Value::String(s) => clip(s, MAX_TEXT),
-        Value::Array(a) => clip(
-            &a.iter()
+        Value::String(s) => (clip(s, MAX_TEXT), vec![]),
+        Value::Array(a) => {
+            let mut refs = vec![];
+            let text = a
+                .iter()
                 .map(|b| match b["type"].as_str() {
                     Some("text") => b["text"].as_str().unwrap_or("").to_string(),
-                    Some("image") => "[image]".to_string(),
+                    Some("image") => match cv_image::index_of(images, b).and_then(|n| cv_image::image_ref(b, off, n)) {
+                        Some(r) => {
+                            refs.push(r);
+                            String::new()
+                        }
+                        None => "[image]".to_string(),
+                    },
                     _ => String::new(),
                 })
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
-                .join("\n"),
-            MAX_TEXT,
-        ),
-        _ => String::new(),
+                .join("\n");
+            (clip(&text, MAX_TEXT), refs)
+        }
+        _ => (String::new(), vec![]),
     }
 }
 
@@ -299,6 +310,7 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                     p.msg = Some(mk(None, vec![CvBlock::Text { text: s.to_string() }]));
                 }
             } else if let Some(a) = c.as_array() {
+                let images = cv_image::images_in(c);
                 let mut blocks = vec![];
                 for b in a {
                     match b["type"].as_str() {
@@ -319,16 +331,18 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                                 return p;
                             }
                         }
-                        Some("image") => {
-                            blocks.push(CvBlock::Image { media_type: b["source"]["media_type"].as_str().unwrap_or("image").to_string() })
-                        }
+                        Some("image") => blocks.push(CvBlock::Image {
+                            media_type: b["source"]["media_type"].as_str().unwrap_or("image").to_string(),
+                            image: cv_image::index_of(&images, b).and_then(|n| cv_image::image_ref(b, off, n)),
+                        }),
                         Some("tool_result") => {
-                            let text = tool_result_text(&b["content"]);
+                            let (text, images) = tool_result_content(&b["content"], &images, off);
                             let stopped = text.starts_with("[Tool call interrupted") || text.starts_with("[Request interrupted");
                             blocks.push(CvBlock::ToolResult {
                                 tool_use_id: b["tool_use_id"].as_str().unwrap_or("").to_string(),
                                 text: if stopped { "Interrupted by user".into() } else { text },
                                 is_error: !stopped && b["is_error"].as_bool().unwrap_or(false),
+                                images,
                             })
                         }
                         _ => {}
@@ -992,6 +1006,18 @@ impl Core {
         }
     }
 
+    /// The bytes of an image in the session's transcript (see `cv_image`).
+    pub fn cv_image(&self, sid: &Id, id: &str, max: Option<u32>) -> Result<CvImageData, na_protocol::ApiError> {
+        let path = self
+            .cv
+            .tails
+            .lock()
+            .get(sid)
+            .and_then(|t| t.st.lock().path.clone())
+            .ok_or_else(|| err(ErrorCode::NotFound, "no transcript yet"))?;
+        cv_image::serve(&path, id, max)
+    }
+
     pub fn cv_commands(&self, sid: &Id) -> Vec<CvCommand> {
         let mut out: Vec<CvCommand> =
             BUILTIN.iter().map(|(n, d)| CvCommand { name: (*n).into(), description: (*d).into(), source: "builtin".into() }).collect();
@@ -1088,6 +1114,13 @@ impl Core {
             Request::CvHistory { sid, before } => {
                 let core = self.clone();
                 match tokio::task::spawn_blocking(move || core.cv_history(&sid, before)).await {
+                    Ok(r) => r.map(|r| json!(r)),
+                    Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
+                }
+            }
+            Request::CvImage { sid, id, max } => {
+                let core = self.clone();
+                match tokio::task::spawn_blocking(move || core.cv_image(&sid, &id, max)).await {
                     Ok(r) => r.map(|r| json!(r)),
                     Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
                 }
@@ -1278,7 +1311,27 @@ mod tests {
         let (evs, _) = st.feed(full.as_bytes(), 0);
         assert_eq!(evs.len(), 1);
         assert_eq!(st.offset, full.len() as u64);
-        assert!(matches!(&st.msgs[0].blocks[1], CvBlock::Image { media_type } if media_type == "image/png"));
+        assert!(
+            matches!(&st.msgs[0].blocks[1], CvBlock::Image { media_type, image: Some(r) } if media_type == "image/png" && r.bytes == 3)
+        );
+    }
+
+    #[test]
+    fn tool_result_images_become_references() {
+        // A PNG header: 2×3 pixels.
+        let png = base64::engine::general_purpose::STANDARD.encode(b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x02\0\0\0\x03\x08\x06\0\0\0");
+        let line = json!({"type":"user","uuid":"r","message":{"role":"user","content":[
+            {"type":"tool_result","tool_use_id":"t1","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":png}}]},
+            {"type":"tool_result","tool_use_id":"t2","content":[{"type":"text","text":"shot"},{"type":"image","source":{"type":"url","url":"https://x"}}]}]}});
+        let p = parse_line(&line, 77);
+        let blocks = p.msg.unwrap().blocks;
+        let CvBlock::ToolResult { text, images, .. } = &blocks[0] else { panic!() };
+        assert_eq!(text, "");
+        assert_eq!(images.len(), 1);
+        assert_eq!((images[0].id.as_str(), images[0].w, images[0].h), (format!("77-0-{}", png.len()).as_str(), Some(2), Some(3)));
+        // No bytes in the transcript: the placeholder stays.
+        let CvBlock::ToolResult { text, images, .. } = &blocks[1] else { panic!() };
+        assert_eq!((text.as_str(), images.len()), ("shot\n[image]", 0));
     }
 
     #[test]

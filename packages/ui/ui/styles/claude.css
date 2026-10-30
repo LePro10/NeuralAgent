@@ -46,6 +46,10 @@
   --cv-diff-del-pill: rgb(221 83 83 / 0.22);
   --cv-glass: rgb(48 48 46 / 0.78);
   --cv-scrim: rgb(0 0 0 / 0.55);
+  /* Image viewer: dark in both appearances, like a photo viewer. */
+  --cv-viewer: rgb(14 14 13 / 0.97);
+  --cv-on-viewer: #faf9f5;
+  --cv-viewer-btn: rgb(250 249 245 / 0.12);
   --cv-shadow-composer: 0 0 0 0.5px rgb(222 220 209 / 0.15), 0 4px 20px rgb(0 0 0 / 0.25);
   --cv-shadow-card: 0 0 0 0.5px rgb(222 220 209 / 0.14), 0 2px 4px rgb(0 0 0 / 0.3), 0 6px 16px rgb(0 0 0 / 0.3);
   --cv-shadow-pop: 0 8px 24px rgb(0 0 0 / 0.32), 0 2px 6px rgb(0 0 0 / 0.2), inset 0 0 0 1px rgb(222 220 209 / 0.1);
@@ -134,6 +138,9 @@
   --color-cv-diff-del-pill: var(--cv-diff-del-pill);
   --color-cv-glass: var(--cv-glass);
   --color-cv-scrim: var(--cv-scrim);
+  --color-cv-viewer: var(--cv-viewer);
+  --color-cv-on-viewer: var(--cv-on-viewer);
+  --color-cv-viewer-btn: var(--cv-viewer-btn);
 
   --font-cv-serif: "Source Serif 4 Variable", "Source Serif 4", "Iowan Old Style", "Charter", ui-serif, Georgia, "Times New Roman", serif;
   --font-cv-sans: var(--font-sans);

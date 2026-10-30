@@ -17,6 +17,8 @@ export type * from "./CvBlock";
 export type * from "./CvCommand";
 export type * from "./CvEvent";
 export type * from "./CvHistoryResult";
+export type * from "./CvImage";
+export type * from "./CvImageData";
 export type * from "./CvMessage";
 export type * from "./CvMeta";
 export type * from "./CvOption";

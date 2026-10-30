@@ -12,6 +12,7 @@ import { useClient } from "../../lib/store";
 import { KeyBar } from "../KeyBar";
 import { TerminalView } from "../TerminalView";
 import { Composer } from "./Composer";
+import { ImageSidContext } from "./Images";
 import { modelName } from "./models";
 import { PromptCard } from "./PromptCard";
 import { Spark } from "./Spark";
@@ -134,6 +135,7 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
 
   return (
     <CwdContext.Provider value={session.cwd}>
+      <ImageSidContext.Provider value={sid}>
       <div className="relative flex h-full min-h-0 flex-col bg-cv-bg font-cv-sans text-cv-text" onMouseDown={onFocus}>
         <div ref={scroller} onScroll={onScroll} className={cn("cv-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain", centred && "flex flex-col justify-end")}>
           <div className={cn("mx-auto flex w-full max-w-3xl flex-col px-4 pt-4 pb-6 [[data-mode=desktop]_&]:px-6", !centred && "min-h-full")}>
@@ -193,6 +195,7 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
           </div>
         )}
       </div>
+      </ImageSidContext.Provider>
     </CwdContext.Provider>
   );
 }

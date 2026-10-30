@@ -10,6 +10,7 @@ mod call;
 mod catalog;
 mod claude_view;
 mod core;
+mod cv_image;
 mod discord;
 mod env;
 mod fsbrowse;

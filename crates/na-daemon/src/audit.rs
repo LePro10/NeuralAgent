@@ -100,6 +100,7 @@ const SKIP: &[&str] = &[
     "git_diff",
     "usage_report",
     "history_search",
+    "cv_image",
     "term_resize",
     "catalog_refresh",
     "audit_list",

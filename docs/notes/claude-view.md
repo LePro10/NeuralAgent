@@ -19,3 +19,10 @@
 - Daemon: `detect_mode` knows "manual mode on" and "don't ask on"; prompt titles keep the dashed command/diff box between ``` lines; the statusline hook's `effort.level` feeds `meta.effort` (the "◐ medium · /effort" hint is only shown now and then).
 - Checked with screenshots (`research-local/polish/cv-shots/`, driver in `/tmp/na-cv-scratch/drv.mjs`) at 390×844, 360×780, 390×450 (keyboard) and 1440×900, light and dark: transcript, permission card (Bash and Edit), model/effort/+/mode pickers, slash list.
 - Open: real iOS/Android keyboard (only emulated by viewport height), the tab bar stays under the composer in the 450px case (AppShell), attachment upload has no byte progress (the `upload` request is one shot; tiles show waiting/uploading/error).
+
+## Images in the conversation (D50)
+- Daemon: `crates/na-daemon/src/cv_image.rs` (`images_in` numbering, `image_ref`, header `dims`, `serve`/`fit` with downscale). `claude_view.rs` puts `CvImage` refs on `ToolResult.images` and `Image.image`; "[image]" stays only for images without base64 bytes.
+- Client: `packages/app/src/lib/cvImages.ts` (cache, sizes, names; tested), `components/claude/Images.tsx` (`Thumb`, `Pictures`, viewer). Tool rows show a large thumbnail under the row (a bare image `Read` has no chevron), a closed "Read 2 files" group shows small thumbnails, user bubbles show tiles.
+- Viewer: pinch / wheel / double tap zoom, drag pan, swipe down (touch) or Esc / click beside closes, arrows between pictures, Copy (as PNG), Save (not on Android).
+- Check: `scripts/dev/scenes/claude-images.mjs` (fake transcript, needs `CLAUDE_CONFIG_DIR` for daemon and shot). Shots in `research-local/polish/img-shots/`. Not exercised: real pinch/swipe on a device, Save in the Tauri window, the remote 1600 px path end to end (covered by the Rust test).
+

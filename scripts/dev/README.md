@@ -42,7 +42,8 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
 - Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Workspaces, Swarm,
   History, Usage, MCP, Settings; pass names to limit), `call` (Call Neural with a fake mic),
   `swarm` (every swarm state, stop confirm, a member, sending, the new-swarm form, narrow windows;
-  seed `swarms` first).
+  seed `swarms` first), `claude-images` (pictures in the Claude view and the viewer; daemon and
+  shot need `CLAUDE_CONFIG_DIR=/tmp/<dir>`, see the scene's header).
   A scene is `export default async ({ p, shot, tap, go, more, sleep, phone, light, args, req }) => …`
   where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the More
   page / sidebar / account menu. Write a new scene for a new screen instead of a one-off script.

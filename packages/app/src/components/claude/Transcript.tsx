@@ -6,8 +6,9 @@
  */
 import type { CvBlock, CvMessage } from "@neuralagent/protocol";
 import { cn, Sheet } from "@neuralagent/ui";
-import { ChevronRight, Copy, FileText, Image as ImageIcon } from "lucide-react";
+import { ChevronRight, Copy, FileText } from "lucide-react";
 import { memo, useMemo, useRef, useState, type ReactNode } from "react";
+import { NoImage, Pictures, type Pic } from "./Images";
 import { copyText, CopyButton, Markdown, plainText } from "./Markdown";
 import { Spark } from "./Spark";
 import { isExplore, ToolCall, ToolGroup, type Res, type Use } from "./tools";
@@ -220,7 +221,9 @@ const Turn = memo(function Turn({ e, results, running, last, phone, onHold }: {
 
 function UserBubble({ m, phone, onHold }: { m: CvMessage; phone: boolean; onHold: (text: string) => void }) {
   const text = textOf(m);
-  const images = m.blocks.filter((b) => b.k === "image").length;
+  const imageBlocks = m.blocks.filter((b): b is Extract<CvBlock, { k: "image" }> => b.k === "image");
+  const pics: Pic[] = imageBlocks.flatMap((b) => (b.image ? [{ img: b.image, caption: `Image ${imageBlocks.indexOf(b) + 1}` }] : []));
+  const missing = imageBlocks.length - pics.length;
   const hold = useLongPress(() => onHold(text), phone && !!text);
   if (m.kind === "output") {
     return <pre className="cv-scroll my-2 overflow-x-auto rounded-cv-md bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2">{text}</pre>;
@@ -238,14 +241,11 @@ function UserBubble({ m, phone, onHold }: { m: CvMessage; phone: boolean; onHold
   }
   return (
     <div className="group/user my-5 flex flex-col items-end gap-1.5 animate-cv-rise">
-      {images > 0 && (
+      {pics.length > 0 && <Pictures pics={pics} size="tile" className="max-w-4/5 justify-end" />}
+      {missing > 0 && (
         <div className="flex gap-1.5">
-          {Array.from({ length: Math.min(images, 4) }, (_, i) => (
-            <div key={i} className="grid size-14 place-items-center rounded-cv-md border border-cv-line-soft bg-cv-surface text-cv-muted">
-              <ImageIcon size={20} strokeWidth={1.6} />
-            </div>
-          ))}
-          {images > 4 && <div className="grid size-14 place-items-center rounded-cv-md bg-cv-chip font-cv-sans text-cv-meta text-cv-muted">+{images - 4}</div>}
+          {Array.from({ length: Math.min(missing, 4) }, (_, i) => <NoImage key={i} />)}
+          {missing > 4 && <div className="grid size-14 place-items-center rounded-cv-md bg-cv-chip font-cv-sans text-cv-meta text-cv-muted">+{missing - 4}</div>}
         </div>
       )}
       {text && (

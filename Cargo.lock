@@ -2576,6 +2576,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -3251,6 +3253,7 @@ dependencies = [
  "discord-rich-presence",
  "futures-util",
  "hostname",
+ "image",
  "keepawake",
  "keyring",
  "na-crypto",

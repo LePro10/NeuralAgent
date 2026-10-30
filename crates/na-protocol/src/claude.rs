@@ -35,11 +35,53 @@ pub enum CvBlock {
         tool_use_id: String,
         text: String,
         is_error: bool,
+        /// Images in the result (a `Read` of a picture, screenshots from MCP tools): references,
+        /// the bytes come from `cv_image`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(as = "Option<Vec<CvImage>>", optional)]
+        images: Vec<CvImage>,
     },
-    /// An image the user attached (bytes are not sent).
+    /// An image the user attached.
     Image {
         media_type: String,
+        /// Absent when the transcript has no bytes for it (or from an older daemon).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        image: Option<CvImage>,
     },
+}
+
+/// An image in the transcript, by reference: history and live updates stay small (a phone may
+/// be on the relay), and a client fetches the bytes with `cv_image` when it shows the image.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CvImage {
+    /// Stable within the session's transcript file (`<line offset>-<n>-<length>`).
+    pub id: String,
+    pub media_type: String,
+    /// Decoded size of the original.
+    #[ts(type = "number")]
+    pub bytes: u64,
+    /// Pixel size, when the header could be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub w: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub h: Option<u32>,
+}
+
+/// Answer to `cv_image`: the picture itself (maybe scaled down, see the request's `max`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CvImageData {
+    pub media_type: String,
+    /// Base64.
+    pub data: String,
+    pub w: u32,
+    pub h: u32,
+    /// Scaled down or re-encoded from the original.
+    pub scaled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

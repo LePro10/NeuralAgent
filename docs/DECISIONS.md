@@ -566,3 +566,17 @@ bundle started), one fading layer with only a transform inside (nested opacity a
 composited wrongly), and the Android activity theme is DayNight so the WebView's
 `prefers-color-scheme` follows the phone. Rejected: keeping the native splash until React is ready
 (no motion, and a blank gap if the page is slow) and a progress spinner.
+
+## D50 — Claude view images by reference, bytes on demand (2026-10-30)
+Transcript images (a `Read` of a picture, MCP screenshots, pasted images) are base64 in the
+JSONL, often hundreds of KB each. `cv_attach`/`cv_history`/live upserts carry only a `CvImage`
+reference (`<line offset>-<n>-<base64 length>`, type, byte size, pixel size read from the header);
+`cv_image {sid, id, max?}` reads that one line again and returns the bytes. The id needs no
+server state, survives daemon restarts, and the length check refuses a different transcript at
+the same path. Remote clients (`platform.kind` ≠ desktop) ask for `max` 1600 px: the daemon
+(`image` crate, png+jpeg only) scales and re-encodes as JPEG (PNG when transparent) and caps an
+answer at 6 MB decoded, under the 16 MB relay frame. The client loads a thumbnail only near the
+viewport and caches object URLs (LRU 60). Alternatives: inline base64 (megabytes per history
+page over the relay), client-side downscaling (still transfers the full bytes), a temp-file cache
+on the host (state to clean up). The full-screen viewer is a custom overlay, like the Picker.
+
