@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-30 by `node scripts/codemap.mjs` (444 files). Do not edit by hand; regenerate after adding,
+Generated 2026-10-30 by `node scripts/codemap.mjs` (446 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -25,7 +25,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 
 ## apps/desktop/src/
 - **dev-browser.tsx** (55) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
-- **hud.tsx** (23)
+- **hud.tsx** (44)
 - **main.tsx** (197)
 
 ## apps/desktop/src-tauri/
@@ -33,14 +33,14 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 
 ## apps/desktop/src-tauri/src/
 - **daemon.rs** (165) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), ensure(), wait_gone(), stop()`
-- **hud.rs** (50) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
+- **hud.rs** (76) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
 - **lib.rs** (195) — `run()`
 - **main.rs** (7) — Prevents an extra console window on Windows in release builds.
-- **mic.rs** (129) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `struct Mic, impl Drop for Mic`
+- **mic.rs** (187) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
 - **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
 - **update.rs** (74) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
-- **voice.rs** (464) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
+- **voice.rs** (491) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/web/
 - **vite.config.ts** (65) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
@@ -207,7 +207,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
-- **VoiceHud.tsx** (24) — `VoiceHud()`
+- **VoiceHud.tsx** (92) — `type VoiceLevelSource, VoiceHud()`
 - **WorkspaceView.tsx** (319) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
 - **WorkspacesPage.tsx** (51) — Phones: the "Workspaces" tab — every project folder as a row (status at a glance), and Add workspace. · `WorkspacesPage()`
 - **ZoomControl.tsx** (126) — Desktop interface size: applies the chosen size to the window's web view and handles the zoom · `ZoomControl()`
@@ -276,6 +276,8 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **time.ts** (11) — "5 min ago", "3 h ago", or the date for anything older than a month. · `ago()`
 - **updates.ts** (239) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
 - **voice.ts** (49) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
+- **voiceMeter.test.ts** (30)
+- **voiceMeter.ts** (37) — Motion for the voice pill's level bars: the daemon-side mic sends a 0..1 loudness ~25 times a · `METER_REST, METER_STALE_MS, approach(), barProfile(), listeningHeight(), writingHeight()`
 - **worktree.ts** (9) — Extra `session_start` fields: agents (not shells) in a git workspace get their own worktree when that is swit… · `useWorktreeStart()`
 - **zoom.test.ts** (35)
 - **zoom.ts** (63) — Interface size (desktop): the whole window's web view is scaled (Tauri `setZoom`), like a · `ZOOM_STEPS, ZOOM_MIN, ZOOM_MAX, clampZoom(), stepZoom(), zoomLabel, storedZoom(), useZoom, zoomKey()`

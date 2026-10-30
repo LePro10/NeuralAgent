@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Improved
+- The listening pill at the bottom of the screen now follows your voice: its bars rise and fall with how loud you speak while you dictate or after "Hey Neural", stay calm when it is quiet, and settle into a gentle shimmer while your words are written out.
+
 ## [0.3.2] - 2026-10-30
 
 See the images Claude reads, a clean start everywhere, a new Swarm view and calls that work again.
