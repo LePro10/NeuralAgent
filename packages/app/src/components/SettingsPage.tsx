@@ -14,7 +14,8 @@ import {
   type Activity,
 } from "@neuralagent/ui";
 import type { LucideIcon } from "lucide-react";
-import { ArrowDownToLine, Bot, Folder, Gamepad2, Info, Mic, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
+import { useAlerts } from "../lib/alerts";
+import { ArrowDownToLine, Bell, Bot, Folder, Gamepad2, Info, Mic, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCatalogSheet, useDaemon, usePlatform } from "../lib/store";
 import { takeSettingsSection, useSettingsRoute } from "../lib/settingsRoute";
@@ -28,6 +29,8 @@ import {
   AboutPanel,
   AdvancedPanel,
   AppearancePanel,
+  NotificationsPanel,
+  alertsSummary,
   appearanceSummary,
   CallsPanel,
   DiscordPanel,
@@ -71,8 +74,10 @@ function useSections(): SectionGroup[] {
   // Re-render the summary when the theme changes.
   useTheme((t) => t.appearance);
   useTheme((t) => t.scheme);
+  useAlerts((a) => a.mode);
   const host = remote ? hostName : null;
 
+  const alerts: SectionDef = { id: "notifications", title: "Notifications", Icon: Bell, value: alertsSummary(), render: () => <NotificationsPanel /> };
   const appearance: SectionDef = { id: "appearance", title: "Appearance", Icon: Palette, value: appearanceSummary(), render: () => <AppearancePanel /> };
   const pending = remoteStatus === "pending";
   const access: SectionDef = remote
@@ -118,13 +123,13 @@ function useSections(): SectionGroup[] {
   // Phones and browsers: this device first, then the computer the agents run on.
   if (remote)
     return [
-      { label: "This device", items: [access, appearance] },
+      { label: "This device", items: [access, appearance, alerts] },
       { label: hostName ?? "Host computer", items: neural },
       { label: "Agents and tools", items: agents },
       { items: [updates, discord, ...app] },
     ];
   return [
-    { items: [appearance] },
+    { items: [appearance, alerts] },
     { label: "Neural and voice", items: neural },
     { label: "Agents and tools", items: agents },
     { label: "Connections", items: [access, discord] },

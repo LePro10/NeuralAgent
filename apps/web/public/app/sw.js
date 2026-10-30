@@ -6,6 +6,16 @@ const TITLE = { waiting: "Needs your input", done: "Finished", error: "Stopped w
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+// This device's alerts have sound off: Settings → Notifications (written by push.ts).
+async function silent() {
+  try {
+    const res = await (await caches.open("na-remote")).match("/app/__alerts");
+    return !!(res && (await res.json()).silent);
+  } catch {
+    return false;
+  }
+}
+
 async function nameOf(sid) {
   try {
     const res = await (await caches.open("na-remote")).match(NAMES);
@@ -31,6 +41,7 @@ self.addEventListener("push", (e) => {
         badge: "/app/icon-192.png",
         tag: n.sid,
         renotify: true,
+        silent: await silent(),
         data: { host: n.host, sid: n.sid },
       });
     })(),

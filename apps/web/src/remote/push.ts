@@ -1,10 +1,11 @@
 // Web Push for the web remote: the service worker, the subscription the relay pushes to, and
 // "open this agent" requests from notification taps.
+import type { PushState } from "@neuralagent/app";
 import { account, ios, native } from "./session";
 
 const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
 
-export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
+export type { PushState };
 
 const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
@@ -158,5 +159,14 @@ export function rememberNames(json: string) {
   void caches
     .open("na-remote")
     .then((c) => c.put("/app/__names", new Response(json, { headers: { "content-type": "application/json" } })))
+    .catch(() => {});
+}
+
+/** Pushes without a sound when this device's alerts have sound off (the service worker reads it). */
+export function setPushSilent(silent: boolean) {
+  if (native || !("caches" in window)) return;
+  void caches
+    .open("na-remote")
+    .then((c) => c.put("/app/__alerts", new Response(JSON.stringify({ silent }), { headers: { "content-type": "application/json" } })))
     .catch(() => {});
 }

@@ -4,9 +4,11 @@
 import type { CallPreviewAudio, CallSettings, DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
 import { Button, Field, Input, List, Pill, Row, Segmented, Switch, cn, haptic, toast } from "@neuralagent/ui";
 import { Check, ExternalLink, Globe, Play, ScrollText, Shield } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ALERT_TEXT, chime, setAlertMode, useAlerts, wantsNotify, wantsSound, type AlertMode } from "../../lib/alerts";
 import { playPreview } from "../../lib/call";
 import { setCallRoute, useBindCallAudio, useCallRoute, useCanPickRoute, type CallRoute } from "../../lib/callaudio";
+import type { PushState } from "../../lib/platform";
 import { useClient, useDaemon, usePlatform } from "../../lib/store";
 import { ACCENTS, accentOf, APPEARANCES, resolvedAppearance, SCHEMES, useTheme } from "../../lib/theme";
 import { openUpdateDialog, useUpdates } from "../../lib/updates";
@@ -470,6 +472,84 @@ export function AdvancedPanel() {
           title="Resume agents after a restart"
           trailing={<Switch label="Resume agents after a restart" checked={settings.resume_on_start} onChange={(resume_on_start) => set({ resume_on_start })} />}
         />
+      </List>
+    </div>
+  );
+}
+
+const ALERT_MODES: { value: AlertMode; label: string; detail: string }[] = [
+  { value: "both", label: "Sound and notification", detail: "A chime, and a notification while you are elsewhere" },
+  { value: "sound", label: "Sound only", detail: "A chime while NeuralAgent is open" },
+  { value: "notify", label: "Notification only", detail: "Silent notifications" },
+  { value: "off", label: "Nothing", detail: "Look at Agents to see what changed" },
+];
+
+export function alertsSummary(): string {
+  const m = useAlerts.getState().mode;
+  return m === "both" ? "Sound and notification" : m === "sound" ? "Sound" : m === "notify" ? "Notification" : "Off";
+}
+
+/** When an agent finishes, needs input or fails: sound, notification, both or nothing, per device. */
+export function NotificationsPanel() {
+  const platform = usePlatform();
+  const { mode, chosen } = useAlerts();
+  const push = platform.push;
+  const [pushState, setPushState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const closed = platform.kind === "android" ? "the app is closed" : "this page is closed";
+  useEffect(() => {
+    if (!push) return;
+    void push.state().then((st) => {
+      setPushState(st);
+      // Before anything was picked here, follow what this device already had.
+      if (!chosen) setAlertMode(st === "on" ? "both" : "sound");
+    });
+  }, [push, chosen]);
+  useEffect(() => push?.silent?.(!wantsSound(mode)), [push, mode]);
+
+  const pick = async (m: AlertMode) => {
+    if (!push) return setAlertMode(m);
+    // Phones and browsers: a notification is a push from the relay, so this turns it on or off.
+    setBusy(true);
+    try {
+      const st = wantsNotify(m) ? await push.enable() : pushState === "on" ? await push.disable() : pushState;
+      setPushState(st);
+      // Notifications could not be turned on (blocked, needs the Home Screen): keep the sound part.
+      setAlertMode(wantsNotify(m) && st !== "on" ? (wantsSound(m) ? "sound" : "off") : m);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const test = () => {
+    if (wantsSound(mode)) chime("done");
+    if (wantsNotify(mode) && !push) platform.notify?.("NeuralAgent", `Test: ${ALERT_TEXT.done}`);
+    if (mode === "off") toast("Alerts are off on this device");
+  };
+
+  const PUSH_NOTE: Partial<Record<PushState, string>> = {
+    denied:
+      platform.kind === "android"
+        ? "Notifications are off for NeuralAgent. Turn them on in Android Settings → Apps → NeuralAgent → Notifications."
+        : "Notifications are blocked for this site. Allow them in the browser's site settings.",
+    install: "On iPhone and iPad, notifications only work after Share → Add to Home Screen. Open NeuralAgent from the Home Screen, then choose here again.",
+    unsupported: platform.kind === "android" ? "This build of the app cannot receive notifications." : "This browser cannot show notifications from a closed page.",
+  };
+  const footer =
+    (pushState && PUSH_NOTE[pushState]) ??
+    (push
+      ? `Notifications also arrive while ${closed}. No sound while you are looking at that agent.`
+      : "Notifications show while NeuralAgent is in the background. No sound while you are looking at that agent.");
+  return (
+    <div className="flex flex-col gap-7">
+      <List label="When an agent finishes, needs you or fails" footer={footer}>
+        {ALERT_MODES.map((a) => (
+          <Choice key={a.value} title={a.label} detail={a.detail} checked={mode === a.value} onSelect={() => void (busy || pick(a.value))} />
+        ))}
+      </List>
+      <List footer="Only this device: your other devices keep their own choice.">
+        <Row Icon={Play} title="Try it" chevron={false} onClick={test} />
       </List>
     </div>
   );

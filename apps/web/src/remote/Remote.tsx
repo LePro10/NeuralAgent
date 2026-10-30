@@ -2,10 +2,10 @@ import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, laun
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
 import { Avatar, Button, Callout, ConfirmSheet, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
-import { Bell, Code, LayoutGrid, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Code, LayoutGrid, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Brand } from "../brand";
-import { disablePush, doneOpening, enablePush, onOpenRequest, pushState, rememberNames, startWorker, syncPush, takeLaunchRequest, type PushState } from "./push";
+import { disablePush, doneOpening, enablePush, onOpenRequest, pushState, rememberNames, setPushSilent, startWorker, syncPush, takeLaunchRequest } from "./push";
 import { account, deviceName, lastHost, link, native, REDIRECT, useLink } from "./session";
 import { webUpdate } from "./webUpdate";
 
@@ -421,9 +421,8 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       readClipboardImage: native ? () => native!.clipboardImage() : undefined,
       copyText: native ? (text) => native!.copyText(text) : undefined,
       focused: () => document.visibilityState === "visible" && document.hasFocus(),
-      notify: (title, body) => {
-        if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "/logo.png" });
-      },
+      // Notifications come as pushes from the relay (also while the page is closed).
+      push: { state: pushState, enable: enablePush, disable: disablePush, silent: setPushSilent },
       call: native
         ? {
             active: (on) => void native?.plugin.callActive({ on }).catch(() => {}),
@@ -496,7 +495,6 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
           />
           <Row Icon={RefreshCw} title="Switch computer" onClick={onSwitch} />
         </List>
-        <Notifications />
         {native && (
           <List label="Home screen" footer="Shows what the agents were doing when the app last looked. The Agents tile is in Quick Settings → Edit.">
             <Row
@@ -536,41 +534,3 @@ function DevicePage({ host, onSwitch }: { host: RelayDevice; onSwitch: () => voi
   );
 }
 
-const closed = native ? "the app is closed" : "this page is closed";
-const PUSH_NOTE: Record<PushState, string> = {
-  on: `A notification when an agent finishes, fails or needs your input while ${closed}.`,
-  off: `Get a notification when an agent finishes, fails or needs your input while ${closed}.`,
-  denied: native
-    ? "Notifications are off for NeuralAgent. Turn them on in Android Settings → Apps → NeuralAgent → Notifications."
-    : "Notifications are blocked for this site. Allow them in the browser's site settings.",
-  install: "On iPhone and iPad, notifications only work after Share → Add to Home Screen. Open NeuralAgent from the Home Screen, then turn them on here.",
-  unsupported: native ? "This build of the app cannot receive notifications." : "This browser cannot show notifications from a closed page.",
-};
-
-function Notifications() {
-  const [state, setState] = useState<PushState | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => void pushState().then(setState), []);
-  if (!state) return null;
-  const change = (f: () => Promise<PushState>) => {
-    setBusy(true);
-    f().then(setState, fail).finally(() => setBusy(false));
-  };
-  return (
-    <List label="Notifications" footer={PUSH_NOTE[state]}>
-      <Row
-        Icon={Bell}
-        title="Agent notifications"
-        trailing={
-          state === "on" ? (
-            <Button size="sm" variant="glass" busy={busy} onClick={() => change(disablePush)}>Turn off</Button>
-          ) : state === "off" ? (
-            <Button size="sm" variant="tint" busy={busy} onClick={() => change(enablePush)}>Turn on</Button>
-          ) : (
-            <Pill tone="warning">{state === "install" ? "Add to Home Screen" : state === "denied" ? "Blocked" : "Not available"}</Pill>
-          )
-        }
-      />
-    </List>
-  );
-}

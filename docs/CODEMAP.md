@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-30 by `node scripts/codemap.mjs` (447 files). Do not edit by hand; regenerate after adding,
+Generated 2026-10-30 by `node scripts/codemap.mjs` (449 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -49,7 +49,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **install.sh** (31) — Installs or updates NeuralAgent on macOS:
 
 ## apps/web/public/app/
-- **sw.js** (56) — Web remote service worker: shows "an agent needs you" pushes and opens that agent on tap.
+- **sw.js** (67) — Web remote service worker: shows "an agent needs you" pushes and opens that agent on tap.
 
 ## apps/web/src/
 - **brand.tsx** (41) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
@@ -72,10 +72,10 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **main.tsx** (13)
 
 ## apps/web/src/remote/
-- **Remote.tsx** (577) — `Remote()`
+- **Remote.tsx** (537) — `Remote()`
 - **main.tsx** (6)
 - **native.ts** (98) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText`
-- **push.ts** (163) — Web Push for the web remote: the service worker, the subscription the relay pushes to, and · `type PushState, startWorker(), pushState(), enablePush(), disablePush(), syncPush(), takeLaunchRequest(), onOpenRequest(), doneOpening(), rememberNames()`
+- **push.ts** (173) — Web Push for the web remote: the service worker, the subscription the relay pushes to, and · `startWorker(), pushState(), enablePush(), disablePush(), syncPush(), takeLaunchRequest(), onOpenRequest(), doneOpening(), rememberNames(), setPushSilent()`
 - **session.ts** (56) — The web remote's account and relay link, shared by every screen. One per tab. · `ios, native, deviceName, account, link, useLink(), lastHost, REDIRECT`
 - **webUpdate.ts** (23) — The web remote (and the Android shell, which loads it from the relay) runs the build that was · `webUpdate`
 
@@ -169,7 +169,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **build-web-icons.mjs** (163) — Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
 
 ## packages/app/src/
-- **App.tsx** (439) — `App()`
+- **App.tsx** (451) — `App()`
 - **index.ts** (12) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote`
 
 ## packages/app/src/components/
@@ -199,7 +199,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **ProfileEditor.tsx** (108) — `ProfileEditor()`
 - **ReleaseNotes.tsx** (81) — Release notes from CHANGELOG.md (lib/changelog.ts): used by the update dialog and Settings → Updates. · `CHANGELOG_URL, ReleaseNotes()`
 - **RemotePage.tsx** (330) — Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePanel()`
-- **SettingsPage.tsx** (269) — Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back). · `SettingsPage()`
+- **SettingsPage.tsx** (274) — Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back). · `SettingsPage()`
 - **SwarmPage.tsx** (104) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
@@ -229,7 +229,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 
 ## packages/app/src/components/settings/
 - **nav.ts** (9) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column). · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
-- **panels.tsx** (528) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
+- **panels.tsx** (608) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), alertsSummary(), NotificationsPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
 
 ## packages/app/src/components/swarm/
 - **NewSwarm.tsx** (188) — New swarm: the form (goal, workspace, team of role + agent) in a dialog on desktop, a sheet on phones. · `NewSwarmSheet()`
@@ -247,6 +247,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 ## packages/app/src/lib/
 - **agentui.test.ts** (24)
 - **agentui.ts** (95) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
+- **alerts.ts** (79) — How this device tells you that an agent finished, needs your input or stopped with an error: · `type AlertMode, type AlertKind, useAlerts, setAlertMode(), wantsSound, wantsNotify, ALERT_TEXT, chime()`
 - **call.ts** (220) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), interruptCall(), playPreview()`
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
@@ -261,7 +262,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **launchFrame.ts** (55) — The launch screen's first frame, written into every app entry page (desktop index.html and · `MARK_PANES, MARK_PX, SCHEME_ACCENT, THEME_SCRIPT, LAUNCH_MARKUP, LAUNCH_MARKER, launchFrame()`
 - **layout.ts** (142) — Pure layout-tree edits. The client changes the tree and sends `layout_set`; the daemon only · `MAX_PANES, newId, newTab(), panes(), activeTab(), updateTab(), splitPane(), removePane(), setContent(), setSizes(), swapPanes(), order(), gridOf(), frontTabFor()`
 - **mic-worklet.js** (39) — Microphone for calls with Neural: mono, downsampled to 16 kHz, 40 ms PCM16 frames,
-- **platform.ts** (116) — What the shell around the shared app provides (Tauri window, browser/PWA, Android). · `interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
+- **platform.ts** (129) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
 - **settingsRoute.test.ts** (17)
@@ -450,6 +451,7 @@ Generated, not listed: `packages/protocol/src/gen/` (81 files, from `crates/na-p
 - **winid.swift** (9) — Prints the window id(s) of an app by owner name, for `screencapture -x -o -l <id>`.
 
 ## scripts/dev/scenes/
+- **alerts.mjs** (22) — Settings → Notifications: sound, notification, both or nothing for this device.
 - **call.mjs** (22) — Call Neural in the browser with a fake microphone and log the call states.
 - **claude-images.mjs** (91) — Pictures in the Claude view: a Read of an image, an MCP screenshot, two reads folded into a
 - **home.mjs** (6) — The start page after load. Usage: node scripts/dev/shot.mjs home

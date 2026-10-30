@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import type { CallAudioApi } from "./callaudio";
 import type { VoiceApi } from "./voice";
 
+/** Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. */
+export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
+
 /** What the shell around the shared app provides (Tauri window, browser/PWA, Android). */
 export interface Platform {
   kind: "desktop" | "web" | "android";
@@ -25,6 +28,16 @@ export interface Platform {
   onTrayRemote?: (cb: () => void) => () => void;
   /** Remote clients: their own account page (which computer, devices, sign out) in place of the desktop's Remote page. */
   account?: { label: string; render: () => ReactNode };
+  /**
+   * Phones and browsers: notifications come as pushes from the relay, also while the page is closed.
+   * `silent`: pushes without a sound (when this device's alerts have sound off).
+   */
+  push?: {
+    state: () => Promise<PushState>;
+    enable: () => Promise<PushState>;
+    disable: () => Promise<PushState>;
+    silent?: (on: boolean) => void;
+  };
   /** A notification was tapped: show this agent. Requests may arrive before the state has loaded. */
   onOpenSession?: (cb: (sid: string) => void) => () => void;
   /** Phones: a call with Neural keeps the microphone on with the screen locked (Android). */

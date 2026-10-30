@@ -14,6 +14,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 ### Improved
 - The **Update** button is filled with your theme's accent colour, shows a download arrow, and unrolls smoothly into a pill when the sidebar opens.
 - **Workspaces in the sidebar**: right-click one to rename it right in place (its folder stays the same), pin it to the top, copy its folder path or remove it; drag workspaces to change their order.
+- **Notifications** in Settings: choose per device whether a finished agent (or one that needs you or failed) plays a sound, shows a notification, both or nothing — on the desktop, in the browser and on the phone. No sound while you are looking at that agent; in front but elsewhere, a small note with Open.
 
 ### Fixed
 - macOS: after an update, NeuralAgent stays pinned in the Dock instead of showing up as a second icon.

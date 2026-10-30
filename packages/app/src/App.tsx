@@ -23,6 +23,7 @@ import { ZoomControl } from "./components/ZoomControl";
 import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
+import { ALERT_TEXT, chime, useAlerts, wantsNotify, wantsSound } from "./lib/alerts";
 import { writeClipboard } from "./lib/clipboard";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 import { useUpdateWatch } from "./lib/updates";
@@ -142,15 +143,6 @@ export function App() {
     [platform.voice, client, setWorkspace],
   );
 
-  // Notify when an agent finishes or needs input while the window is in the background.
-  useEffect(() => {
-    const off = client.onEvent((ev) => {
-      if (ev.e !== "attention" || platform.focused?.()) return;
-      const s = client.state?.sessions[ev.session_id];
-      platform.notify?.(s?.title ?? "Agent", ev.kind === "waiting" ? "Needs your input" : ev.kind === "error" ? "Stopped with an error" : "Finished");
-    });
-    return () => void off();
-  }, [client, platform]);
 
   // Phones: the quick tile starts a call (on the Neural page); the native side keeps it alive.
   const live = useCall((c) => c.live);
@@ -189,6 +181,26 @@ export function App() {
     if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
     setWorkspace(s.workspace_id);
   }, [opening, state, client, setWorkspace]);
+
+  // An agent finished, needs input or failed: sound and/or notification as this device chose
+  // (lib/alerts.ts). Silent while you look at its workspace; in front but elsewhere, a small note
+  // with "Open"; in the background a system notification (phones and browsers: the relay's push).
+  const shownWs = useRef<string | undefined>(undefined);
+  shownWs.current = current?.id;
+  useEffect(() => {
+    const off = client.onEvent((ev) => {
+      if (ev.e !== "attention") return;
+      const mode = useAlerts.getState().mode;
+      const s = client.state?.sessions[ev.session_id];
+      const looking = platform.focused ? platform.focused() : document.visibilityState === "visible";
+      if (mode === "off" || (looking && s && s.workspace_id === shownWs.current)) return;
+      const title = s?.title ?? "Agent";
+      if (wantsSound(mode)) chime(ev.kind);
+      if (looking) toast(`${title}: ${ALERT_TEXT[ev.kind]}`, { actionLabel: "Open", undo: () => setOpening(ev.session_id), tone: ev.kind === "error" ? "danger" : undefined });
+      else if (wantsNotify(mode) && !platform.push) platform.notify?.(title, ALERT_TEXT[ev.kind]);
+    });
+    return () => void off();
+  }, [client, platform]);
 
   // Menu bar / tray: how many agents run, work, and wait for you.
   const agentStatuses = useMemo(() => {
