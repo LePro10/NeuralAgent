@@ -32,11 +32,13 @@ interface Props {
   disabled?: boolean;
   /** Corner radius of the lifted clone (match the item). */
   radius?: number;
+  /** Told when the menu opens and closes (e.g. a sidebar stays open meanwhile). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const HOLD_MS = 420;
 
-export function ContextMenu({ items, children, onTap, className, preview, selectable, disabled, radius = 16 }: Props) {
+export function ContextMenu({ items, children, onTap, className, preview, selectable, disabled, radius = 16, onOpenChange }: Props) {
   const target = usePortalTarget();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState<null | { rect: Box; at?: { x: number; y: number } }>(null);
@@ -45,6 +47,9 @@ export function ContextMenu({ items, children, onTap, className, preview, select
   const fired = useRef(false);
   const close = () => setOpen(null);
   useLayer(!!open, close);
+  const changed = useRef(onOpenChange);
+  changed.current = onOpenChange;
+  useEffect(() => changed.current?.(!!open), [open]);
 
   const openAt = (at?: { x: number; y: number }) => {
     if (!ref.current) return;

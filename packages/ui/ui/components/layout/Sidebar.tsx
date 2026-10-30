@@ -13,8 +13,12 @@
  * The active item wears its place's colour and its highlight slides between
  * entries. Groups are labelled when open and become a short hairline when
  * collapsed. ⌘/Ctrl + 1–9 switch, ⌘K searches.
+ *
+ * Items with a `menu` get a context menu (right-click, long-press); `reorder` items can be dragged
+ * into a new order within their run (`onReorder`); `renaming` turns one label into a text field.
+ * The island stays open while a menu or a rename is up.
  */
-import { motion } from 'motion/react';
+import { motion, Reorder } from 'motion/react';
 import { PanelLeftClose, PanelLeftOpen, Search, Settings, type LucideIcon } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
@@ -23,6 +27,8 @@ import { MOD_KEY } from '../../lib/hooks';
 import { SPRING } from '../../lib/motion';
 import { useShell } from '../../lib/surface';
 import { ACTIVITY_LABEL, ActivityMark, type Activity } from '../core/Activity';
+import { ContextMenu } from '../overlays/ContextMenu';
+import type { MenuEntry } from '../overlays/Menu';
 import { PLACES, type Place, type Signal } from '../../lib/tokens';
 
 export interface SidebarItem<T extends string = string> {
@@ -40,6 +46,12 @@ export interface SidebarItem<T extends string = string> {
   place?: Place;
   /** The place's signal colour: the active icon wears it. */
   signal?: Signal;
+  /** Right-click / long-press actions. */
+  menu?: MenuEntry[];
+  /** Can be dragged into a new place among its neighbours that also have `reorder`. */
+  reorder?: boolean;
+  /** Hover title (e.g. the folder behind a workspace). */
+  title?: string;
 }
 
 const RAIL = 60, OPEN = 176, INSET = 8;
@@ -52,7 +64,7 @@ const RAIL = 60, OPEN = 176, INSET = 8;
 const INTENT_OUT = 240;
 const REST_SLOP = 8;
 
-export function Sidebar<T extends string>({ items, value, onChange, brand, above, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 200, pinned: pinnedProp, onPinnedChange, className }: {
+export function Sidebar<T extends string>({ items: given, value, onChange, brand, above, footer, onSettings, settingsActive, search, shortcuts = true, openDelay = 200, pinned: pinnedProp, onPinnedChange, onReorder, renaming, onRename, className }: {
   items: SidebarItem<T>[];
   value: T;
   onChange: (id: T) => void;
@@ -74,13 +86,39 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
   /** Kept open, with the page making room. Uncontrolled if left out. */
   pinned?: boolean;
   onPinnedChange?: (v: boolean) => void;
+  /** A run of `reorder` items was dragged: their ids in the new order, and the one that moved. */
+  onReorder?: (ids: T[], moved: T) => void;
+  /** This item's label is a text field; `onRename` gets the new name, or null when cancelled. */
+  renaming?: T | null;
+  onRename?: (id: T, name: string | null) => void;
   className?: string;
 }) {
+  // While a drag settles, the order it left behind (until `given` catches up, or 2 s pass).
+  const [order, setOrder] = useState<T[] | null>(null);
+  // The drag's own handlers keep the props from when it began, so they read the order from here.
+  const orderRef = useRef<T[] | null>(null);
+  orderRef.current = order;
+  const runKeyRef = useRef('');
+  const runIds = given.filter((i) => i.reorder).map((i) => i.id);
+  const runKey = runIds.join('\n');
+  runKeyRef.current = runKey;
+  useEffect(() => {
+    if (!order) return;
+    if (order.join('\n') === runKey) { setOrder(null); return; }
+    const t = window.setTimeout(() => setOrder(null), 2000);
+    return () => window.clearTimeout(t);
+  }, [order, runKey]);
+  const items = order && order.length === runIds.length && order.every((id) => runIds.includes(id))
+    ? (() => { const byId = new Map(given.map((i) => [i.id, i])); let k = 0; return given.map((i) => (i.reorder ? byId.get(order[k++])! : i)); })()
+    : given;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dragging, setDragging] = useState<T | null>(null);
+  const dragged = useRef(false);
   const [ownPin, setOwnPin] = useState(false);
   const pinned = pinnedProp ?? ownPin;
   const setPinned = (v: boolean) => { setOwnPin(v); onPinnedChange?.(v); };
   const [peek, setPeek] = useState(false);
-  const open = pinned || peek;
+  const open = pinned || peek || menuOpen || !!renaming || !!dragging;
   const id = useId();
   const shell = useShell();
   const timer = useRef(0);
@@ -123,6 +161,48 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
 
   const fade = 'whitespace-nowrap transition-opacity duration-200';
   const show = { opacity: open ? 1 : 0, transitionDelay: open ? '60ms' : '0ms' };
+  const heading = (it: SidebarItem<T>, i: number) => {
+    const head = it.group !== undefined ? (i === 0 || items[i - 1].group !== it.group ? it.group : null) : it.groupStart ? '' : null;
+    if (head === null || i === 0) return null;
+    return (
+      // Open: the group's name. Collapsed: a short hairline. Same height, so nothing jumps.
+      <div className="relative mt-1.5 h-6" aria-hidden={!head || undefined}>
+        <span className="absolute top-1/2 left-[14.5px] h-[var(--hair)] w-[14px] bg-line-2 transition-opacity duration-200" style={{ opacity: open && head ? 0 : 1 }} />
+        {head && <span className={cn('absolute top-1/2 left-[12.5px] -translate-y-1/2 text-tiny text-faint', fade)} style={show}>{head}</span>}
+      </div>
+    );
+  };
+  const row = (it: SidebarItem<T>, i: number) => {
+    const active = it.id === value;
+    const sig = it.signal ?? (it.place ? PLACES[it.place].signal : undefined);
+    const editing = renaming === it.id;
+    const cls = cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[12.5px] text-chip transition-colors duration-200',
+      active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink', dragging === it.id && 'bg-fill-2 text-ink shadow-edge');
+    const inner = (
+      <>
+        {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-lens shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
+        <span className="relative transition-colors duration-300" style={active && sig ? { color: `var(--color-signal-${sig})` } : undefined}>
+          <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />
+          {it.activity ? <ActivityMark activity={it.activity} edge="ring-chrome" size={7} /> : it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-sys-red ring-[1.5px] ring-chrome" />}
+        </span>
+        {editing ? (
+          <RenameField name={it.label} onDone={(name) => onRename?.(it.id, name)} />
+        ) : (
+          <span className={cn('relative min-w-0 truncate', fade)} style={show}>{it.label}</span>
+        )}
+        {shortcuts && i < 9 && !editing && <kbd className={cn('relative ml-auto font-mono text-tiny text-faint opacity-0 transition-opacity', open && 'group-hover:opacity-100')}>{MOD_KEY}{i + 1}</kbd>}
+      </>
+    );
+    // No button while renaming: Space and Enter belong to the text field.
+    const button = editing ? <div className={cls}>{inner}</div> : (
+      <button type="button" onClick={() => { if (dragged.current) return; haptic('select'); onChange(it.id); }} aria-current={active ? 'page' : undefined} aria-label={it.label}
+        aria-description={it.activity ? ACTIVITY_LABEL[it.activity] : typeof it.badge === 'string' ? it.badge : undefined}
+        title={it.title} className={cls}>
+        {inner}
+      </button>
+    );
+    return it.menu && !editing ? <ContextMenu items={it.menu} radius={12} onOpenChange={setMenuOpen}>{button}</ContextMenu> : button;
+  };
   return (
     // Collapsed, the island hugs its icons and floats at the middle of the edge; opened it grows
     // up and down to the full height (both ways at once, from the centre). Owner's choice: keep
@@ -175,35 +255,44 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
             <kbd className={cn('ml-auto font-mono text-tiny text-faint opacity-0 transition-opacity', open && 'group-hover:opacity-100')}>{MOD_KEY}K</kbd>
           </button>
         )}
-        <ul className="scroller -mx-2 flex min-h-0 flex-1 flex-col px-2">
+        <motion.ul layoutScroll className="scroller -mx-2 flex min-h-0 flex-1 flex-col px-2">
           {items.map((it, i) => {
-            const active = it.id === value;
-            const sig = it.signal ?? (it.place ? PLACES[it.place].signal : undefined);
-            const head = it.group !== undefined ? (i === 0 || items[i - 1].group !== it.group ? it.group : null) : it.groupStart ? '' : null;
+            // A run of reorderable items is one drag list; it is drawn at its first item.
+            if (it.reorder && onReorder) {
+              if (i > 0 && items[i - 1].reorder) return null;
+              let end = i;
+              while (end < items.length && items[end].reorder) end++;
+              const run = items.slice(i, end);
+              return (
+                <li key={`run-${it.group ?? i}`}>
+                  {heading(it, i)}
+                  <Reorder.Group as="ul" axis="y" values={run.map((r) => r.id)} onReorder={(ids: T[]) => { orderRef.current = ids; setOrder(ids); }} className="flex flex-col">
+                    {run.map((r, k) => (
+                      <Reorder.Item key={r.id} as="li" value={r.id} className="relative"
+                        onDragStart={() => { dragged.current = true; setDragging(r.id); }}
+                        onDragEnd={() => {
+                          setDragging(null);
+                          window.setTimeout(() => { dragged.current = false; }, 0);
+                          const ids = orderRef.current;
+                          if (ids && ids.join('\n') !== runKeyRef.current) onReorder(ids, r.id);
+                        }}
+                        whileDrag={{ scale: 1.03 }}>
+                        {row(r, i + k)}
+                      </Reorder.Item>
+                    ))}
+                  </Reorder.Group>
+                </li>
+              );
+            }
             return (
               <li key={it.id}>
-                {head !== null && i > 0 && (
-                  // Open: the group's name. Collapsed: a short hairline. Same height, so nothing jumps.
-                  <div className="relative mt-1.5 h-6" aria-hidden={!head || undefined}>
-                    <span className="absolute top-1/2 left-[14.5px] h-[var(--hair)] w-[14px] bg-line-2 transition-opacity duration-200" style={{ opacity: open && head ? 0 : 1 }} />
-                    {head && <span className={cn('absolute top-1/2 left-[12.5px] -translate-y-1/2 text-tiny text-faint', fade)} style={show}>{head}</span>}
-                  </div>
-                )}
-                <button type="button" onClick={() => { haptic('select'); onChange(it.id); }} aria-current={active ? 'page' : undefined} aria-label={it.label}
-                  aria-description={it.activity ? ACTIVITY_LABEL[it.activity] : typeof it.badge === 'string' ? it.badge : undefined}
-                  className={cn('group relative flex h-9 w-full items-center gap-3 rounded-field px-[12.5px] text-chip transition-colors duration-200', active ? 'text-bright' : 'text-dim hover:bg-fill-1 hover:text-ink')}>
-                  {active && <motion.span layoutId={`side-${id}`} className="absolute inset-0 rounded-field bg-lens shadow-[var(--shadow-edge),0_0_18px_-6px_color-mix(in_oklab,var(--color-accent)_50%,transparent)]" transition={SPRING.goo} />}
-                  <span className="relative transition-colors duration-300" style={active && sig ? { color: `var(--color-signal-${sig})` } : undefined}>
-                    <it.Icon size={18} strokeWidth={active ? 1.8 : 1.6} />
-                    {it.activity ? <ActivityMark activity={it.activity} edge="ring-chrome" size={7} /> : it.badge && <i className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-sys-red ring-[1.5px] ring-chrome" />}
-                  </span>
-                  <span className={cn('relative min-w-0 truncate', fade)} style={show}>{it.label}</span>
-                  {shortcuts && i < 9 && <kbd className={cn('relative ml-auto font-mono text-tiny text-faint opacity-0 transition-opacity', open && 'group-hover:opacity-100')}>{MOD_KEY}{i + 1}</kbd>}
-                </button>
+                {heading(it, i)}
+                {row(it, i)}
               </li>
             );
           })}
-        </ul>
+        </motion.ul>
+
         {above && <div className="shrink-0">{above(open)}</div>}
         {/* You: always at the foot, set apart by a hairline and a slightly deeper ground. */}
         {(footer || onSettings) && (
@@ -221,5 +310,28 @@ export function Sidebar<T extends string>({ items, value, onChange, brand, above
         )}
       </motion.nav>
     </div>
+  );
+}
+
+/** The label as a text field: Enter or leaving it keeps the name, Escape keeps the old one. */
+function RenameField({ name, onDone }: { name: string; onDone: (name: string | null) => void }) {
+  const [v, setV] = useState(name);
+  const done = useRef(false);
+  const finish = (n: string | null) => { if (done.current) return; done.current = true; onDone(n); };
+  return (
+    <input
+      autoFocus
+      value={v}
+      aria-label="Name"
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setV(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') finish(v.trim() && v.trim() !== name ? v.trim() : null);
+        if (e.key === 'Escape') finish(null);
+      }}
+      onBlur={() => finish(v.trim() && v.trim() !== name ? v.trim() : null)}
+      className="relative -my-1 -ml-1.5 h-7 min-w-0 flex-1 rounded-item bg-fill-2 px-1.5 text-chip text-bright outline-none ring-1 ring-accent/50"
+    />
   );
 }

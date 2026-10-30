@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
-import { AppShell, Button, CommandPalette, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
-import { ArrowDownToLine, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Plug, Settings, Smartphone, Sparkles, Users } from "lucide-react";
+import { AppShell, Button, CommandPalette, ConfirmSheet, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
+import { ArrowDownToLine, Copy, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Pencil, Pin, PinOff, Plug, Settings, Smartphone, Sparkles, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
 import { LaunchScreen } from "./components/LaunchScreen";
@@ -23,6 +23,7 @@ import { ZoomControl } from "./components/ZoomControl";
 import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
+import { writeClipboard } from "./lib/clipboard";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 import { useUpdateWatch } from "./lib/updates";
 import { MOVED_TO_SETTINGS, SETTINGS_PAGE, requestSettingsSection } from "./lib/settingsRoute";
@@ -233,6 +234,31 @@ export function App() {
   const running = (state?.swarms ?? []).filter((w) => !w.ended).length;
   // Remote sign-in waits for approval: shown on Settings → Remote access, the account and the More tab.
   const remoteWaiting = platform.kind === "desktop" && state?.remote.status === "pending" ? ("waiting" as const) : undefined;
+  // Workspaces in the sidebar: right-click to rename (the folder stays), pin, copy the path or
+  // remove; drag to reorder. Dropped next to pinned ones, a workspace becomes pinned (and back).
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Workspace | null>(null);
+  const updateWs = (id: string, p: { name?: string; pinned?: boolean; order?: number }) =>
+    client.req({ m: "workspace_update", p: { id, ...p } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+  const reorderWs = (ids: string[], moved: string) => {
+    const byId = new Map(workspaces.map((w) => [w.id, w]));
+    const at = ids.indexOf(moved);
+    const above = byId.get(ids[at - 1] ?? "");
+    const pinned = above ? above.pinned : !!byId.get(ids[at + 1] ?? "")?.pinned;
+    ids.forEach((id, order) => {
+      const w = byId.get(id);
+      if (!w) return;
+      const p = { ...(w.order !== order && { order }), ...(id === moved && w.pinned !== pinned && { pinned }) };
+      if (Object.keys(p).length) void updateWs(id, p);
+    });
+  };
+  const wsMenu = (w: Workspace) => [
+    { label: "Rename", Icon: Pencil, onSelect: () => setRenaming(w.id) },
+    { label: w.pinned ? "Unpin" : "Pin to top", Icon: w.pinned ? PinOff : Pin, onSelect: () => void updateWs(w.id, { pinned: !w.pinned }) },
+    { label: "Copy folder path", Icon: Copy, onSelect: () => void writeClipboard(w.path, platform).then((ok) => toast(ok ? "Path copied" : "Could not copy the path", ok ? undefined : { tone: "danger" })) },
+    { label: "Remove…", Icon: Trash2, destructive: true, divider: true, onSelect: () => setRemoving(w) },
+  ];
+
   const items: NavItem[] = [
     { id: NEURAL, label: "Neural", Icon: Sparkles, activity: state?.orchestrator.busy ? "working" : undefined },
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, activity: waiting > 0 ? "waiting" : undefined },
@@ -249,6 +275,9 @@ export function App() {
         Icon: w.git ? FolderGit2 : Folder,
         group: "Workspaces",
         activity: act,
+        menu: wsMenu(w),
+        reorder: true,
+        title: w.path,
       };
     }),
     { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
@@ -369,6 +398,12 @@ export function App() {
           footer={(open) => <AccountRow open={open} active={settingsOpen} activity={remoteWaiting} onSettings={() => setWorkspace(SETTINGS)} />}
           pinned={sidebarPinned}
           onPinnedChange={setSidebarPinned}
+          onReorder={reorderWs}
+          renaming={renaming}
+          onRename={(id, name) => {
+            setRenaming(null);
+            if (name) void updateWs(id, { name });
+          }}
           // macOS draws the window buttons over the top-left corner.
           className={platform.trafficLights ? "top-7" : undefined}
         />
@@ -384,6 +419,18 @@ export function App() {
       {state && <ChangesSheet />}
       {state && <FolderBrowserSheet />}
       <UpdateDialog />
+      <ConfirmSheet
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        onConfirm={async () => {
+          if (removing) await client.req({ m: "workspace_remove", p: { id: removing.id } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+        }}
+        title={`Remove ${removing?.name ?? "workspace"}?`}
+        message="It leaves NeuralAgent and its agents stop; the folder and its files stay on the computer."
+        confirmLabel="Remove"
+        destructive
+        Icon={Trash2}
+      />
       <Toaster />
       <ZoomControl />
     </AppShell>

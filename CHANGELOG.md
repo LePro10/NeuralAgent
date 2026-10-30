@@ -13,6 +13,7 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ### Improved
 - The **Update** button is filled with your theme's accent colour, shows a download arrow, and unrolls smoothly into a pill when the sidebar opens.
+- **Workspaces in the sidebar**: right-click one to rename it right in place (its folder stays the same), pin it to the top, copy its folder path or remove it; drag workspaces to change their order.
 
 ### Fixed
 - macOS: after an update, NeuralAgent stays pinned in the Dock instead of showing up as a second icon.
