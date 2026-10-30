@@ -107,6 +107,22 @@ Open items first. Everything else keeps going locally until these are done.
 | M6 web remote, phone layout, Android | done (2026-10-30) — web remote at `/app` with Web Push; Android app (FCM, widget, tile) verified in the emulator; real iPhone on your list |
 | M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — see below; your own voice on a real phone on your list |
 | M8 swarm: agent teams with visible hand-offs | done (2026-10-30) — see below |
+| M9 themes, auto-update, release CI, downloads | done (2026-10-30) — v0.1.1 released through CI, see below |
+
+### M9 verified (2026-10-30)
+- Themes: six schemes + accents, per device; screenshots desktop/phone; reload keeps them; the
+  terminal re-themes live; the voice HUD follows through the storage event.
+- Update N-1→N locally (`/tmp/na-upd`): a 0.1.0 app with a running shell session installed
+  0.1.1 from a local relay, restarted as 0.1.1; the service (0.1.0, same pid) and the session
+  kept running; after the session stopped the app swapped the service to 0.1.1.
+- Release v0.1.1 through `release.yml`: all jobs green (macOS arm64 + Intel, Windows, Linux,
+  APK, publish). `/api/releases/latest` lists six downloads, all served; `/download` shows them;
+  `/api/update/{darwin,windows,linux}/…/0.1.0` offer 0.1.1. The macOS DMG holds 0.1.1 with the
+  bundled service; the darwin-aarch64 update verifies against the app's public key.
+- Relay release tests (upload, publish, update, prune to three, pre-releases only for testers,
+  public links skip pre-releases). The proxy accepts 80 MB uploads.
+- Not tested by hand: installing on Windows/Linux, the APK update notice on a real phone
+  (checklist: *Install the released app*).
 
 ### M8 verified (2026-10-30)
 - `scripts/e2e-swarm.ts` (CI on Linux/macOS): daemon + four stand-in agents
