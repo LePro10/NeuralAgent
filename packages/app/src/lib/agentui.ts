@@ -1,28 +1,7 @@
 // Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History):
-// plain-text previews, short relative times, day groups, engine colours.
+// plain-text previews, short relative times, day groups, swarm member colours.
 import type { SysColor } from "@neuralagent/ui";
 import { useEffect, useState } from "react";
-
-/** Engine → iOS system colour for its tile. Unknown engines are purple. */
-const ENGINE_COLOR: Record<string, SysColor> = {
-  claude: "orange",
-  codex: "indigo",
-  gemini: "blue",
-  antigravity: "teal",
-  cursor: "gray",
-  copilot: "blue",
-  opencode: "teal",
-  grok: "gray",
-  amp: "pink",
-  droid: "green",
-  kimi: "indigo",
-  qwen: "purple",
-  aider: "green",
-  shell: "gray",
-  terminal: "gray",
-  install: "gray",
-};
-export const engineColor = (engine: string): SysColor => ENGINE_COLOR[engine] ?? "purple";
 
 /** Member colours for swarms (avatars), in team order. */
 export const MEMBER_COLORS: SysColor[] = ["blue", "green", "orange", "purple", "pink", "teal", "indigo", "yellow"];

@@ -1,5 +1,6 @@
 import type { GitChanges, GitDiff, GitFile, GitFileStatus } from "@neuralagent/protocol";
-import { Button, Callout, ConfirmSheet, Empty, IconTile, Sheet, Spinner, cn, toast, useLayoutMode } from "@neuralagent/ui";
+import { Button, Callout, ConfirmSheet, Empty, Sheet, Spinner, cn, toast, useLayoutMode } from "@neuralagent/ui";
+import { QuietTile, tileGlyph } from "./EngineTile";
 import { GitBranch, GitMerge, RotateCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useChanges, useClient, useDaemon } from "../lib/store";
@@ -101,9 +102,9 @@ export function ChangesSheet() {
       <div className="flex flex-col gap-5 pb-4">
         {changes && (
           <div className="surface flex items-center gap-3 rounded-list p-4">
-            <IconTile color={wt ? "purple" : "gray"} className="size-11 rounded-tile">
-              <GitBranch />
-            </IconTile>
+            <QuietTile size="lg">
+              <GitBranch size={tileGlyph("lg")} strokeWidth={1.6} />
+            </QuietTile>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-headline text-bright">{wt ? wt.branch : changes.branch}</span>
               <span className="truncate text-footnote text-dim">

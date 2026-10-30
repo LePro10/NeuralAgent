@@ -61,14 +61,12 @@ export function NewAgentSheet({ open, onClose, workspaceId }: { open: boolean; o
           {workspace?.git && (
             <Row
               Icon={GitBranch}
-              tile="purple"
               title="Own worktree per agent"
               trailing={<Switch label="Own worktree per agent" checked={worktrees} onChange={setWorktrees} />}
             />
           )}
           <Row
             Icon={Download}
-            tile="blue"
             title="Install more agents"
             onClick={() => {
               onClose();

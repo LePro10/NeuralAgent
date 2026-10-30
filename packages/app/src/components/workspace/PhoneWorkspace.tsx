@@ -1,16 +1,18 @@
 // Phones: one agent at a time, full screen. A calm header (back · workspace and branch · "…" · "+")
 // sits under the status bar; below it a strip of big agent chips switches between the agents of
-// every tab (long-press a chip to close or restart it). Claude panes share the Claude view's own
+// every tab (long-press a chip to close or restart it), and ends in the Chat/Terminal switch while
+// a Claude agent is shown. Claude panes share the Claude view's own
 // background, so the chat reaches the header with no frame around it.
 import type { PaneContent } from "@neuralagent/protocol";
-import { ActionSheet, ContextMenu, IconButton, IconTile, cn, useNavBack, type MenuEntry } from "@neuralagent/ui";
+import { ActionSheet, ContextMenu, IconButton, cn, useNavBack, type MenuEntry } from "@neuralagent/ui";
 import { ChevronLeft, Download, Ellipsis, GitBranch, GitCompare, Globe, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { activityOf } from "../../lib/status";
 import { useCatalogSheet, useChanges, useDaemon, useUi } from "../../lib/store";
-import { EngineTile } from "../EngineTile";
+import { EngineTile, QuietTile, tileGlyph } from "../EngineTile";
 import type { PaneActions } from "../Pane";
 import type { PaneRef } from "../WorkspaceView";
+import { ClaudeViewSwitch } from "./ClaudeViewSwitch";
 import { NewAgentSheet } from "./NewAgentSheet";
 import { paneTitle, usePaneMenu, usePaneSession } from "./paneMenu";
 
@@ -30,7 +32,7 @@ export function PhoneWorkspace({ workspaceId, panes, current, actionsIn, childre
   const [menu, setMenu] = useState(false);
   const actions = current ? actionsIn(current.tab, current.id) : null;
   const pane = usePaneMenu({ workspaceId, content: current?.content, actions, phone: true });
-  const { session, claudeView } = usePaneSession(current?.content, true);
+  const { session, isClaude, claudeView } = usePaneSession(current?.content, true);
   const git = ws?.git;
 
   const items: MenuEntry[] = [
@@ -51,8 +53,10 @@ export function PhoneWorkspace({ workspaceId, panes, current, actionsIn, childre
     ...pane.items.filter((i) => i.destructive),
   ];
 
-  const showStrip = panes.length > 1 || (panes.length === 1 && current?.content.kind === "empty");
   const cv = claudeView;
+  // The strip also carries the Chat/Terminal switch while a Claude agent is shown.
+  const showSwitch = isClaude;
+  const showStrip = panes.length > 1 || (panes.length === 1 && current?.content.kind === "empty") || showSwitch;
 
   return (
     <div
@@ -96,7 +100,12 @@ export function PhoneWorkspace({ workspaceId, panes, current, actionsIn, childre
         {/* Content passing under the header fades out instead of meeting a hard edge. */}
         <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 top-full h-3 bg-linear-to-b to-transparent", cv ? "from-cv-bg" : "from-bg")} />
       </header>
-      {showStrip && <AgentStrip workspaceId={workspaceId} panes={panes} current={current} actionsIn={actionsIn} claude={cv} />}
+      {showStrip && (
+        <div className="flex shrink-0 items-center pr-3 pb-2.5">
+          <AgentStrip workspaceId={workspaceId} panes={panes} current={current} actionsIn={actionsIn} claude={cv} />
+          {showSwitch && <ClaudeViewSwitch className="pl-1" />}
+        </div>
+      )}
       <div className={cn("relative min-h-0 flex-1", !cv && "px-2 pb-2")}>
         <div className="relative h-full w-full">{children}</div>
       </div>
@@ -120,7 +129,7 @@ function AgentStrip({ workspaceId, panes, current, actionsIn, claude }: {
     box.current?.querySelector<HTMLElement>("[aria-selected=true]")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
   }, [current?.id]);
   return (
-    <div ref={box} role="tablist" aria-label="Agents" className="scroll-x flex shrink-0 gap-2 px-3 pt-0.5 pb-2.5" data-no-swipe>
+    <div ref={box} role="tablist" aria-label="Agents" className="scroll-x flex min-w-0 flex-1 gap-2 pt-0.5 pl-3 pr-2" data-no-swipe>
       {panes.map((p) => (
         <AgentChip key={p.id} workspaceId={workspaceId} pane={p} active={p.id === current?.id} actions={actionsIn(p.tab, p.id)} claude={claude} />
       ))}
@@ -154,11 +163,11 @@ function AgentChip({ workspaceId, pane, active, actions, claude }: { workspaceId
           )}
         >
           {pane.content.kind === "browser" ? (
-            <IconTile color="blue" className="!size-8 !rounded-full">
-              <Globe />
-            </IconTile>
+            <QuietTile size="chip" round selected={active}>
+              <Globe size={tileGlyph("chip")} strokeWidth={1.6} />
+            </QuietTile>
           ) : (
-            <EngineTile engine={engine} activity={act} className="!size-8 !rounded-full" />
+            <EngineTile engine={engine} size="chip" round selected={active} activity={act} edge={claude ? "ring-cv-bg" : "ring-bg"} />
           )}
           <span className="truncate text-subhead">{title}</span>
         </button>

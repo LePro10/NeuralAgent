@@ -502,3 +502,15 @@ action sheet (pull-downs overflowed inside sheets). Sheets stay under the status
 keyboard for any portal target. Agent state on nav items is structured (`activity`): a running
 light ring for working, an accent pulse for waiting, ember only for "finished, not seen", red for
 error. Launch motion is ≤1.2 s and never blocks.
+
+## D46 — Quiet agent tiles; one app-wide Chat/Terminal switch for Claude (2026-10-30)
+Agent and engine icons use one quiet tile (`EngineTile`/`QuietTile`: the library's list-row tile,
+`bg-fill-3` with the glyph in ink, brighter when selected) instead of a system colour per engine.
+The coloured tiles read as decoration and competed with the status colours; now colour means
+status only (activity ring/dots, D45). Coloured `IconTile`s stay for settings-like rows outside
+the agent surfaces. The Chat/Terminal choice for Claude was already one app-wide preference, but
+its switch sat in each pane header and showed only on the focused pane, so it looked per-pane.
+It is now one `ClaudeViewSwitch` in the workspace bar (desktop, labelled "Claude") and at the end
+of the agent strip (phones, icons only), shown only while a Claude agent is in view. Rejected: a
+per-pane preference (more state, and the owner asked for one global switch). Defaults unchanged:
+terminal on desktop, chat on phones.

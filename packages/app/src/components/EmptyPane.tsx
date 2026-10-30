@@ -1,11 +1,11 @@
 import type { Profile } from "@neuralagent/protocol";
-import { Button, Callout, IconTile, cn, useLayoutMode } from "@neuralagent/ui";
+import { Button, Callout, cn, useLayoutMode } from "@neuralagent/ui";
 import { useState } from "react";
 import { launchable } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
 import { Download, Globe } from "lucide-react";
 import { useWorktreeStart } from "../lib/worktree";
-import { EngineTile } from "./EngineTile";
+import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 
 /** An empty pane is a launcher: pick what runs here. */
 export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspaceId: string; paneId: string; onFocus: () => void; onBrowser: (url: string) => void }) {
@@ -61,7 +61,7 @@ export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspa
             </button>
           ))}
           <button type="button" onClick={openBrowser} className="pressable surface flex min-h-28 flex-col items-start justify-between gap-3 rounded-list p-3.5 text-left">
-            <IconTile color="blue" className="size-11 rounded-tile"><Globe /></IconTile>
+            <QuietTile size="lg"><Globe size={tileGlyph("lg")} strokeWidth={1.6} /></QuietTile>
             <span className="flex w-full min-w-0 flex-col">
               <span className="truncate text-headline text-bright">Preview</span>
               <span className="truncate text-footnote text-dim">{(previewUrl ?? "localhost:3000").replace(/^https?:\/\//, "")}</span>
@@ -90,7 +90,7 @@ export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspa
               onClick={() => start(p)}
               className="hoverable flex h-9 items-center gap-2 rounded-full bg-fill-1 pr-3.5 pl-1.5 text-chip text-ink shadow-rim transition-colors hover:text-bright disabled:opacity-50"
             >
-              <EngineTile engine={p.engine} className="!size-6 !rounded-full" />
+              <EngineTile engine={p.engine} size="sm" round />
               <span className="truncate">{busy === p.id ? "Starting…" : p.name}</span>
             </button>
           ))}
@@ -99,7 +99,7 @@ export function EmptyPane({ workspaceId, paneId, onFocus, onBrowser }: { workspa
             onClick={openBrowser}
             className="hoverable flex h-9 items-center gap-2 rounded-full bg-fill-1 pr-3.5 pl-1.5 text-chip text-ink shadow-rim transition-colors hover:text-bright"
           >
-            <IconTile color="blue" className="!size-6 !rounded-full"><Globe /></IconTile>
+            <QuietTile size="sm" round><Globe size={tileGlyph("sm")} strokeWidth={1.6} /></QuietTile>
             Preview
           </button>
           <button

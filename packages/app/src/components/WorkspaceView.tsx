@@ -11,6 +11,7 @@ import { AgentGlyph } from "./AgentGlyph";
 import type { PaneActions } from "./Pane";
 import { PaneTree, type TreeCtx } from "./PaneTree";
 import { isAppShortcut } from "./TerminalView";
+import { ClaudeViewSwitch } from "./workspace/ClaudeViewSwitch";
 import { PhoneWorkspace } from "./workspace/PhoneWorkspace";
 
 /** WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. */
@@ -193,7 +194,7 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/** Desktop: tabs on the left; branch, layout and New agent on the right. The empty strip drags the window. */
+/** Desktop: tabs on the left; Claude Chat/Terminal, branch, layout and New agent on the right. The empty strip drags the window. */
 function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab }: {
   workspaceId: string;
   layout: WorkspaceLayout;
@@ -225,6 +226,8 @@ function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab 
     client.req({ m: "session_start", p: { workspace_id: workspaceId, profile_id: profileId, ...worktree(engine) } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
 
   const count = panes(tab.root).length;
+  // The Chat/Terminal switch only means something while a Claude agent is in this tab.
+  const claudeShown = sessionsOf(tab.root).some((sid) => profiles?.find((p) => p.id === sessions?.[sid]?.profile_id)?.engine === "claude");
   const presetItems: MenuEntry[] = PRESETS.map((n) => ({
     label: n === 1 ? "1 pane" : `${n} panes`,
     checked: n === count,
@@ -282,6 +285,7 @@ function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab 
         </button>
       </div>
       <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
+      {claudeShown && <ClaudeViewSwitch className="mr-1.5" />}
       {git && (
         <button
           type="button"

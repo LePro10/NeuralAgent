@@ -31,7 +31,7 @@ import { NOTICE, byDay, clock, plainText, shortAgo, useNow } from "../lib/agentu
 import { activityOf } from "../lib/status";
 import { useClient, useDaemon, useUi } from "../lib/store";
 import { CallScreen } from "./CallScreen";
-import { EngineTile } from "./EngineTile";
+import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { Glow } from "./Glow";
 
 /** Content fades under the header and above the composer instead of being cut. */
@@ -269,7 +269,7 @@ function NoticeRow({ m, now }: { m: OrchMessage; now: number }) {
       onClick={() => m.session_id && open(m.session_id)}
       className={cn("flex w-full items-start gap-3 px-4 py-3 text-left", can && "press-row hover:bg-fill-1")}
     >
-      {engine ? <EngineTile engine={engine} activity={still ? k.activity : undefined} className="mt-0.5" /> : <IconTile Icon={Bell} color="gray" className="mt-0.5" />}
+      {engine ? <EngineTile engine={engine} activity={still ? k.activity : undefined} className="mt-0.5" /> : <QuietTile className="mt-0.5"><Bell size={tileGlyph("md")} strokeWidth={1.6} /></QuietTile>}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="min-w-0 flex-1 truncate text-headline text-bright">{title}</span>
@@ -389,7 +389,7 @@ function LiveAgents() {
             className="pressable surface flex h-12 max-w-56 shrink-0 items-center gap-2.5 rounded-full py-1 pr-4 pl-2 text-left"
             aria-label={`${c.title}, ${c.sub}`}
           >
-            {c.engine ? <EngineTile engine={c.engine} activity={c.activity} className="rounded-full" /> : <IconTile Icon={Users} color="purple" activity={c.activity} className="rounded-full" />}
+            {c.engine ? <EngineTile engine={c.engine} activity={c.activity} round /> : <QuietTile round activity={c.activity}><Users size={tileGlyph("md")} strokeWidth={1.6} /></QuietTile>}
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-subhead text-bright">{c.title}</span>
               {c.sub && <span className="truncate text-caption text-dim">{c.sub}</span>}

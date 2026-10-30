@@ -9,7 +9,6 @@ import {
   ConfirmSheet,
   Empty,
   IconButton,
-  IconTile,
   List,
   Menu,
   Page,
@@ -35,7 +34,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { MEMBER_COLORS, clock, shortAgo, sysVar, useNow } from "../lib/agentui";
 import { STATUS, activityOf } from "../lib/status";
 import { useClient, useDaemon } from "../lib/store";
-import { EngineTile } from "./EngineTile";
+import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { Glow } from "./Glow";
 import { useOpenSession } from "./NeuralPage";
 
@@ -168,7 +167,7 @@ function SwarmRow({ swarm, selected, onClick }: { swarm: Swarm; selected: boolea
       aria-current={selected || undefined}
       className={cn("press-row flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-fill-1", selected && "!bg-fill-3")}
     >
-      <IconTile Icon={Users} color={swarm.ended ? "gray" : "purple"} activity={activity} className="mt-0.5" />
+      <QuietTile activity={activity} className={cn("mt-0.5", swarm.ended && "opacity-60")}><Users size={tileGlyph("md")} strokeWidth={1.6} /></QuietTile>
       <span className="min-w-0 flex-1">
         <span className="line-clamp-2 text-headline text-bright">{swarm.goal}</span>
         <span className="mt-1.5 flex items-center gap-2 text-footnote text-dim">
