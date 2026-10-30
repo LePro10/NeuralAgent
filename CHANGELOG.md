@@ -11,13 +11,16 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
+Calmer, more colourful: your accent is back, the icons are quiet, and Settings holds everything.
+
 ### Improved
 - The desktop sidebar is short again when closed and grows to full height when you point at it.
 - The changelog on the website is easier to scan: the newest release is open, older ones are short rows you can open, and links like `/changelog#v0-3-0` open that release.
 - Agent icons are calm now: one quiet style instead of a colourful tile per agent, in workspaces, the "+" sheet and the agent lists. Colour is left for status: a light runs around an agent while it works, and a dot shows when it needs you, finished or failed.
 - Chat or terminal for Claude is one clear switch in the workspace bar (on phones at the end of the agent strip) instead of a switch hidden in one pane. It applies to every Claude agent and only shows when a Claude agent is in view.
 - The app background glows in your colours again: soft light in your accent and theme colours behind every page, the launch screen and the phone status bar, in light and dark mode. Each accent and theme now looks clearly different.
-
 - Settings, the More page and the account look calmer: plain grey icons instead of colourful tiles, and Settings is grouped into clear sections.
 - Remote access and MCP servers now live in Settings instead of having their own places in the sidebar. Old links still open them.
 - Clicking your profile picture in the sidebar opens Settings straight away.

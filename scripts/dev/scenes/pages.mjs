@@ -12,7 +12,7 @@ export default async ({ p, shot, sleep, go, more, tap, phone, args }) => {
       const first = p.getByText("product-docs", { exact: true }).first();
       if (await first.count()) { await tap(first); await sleep(1500); await shot("04-workspace"); }
     } else {
-      const ws = p.locator('nav :text-is("product-docs")').first();
+      const ws = p.locator('nav [aria-label="product-docs"]').first();
       if (await ws.count()) { await ws.click(); await sleep(1500); await shot("04-workspace"); }
     }
   }

@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-30 by `node scripts/codemap.mjs` (415 files). Do not edit by hand; regenerate after adding,
+Generated 2026-10-30 by `node scripts/codemap.mjs` (420 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -168,11 +168,11 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **build-web-icons.mjs** (163) — Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
 
 ## packages/app/src/
-- **App.tsx** (381) — `App()`
+- **App.tsx** (382) — `App()`
 - **index.ts** (9) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio`
 
 ## packages/app/src/components/
-- **AccountRow.tsx** (68) — The user at the foot of the sidebar: photo (Google/GitHub when the relay knows it), name, email, · `AccountRow()`
+- **AccountRow.tsx** (32) — The user at the foot of the sidebar: photo (Google/GitHub when the relay knows it), name, email, · `AccountRow()`
 - **AgentCatalog.tsx** (137) — Every known agent CLI: what is installed, and a one-click install that runs visibly in a pane. · `AgentCatalog()`
 - **AgentGlyph.tsx** (36) — `AgentGlyph(), GlyphTile()`
 - **AgentsDashboard.tsx** (188) — `AgentsDashboard()`
@@ -180,35 +180,35 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **BrowserPane.tsx** (90) — Normalises what was typed: `localhost:3000` → `http://localhost:3000/`. · `toUrl(), BrowserPane()`
 - **CallAudioToggle.tsx** (26) — Earpiece / speaker switch among the call controls. Hidden where the browser cannot choose. · `CallAudioToggle()`
 - **CallScreen.tsx** (60) — The in-call surface for Neural: orb, running time, what was heard and said, mute / speaker / end. · `CallScreen()`
-- **ChangesSheet.tsx** (225) — `ChangesSheet()`
+- **ChangesSheet.tsx** (226) — `ChangesSheet()`
 - **EmptyPane.tsx** (119) — An empty pane is a launcher: pick what runs here. · `EmptyPane()`
-- **EngineTile.tsx** (16) — An agent's coloured tile (iOS Settings style): the engine's glyph on its system colour, plus · `EngineTile()`
+- **EngineTile.tsx** (58) — `QuietTile(), EngineTile(), tileGlyph`
 - **FolderBrowser.tsx** (188) — `pickHostFolder(), FolderBrowserSheet()`
-- **Glow.tsx** (28) — Colour pairs for a page's light: [left, right, centre] as colour tokens. · `Glow()`
+- **Glow.tsx** (29) — Colour pairs for a page's light: [left, right, centre] as colour tokens. · `Glow()`
 - **HistoryPage.tsx** (116) — Past Claude Code and Codex conversations on this computer, searchable; tap one to resume it. · `HistoryPage()`
-- **HostSettings.tsx** (308) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings()`
+- **HostSettings.tsx** (307) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings()`
 - **HostWatcher.tsx** (67) — `HostUpdateWatcher()`
 - **KeyBar.tsx** (187) — `KeyBar()`
 - **LaunchScreen.tsx** (88) — Launch motion: the NeuralAgent mark assembles from its panes while the accent light blooms · `LaunchScreen()`
 - **McpPage.tsx** (249) — `McpPage()`
-- **MorePage.tsx** (52) — Phones: the "More" tab — everything that is not a tab, as an iOS Settings-style list. · `interface MoreItem, MorePage()`
+- **MorePage.tsx** (51) — Phones: the "More" tab — everything that is not a tab, as a grouped list with quiet icon tiles. · `interface MoreItem, MorePage()`
 - **NeuralPage.tsx** (423) — `NeuralPage(), useOpenSession()`
-- **Pane.tsx** (212) — `interface PaneActions, Pane()`
+- **Pane.tsx** (196) — `interface PaneActions, Pane()`
 - **PaneTree.tsx** (102) — `interface TreeCtx, PaneTree()`
 - **ProfileEditor.tsx** (108) — `ProfileEditor()`
 - **ReleaseNotes.tsx** (81) — Release notes from CHANGELOG.md (lib/changelog.ts): used by the update dialog and Settings → Updates. · `CHANGELOG_URL, ReleaseNotes()`
-- **RemotePage.tsx** (324) — Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePage()`
-- **SettingsPage.tsx** (207) — Settings. Phones: an iOS Settings list with coloured tiles; each row pushes its page (swipe · `SettingsPage()`
-- **SwarmPage.tsx** (523) — `SwarmPage()`
+- **RemotePage.tsx** (331) — Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePage()`
+- **SettingsPage.tsx** (246) — Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back). · `SettingsPage()`
+- **SwarmPage.tsx** (522) — `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
-- **UpdateBadge.tsx** (61) — The running version, small, above the account row (desktop sidebar foot; phones: next to the · `UpdateBadge()`
+- **UpdateBadge.tsx** (93) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
 - **VoiceHud.tsx** (24) — `VoiceHud()`
-- **WorkspaceView.tsx** (315) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
-- **WorkspacesPage.tsx** (54) — Phones: the "Workspaces" tab — every project folder as a row (status at a glance), and Add workspace. · `WorkspacesPage()`
+- **WorkspaceView.tsx** (319) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
+- **WorkspacesPage.tsx** (51) — Phones: the "Workspaces" tab — every project folder as a row (status at a glance), and Add workspace. · `WorkspacesPage()`
 
 ## packages/app/src/components/claude/
 - **ClaudeView.tsx** (251) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
@@ -226,16 +226,17 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 
 ## packages/app/src/components/settings/
 - **nav.ts** (9) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column). · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
-- **panels.tsx** (494) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
+- **panels.tsx** (493) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
 
 ## packages/app/src/components/workspace/
-- **NewAgentSheet.tsx** (83) — Phones: "+" in a workspace opens this sheet: every agent you can start as a big tile, the · `NewAgentSheet()`
-- **PhoneWorkspace.tsx** (170) — Phones: one agent at a time, full screen. A calm header (back · workspace and branch · "…" · "+") · `PhoneWorkspace()`
-- **paneMenu.tsx** (94) — What you can do with one pane, in one place: the desktop pane header's "…" menu and the phone · `usePaneSession(), paneTitle(), usePaneMenu()`
+- **ClaudeViewSwitch.tsx** (45) — Chat or terminal for Claude agents: one app-wide choice, so it is one switch in the workspace · `useClaudeChat(), ClaudeViewSwitch()`
+- **NewAgentSheet.tsx** (81) — Phones: "+" in a workspace opens this sheet: every agent you can start as a big tile, the · `NewAgentSheet()`
+- **PhoneWorkspace.tsx** (179) — Phones: one agent at a time, full screen. A calm header (back · workspace and branch · "…" · "+") · `PhoneWorkspace()`
+- **paneMenu.tsx** (87) — What you can do with one pane, in one place: the desktop pane header's "…" menu and the phone · `usePaneSession(), paneTitle(), usePaneMenu()`
 
 ## packages/app/src/lib/
 - **agentui.test.ts** (24)
-- **agentui.ts** (121) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `engineColor, MEMBER_COLORS, sysVar, plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
+- **agentui.ts** (100) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `MEMBER_COLORS, sysVar, plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **call.ts** (220) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), interruptCall(), playPreview()`
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
@@ -248,11 +249,13 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **platform.ts** (111) — What the shell around the shared app provides (Tauri window, browser/PWA, Android). · `interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
+- **settingsRoute.test.ts** (17)
+- **settingsRoute.ts** (28) — Which Settings section to show next. Anything can open Settings at a section (the command · `SETTINGS_PAGE, MOVED_TO_SETTINGS, useSettingsRoute, requestSettingsSection(), takeSettingsSection()`
 - **status.ts** (37) — `STATUS, mostUrgent(), since(), activityOf()`
 - **store.tsx** (82) — `DaemonProvider(), useClient(), usePlatform(), useDaemon(), useUi, useCatalogSheet, useChanges`
 - **termtext.test.ts** (48) — Rows as xterm stores them: fixed width, `+` prefix = soft-wrapped continuation of the row above.
 - **termtext.ts** (71) — Plain text out of an xterm.js buffer, for copying: rows that xterm soft-wrapped are joined back · `interface TextLine, interface TextBuffer, MAX_TEXT, bufferLines(), capLines(), interface TerminalText, terminalText()`
-- **theme.ts** (112) — Themes: a colour scheme (ground, surfaces, ink; data-scheme) plus an accent (data-accent) and an · `type Scheme, type Accent, type Appearance, APPEARANCES, SCHEMES, ACCENTS, useTheme, accentOf, THEME_EVENT, resolvedAppearance(), syncThemeColor(), startTheme()`
+- **theme.ts** (139) — Themes: a colour scheme (ground, surfaces, ink; data-scheme) plus an accent (data-accent) and an · `type Scheme, type Accent, type Appearance, APPEARANCES, SCHEMES, ACCENTS, useTheme, accentOf, THEME_EVENT, resolvedAppearance(), syncThemeColor(), startTheme()`
 - **time.ts** (11) — "5 min ago", "3 h ago", or the date for anything older than a month. · `ago()`
 - **updates.ts** (239) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
 - **voice.ts** (49) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
@@ -308,7 +311,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **Feedback.tsx** (98) — States are part of the feature: empty, loading, error, live. · `Empty(), Callout(), StatusDot(), Spinner(), Skeleton(), SkeletonText(), SkeletonRow(), SkeletonList(), Kbd()`
 - **Field.tsx** (81) — Inputs. Wells sunk into the page: a faint fill, an inner shadow from the · `inputClass, Field(), Input(), TextArea(), SearchField()`
 - **List.tsx** (108) — Inset grouped list (iOS Settings) and its row. A surface lit from above, · `type SysColor, IconTile(), List(), interface RowProps, Row()`
-- **Segmented.tsx** (55) — Segmented control (iOS): a filled capsule track and a lifted thumb that · `interface SegmentedOption, Segmented()`
+- **Segmented.tsx** (58) — Segmented control (iOS): a filled capsule track and a lifted thumb that · `interface SegmentedOption, Segmented()`
 - **Slider.tsx** (98) — Slider. A 4px track that fills in the place's colour, an 18px thumb that · `Slider()`
 - **Stat.tsx** (41) — Figures. `Stat` is the small tile (a value over a label, in rows of 2–3); · `Stat(), Trend()`
 - **Switch.tsx** (88) — Switch and Check. · `Switch(), Check()`
@@ -348,7 +351,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 ## packages/ui/ui/components/layout/
 - **AppShell.tsx** (101) — App frame: a floating glass sidebar on desktop, a floating liquid-glass tab · `type NavItem, interface Nav, AppShell()`
 - **Page.tsx** (166) — A scrollable screen with a large title — and the one owner of page spacing. · `interface PageProps, BackButton(), Page(), Section()`
-- **Sidebar.tsx** (211) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
+- **Sidebar.tsx** (214) — Desktop navigation: a glass island that floats off the window's edge — · `interface SidebarItem, Sidebar()`
 - **TabBar.tsx** (360) — Floating liquid-glass tab bar (phones), with the rest of the app inside it. · `interface TabItem, signalOf, TabBar()`
 - **index.ts** (5)
 
@@ -408,7 +411,7 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 - **lib.mjs** (237) — Shared helpers for the dev/test tools in scripts/dev: repo paths, a safe test-daemon home, · `ROOT, DEV, sleep, DEFAULT_HOME, DEFAULT_VITE_PORT, realDataDir(), testHome(), daemonBin, relayBin, daemonInfo, readState, waitForFile(), connect(), redact` +12
 - **montage.mjs** (12) — One labelled contact sheet from many screenshots (cheaper to review than many images).
 - **seed.mjs** (93) — Demo data for screenshots in a test daemon: four workspaces, stand-in Claude/Codex/Gemini · `seed()`
-- **shot.mjs** (132) — Screenshot driver for the desktop UI (dev.html) against a test daemon, at standard sizes in
+- **shot.mjs** (137) — Screenshot driver for the desktop UI (dev.html) against a test daemon, at standard sizes in
 - **swarm-real.mjs** (65) — A real swarm: four Claude Code (Haiku) members on a tiny task in a throwaway git repo.
 - **web-push.mjs** (132) — Web Push in Chromium: the web remote (/app) against a local relay (test sign-in) + daemon, with
 - **web-remote.mjs** (127) — The web remote (/app, also what the Android app loads) in a browser against a local relay
@@ -426,4 +429,6 @@ Generated, not listed: `packages/protocol/src/gen/` (79 files, from `crates/na-p
 ## scripts/dev/scenes/
 - **call.mjs** (22) — Call Neural in the browser with a fake microphone and log the call states.
 - **home.mjs** (6) — The start page after load. Usage: node scripts/dev/shot.mjs home
+- **nav.mjs** (61) — Navigation chrome: the More page, Settings (with Remote access and MCP servers inside), and on
 - **pages.mjs** (25) — Tour of the main pages. Seed first (env.mjs up --seed [--llm]).
+- **workspace.mjs** (59) — The workspace view: split panes (Gemini + Claude), the focused pane, the Chat/Terminal switch,
