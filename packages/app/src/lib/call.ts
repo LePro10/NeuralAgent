@@ -11,6 +11,8 @@ import { create } from "zustand";
 
 interface CallView {
   on: boolean;
+  /** The microphone is open. */
+  live: boolean;
   state: VoiceState;
   /** What Neural understood, last turn. */
   heard: string;
@@ -21,7 +23,7 @@ interface CallView {
   error?: string;
 }
 
-const IDLE: CallView = { on: false, state: "connecting", heard: "", transcript: "", spokenWords: 0, muted: false };
+const IDLE: CallView = { on: false, live: false, state: "connecting", heard: "", transcript: "", spokenWords: 0, muted: false };
 export const useCall = create<CallView>(() => IDLE);
 /** Microphone level 0..1, for the orb. */
 export const callLevel = motionValue(0);
@@ -96,6 +98,7 @@ class Session {
     ctx.createMediaStreamSource(stream).connect(node);
     this.node = node;
     await ctx.resume();
+    useCall.setState({ live: true });
   }
 
   close() {

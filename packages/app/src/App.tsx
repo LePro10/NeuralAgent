@@ -1,7 +1,7 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, Callout, Empty, Page, Sidebar, Spinner, Toaster, toast, type NavItem } from "@neuralagent/ui";
 import { Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Plug, Settings, Smartphone, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
 import { BrandMark } from "./components/BrandMark";
@@ -14,6 +14,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { NeuralPage } from "./components/NeuralPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { frontTabFor } from "./lib/layout";
+import { endCall, startCall, useCall } from "./lib/call";
 import { mostUrgent } from "./lib/status";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 
@@ -56,6 +57,32 @@ export function App() {
     });
     return () => void off();
   }, [client, platform]);
+
+  // Phones: the quick tile starts a call (on the Neural page); the native side keeps it alive.
+  const live = useCall((c) => c.live);
+  const on = useCall((c) => c.on);
+  // Told the native side about this call; or it was dialled from there and waits for the end.
+  const told = useRef(false);
+  const dialled = useRef(false);
+  useEffect(() => {
+    if (live && !told.current) {
+      told.current = true;
+      platform.call?.active(true);
+    } else if (!on && (told.current || dialled.current)) {
+      told.current = dialled.current = false;
+      platform.call?.active(false);
+    }
+  }, [platform, live, on]);
+  useEffect(
+    () =>
+      platform.call?.onDial((start) => {
+        if (!start) return endCall();
+        dialled.current = true;
+        setWorkspace(null);
+        void startCall(client);
+      }),
+    [platform, client, setWorkspace],
+  );
 
   // A tapped notification (web push, Android) opens its agent once the state knows it.
   const [opening, setOpening] = useState<string | null>(null);

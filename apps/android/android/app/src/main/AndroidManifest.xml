@@ -57,6 +57,19 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".CallTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_call"
+            android:label="Call Neural"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service android:name=".CallService" android:exported="false" android:foregroundServiceType="microphone" />
+
         <receiver android:name=".AgentWidget" android:exported="false" android:label="Agents">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -82,4 +95,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Calls with Neural: the microphone, also with the screen locked. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 </manifest>

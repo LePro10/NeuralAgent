@@ -20,6 +20,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 public class NativePlugin extends Plugin {
     private static NativePlugin instance;
     private static JSObject pending;
+    private static Boolean pendingDial;
 
     @Override
     public void load() {
@@ -28,6 +29,31 @@ public class NativePlugin extends Plugin {
             notifyListeners("open", pending, true);
             pending = null;
         }
+        if (pendingDial != null) {
+            dial(pendingDial);
+            pendingDial = null;
+        }
+    }
+
+    /** The "Call Neural" tile or the call notification: start or end a call in the page. */
+    static void dial(boolean start) {
+        if (instance == null) {
+            pendingDial = start;
+            return;
+        }
+        JSObject o = new JSObject();
+        o.put("start", start);
+        instance.notifyListeners("dial", o, true);
+    }
+
+    /** The page started or ended a call: keep the microphone on with the screen locked meanwhile. */
+    @PluginMethod
+    public void callActive(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        if (on) CallService.start(getContext());
+        else CallService.stop(getContext());
+        getActivity().runOnUiThread(() -> ((MainActivity) getActivity()).calling(on));
+        call.resolve();
     }
 
     /** Open one agent; kept until the page listens when the app was cold-started by the tap. */

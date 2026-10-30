@@ -325,6 +325,15 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       notify: (title, body) => {
         if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: "/logo.png" });
       },
+      call: native
+        ? {
+            active: (on) => void native?.plugin.callActive({ on }).catch(() => {}),
+            onDial: (cb) => {
+              const h = native!.plugin.addListener("dial", (o) => cb(o.start));
+              return () => void h.then((x) => x.remove());
+            },
+          }
+        : undefined,
       account: { label: "This device", render: () => <DevicePage host={host} onSwitch={onSwitch} /> },
       onOpenSession: (cb) =>
         onOpenRequest((o) => {

@@ -26,6 +26,13 @@ export interface Platform {
   account?: { label: string; render: () => ReactNode };
   /** A notification was tapped: show this agent. Requests may arrive before the state has loaded. */
   onOpenSession?: (cb: (sid: string) => void) => () => void;
+  /** Phones: a call with Neural keeps the microphone on with the screen locked (Android). */
+  call?: {
+    /** The call has the microphone (true) or ended (false). */
+    active: (on: boolean) => void;
+    /** "Call Neural" was picked outside the page (quick tile, notification): start or end a call. */
+    onDial: (cb: (start: boolean) => void) => () => void;
+  };
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
 }

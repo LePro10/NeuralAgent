@@ -11,6 +11,8 @@ interface NeuralAgentPlugin {
   setStatus(o: { computer: string; running: number; working: number; waiting: number }): Promise<void>;
   setNames(o: { json: string }): Promise<void>;
   pinWidget(): Promise<{ ok: boolean }>;
+  callActive(o: { on: boolean }): Promise<void>;
+  addListener(event: "dial", cb: (o: { start: boolean }) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", cb: (o: { host: string | null; sid: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "token", cb: (o: { token: string }) => void): Promise<PluginListenerHandle>;
 }
