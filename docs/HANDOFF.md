@@ -6,10 +6,13 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
 ## Where we are (2026-10-31)
-- **Mobile overhaul done on branch `mobile-overhaul`: uncommitted, not released.** Phone IA (4 tabs,
+- **Mobile overhaul committed on branch `mobile-overhaul` (not merged into main, not released).
+  Web remote + relay deployed from it on 2026-10-31 (build `0.3.4+mvwk87yh`): phones and the Android
+  app load the new UI now; subagents, tasks, real context and daemon actions need the new daemon
+  (next release).** Phone IA (4 tabs,
   hash router), agent screen with Island, new transcript, composer and controls, subagents/tasks,
   daemon `cv_action` (D52-D57, [notes/mobile-overhaul.md](notes/mobile-overhaul.md)). Owner tests it
-  on real devices before it is committed and released (0.4.0).
+  on real devices; then merge into main and release (0.4.0).
 - M0–M9 done; **M10 (own ideas, polish, final report) is current**.
 - Released: 0.2.0 (design + remote round, D40–D42), installed and deployed.
 - 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, never built.
@@ -39,7 +42,7 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
 ## Next
-1. Owner tests the overhaul on a real phone and Android device; fix findings; commit the branch.
+1. Owner tests the overhaul on a real phone and Android device; fix findings; merge the branch into main.
 2. Release when the owner says so (new APK needed for the APK-only items in the overhaul note).
 3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, iOS PWA status
    text stays white in light mode, "done, not seen" is not persisted by the daemon.
