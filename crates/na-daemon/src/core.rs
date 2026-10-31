@@ -412,6 +412,11 @@ impl Core {
                 Ok(Value::Null)
             }
             Request::SessionPrompt { id, text } => {
+                // In a Claude session the prompt ends with Enter, which would accept whatever an
+                // open dialog has highlighted (often "Yes").
+                if self.cv.has_tail(&id) && self.pty(&id).is_ok_and(|p| crate::cv_action::menu_now(&p.screen_text()).is_some()) {
+                    return Err(err(ErrorCode::Conflict, "Answer the open question in the terminal first"));
+                }
                 self.send_prompt(&id, &text)?;
                 Ok(Value::Null)
             }
@@ -434,6 +439,9 @@ impl Core {
             | Request::CvImage { .. }
             | Request::CvCommands { .. }
             | Request::CvFiles { .. }
+            | Request::CvAction { .. }
+            | Request::CvTaskOutput { .. }
+            | Request::CvFile { .. }
             | Request::Upload { .. }
             | Request::Transcribe { .. }) => self.cv_handle(r).await.unwrap_or(Ok(Value::Null)),
             Request::CvAttach { .. } | Request::CvDetach { .. } | Request::TermAttach { .. } | Request::TermDetach { .. } => {
@@ -1054,8 +1062,8 @@ impl Core {
     }
 
     /// Output-based status for sessions without hooks, plus `last_line` refresh. Runs ~3×/s.
+    /// (The Claude view's tick runs on its own thread: it reads files.)
     pub fn tick(&self) {
-        self.cv_tick();
         let ids: Vec<(Id, Option<Instant>, bool, Arc<Pty>)> =
             self.live.lock().iter().map(|(id, l)| (id.clone(), l.last_output, l.prompted, l.pty.clone())).collect();
         for (id, last_output, prompted, pty) in ids {
@@ -1104,6 +1112,7 @@ impl Core {
         if let Some(p) = payload.get("transcript_path").and_then(Value::as_str) {
             self.cv_note_path(sid, p);
         }
+        self.cv_hook(sid, event, payload);
         let mark = |x: &mut Session| {
             x.status_source = StatusSource::Hooks;
             if let Some(e) = &engine_session {
@@ -1116,9 +1125,11 @@ impl Core {
             if !limits.is_empty() {
                 self.set_limits("claude", limits);
             }
-            if let Some(level) = payload.pointer("/effort/level").and_then(Value::as_str) {
-                self.cv_status_effort(sid, level);
-            }
+            self.cv_status(sid, payload);
+            return;
+        }
+        if event == "subagent-statusline" || event == "SubagentStart" || event == "SubagentStop" {
+            // Subagents: the Claude view's task list only, not the session's status.
             return;
         }
         match event {

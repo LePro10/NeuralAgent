@@ -10,7 +10,12 @@ mod call;
 mod catalog;
 mod claude_view;
 mod core;
+mod cv_action;
+mod cv_commands;
 mod cv_image;
+mod cv_parse;
+mod cv_screen;
+mod cv_tasks;
 mod discord;
 mod env;
 mod fsbrowse;
@@ -45,6 +50,10 @@ fn main() -> Result<()> {
     match args.first().map(String::as_str) {
         Some("statusline") => {
             hooks::statusline_main();
+            Ok(())
+        }
+        Some("subagent-statusline") => {
+            hooks::subagent_statusline_main();
             Ok(())
         }
         Some("hook") => {
@@ -111,6 +120,20 @@ fn serve() -> Result<()> {
         write_private(&paths.daemon_json(), &serde_json::to_vec_pretty(&info)?)?;
         tracing::info!(port, "listening");
 
+        {
+            // The Claude view reads transcripts and screens ~3×/s: blocking file IO, so not on
+            // the async workers.
+            let core = core.clone();
+            std::thread::Builder::new()
+                .name("claude-view".into())
+                .spawn(move || {
+                    loop {
+                        std::thread::sleep(Duration::from_millis(333));
+                        core.cv_tick();
+                    }
+                })
+                .expect("start the claude view thread");
+        }
         {
             let core = core.clone();
             let awake = awake::Awake::start();

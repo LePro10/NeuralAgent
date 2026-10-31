@@ -8,4 +8,33 @@ name: string, description: string,
 /**
  * `builtin`, `user`, `project`, `skill`, `plugin`.
  */
-source: string, };
+source: string, 
+/**
+ * Palette section: `conversation`, `model`, `context`, `agents`, `code`, `project`,
+ * `extensions`, `account`, `custom` (user/project commands), `skills`, `plugins`.
+ */
+group?: string, 
+/**
+ * What running it does: `native` (the app has its own UI, see `native`), `args` (typed with
+ * optional arguments, runs at once), `dialog` (opens a CLI menu: answered via the prompt
+ * card / menu sheet, or the terminal), `prompt` (sends a prompt to Claude: skills, custom
+ * commands), `output` (prints something into the conversation).
+ */
+kind?: string, 
+/**
+ * Argument hint (`[instructions]`, `<path>`, `[low|medium|high|xhigh|max|auto]`).
+ */
+args?: string, 
+/**
+ * Known values for the argument (for chips).
+ */
+values?: Array<string>, aliases?: Array<string>, 
+/**
+ * `kind = native`: which app UI handles it: `model`, `effort`, `mode`, `fast`, `rewind`,
+ * `tasks`, `context`, `usage`, `changes`, `mcp`, `resume`, `folder`, `todos`.
+ */
+native?: string, 
+/**
+ * `false`: makes little sense on a phone (theme, terminal setup…): list it under "More".
+ */
+phone?: boolean, };

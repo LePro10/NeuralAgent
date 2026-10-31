@@ -42,9 +42,16 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
                 None => Err(err(ErrorCode::NotFound, "no such swarm")),
             }
         }
-        Request::Upload { sid, .. } | Request::CvFiles { sid, .. } => match ws_of_session(sid) {
+        Request::Upload { sid, .. } | Request::CvFiles { sid, .. } | Request::CvFile { sid, .. } | Request::CvTaskOutput { sid, .. } => {
+            match ws_of_session(sid) {
+                Some((ws, _)) if approved(&ws) => Ok(()),
+                Some(_) => needs("adding files for an agent outside an approved workspace"),
+                None => Err(err(ErrorCode::NotFound, "no such session")),
+            }
+        }
+        Request::CvAction { sid, .. } => match ws_of_session(sid) {
             Some((ws, _)) if approved(&ws) => Ok(()),
-            Some(_) => needs("adding files for an agent outside an approved workspace"),
+            Some(_) => needs("controlling an agent outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
         Request::TermWrite { sid, .. } => match ws_of_session(sid) {

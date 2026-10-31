@@ -9,6 +9,16 @@ export type CvMessage = {
 i: number, id: string, role: CvRole, ts: number, model?: string, 
 /**
  * `command` (a slash command the user ran), `output` (its output), `compact`, `notice`,
- * `summary` (the carried-over summary after compaction).
+ * `summary` (the carried-over summary after compaction), and since the mobile overhaul:
+ * `task` (a `task_note` block), `shell` (`!` mode, a `shell` block), `peer` (a message from
+ * another agent, see `from`), `hook`, `error`, `duration`.
  */
-kind?: string, blocks: Array<CvBlock>, };
+kind?: string, blocks: Array<CvBlock>, 
+/**
+ * `peer`: who sent it (agent id) and its name/type.
+ */
+from?: string, from_name?: string, 
+/**
+ * User prompts: a file checkpoint exists, so `/rewind` can restore code to before it.
+ */
+checkpoint?: boolean, };

@@ -1,7 +1,23 @@
 import { apply } from "./apply.ts";
-import type { ApiError, AttachResult, CallEvent, CvAttachResult, CvEvent, ClientInfo, Event, HostInfo, Request, ServerMsg, State } from "./gen/index.ts";
+import type {
+  ApiError,
+  AttachResult,
+  CallEvent,
+  CvAction,
+  CvAttachResult,
+  CvEvent,
+  CvTextResult,
+  ClientInfo,
+  Event,
+  HostInfo,
+  Request,
+  ServerMsg,
+  State,
+} from "./gen/index.ts";
 
 export const PROTOCOL_VERSION = 1;
+/** Claude view event kinds this client handles beyond upsert/reset/meta/prompt (sent with `cv_attach`). */
+export const CV_FEATURES = ["tasks"];
 
 /** A message pipe to a daemon: the local WebSocket, or the relay with E2E sealing. */
 export interface Transport {
@@ -91,7 +107,8 @@ export class DaemonClient {
   /** A call is on: started again after a reconnect (the conversation lives in the daemon). */
   private calling = false;
   private terms = new Map<string, Attached>();
-  private cvs = new Map<string, { sinks: Set<CvSink>; gen: number }>();
+  /** Keyed by `cvKey(sid, agent)`. */
+  private cvs = new Map<string, { sinks: Set<CvSink>; gen: number; sid: string; agent?: string }>();
   private retry = 0;
   private closed = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -406,7 +423,7 @@ export class DaemonClient {
         break;
       }
       case "cv": {
-        const a = this.cvs.get(m.sid);
+        const a = this.cvs.get(cvKey(m.sid, m.agent));
         if (!a) return;
         for (const s of a.sinks) s.event(m.ev);
         break;
@@ -477,36 +494,57 @@ export class DaemonClient {
 
   private reattachAll() {
     for (const sid of this.terms.keys()) void this.doAttach(sid);
-    for (const sid of this.cvs.keys()) void this.doAttachCv(sid);
+    for (const key of this.cvs.keys()) void this.doAttachCv(key);
   }
 
-  /** Streams a Claude session's conversation into `sink` until the returned function is called. */
-  attachCv(sid: string, sink: CvSink): () => void {
-    let a = this.cvs.get(sid);
+  /**
+   * Streams a Claude session's conversation into `sink` until the returned function is called.
+   * `opts.agent`: a subagent's own transcript (`CvTask.id`) instead of the main conversation.
+   */
+  attachCv(sid: string, sink: CvSink, opts?: { agent?: string }): () => void {
+    const key = cvKey(sid, opts?.agent);
+    let a = this.cvs.get(key);
     if (!a) {
-      a = { sinks: new Set(), gen: 0 };
-      this.cvs.set(sid, a);
+      a = { sinks: new Set(), gen: 0, sid, agent: opts?.agent };
+      this.cvs.set(key, a);
     }
     a.sinks.add(sink);
-    void this.doAttachCv(sid, sink);
+    void this.doAttachCv(key, sink);
     return () => {
-      const cur = this.cvs.get(sid);
+      const cur = this.cvs.get(key);
       if (!cur) return;
       cur.sinks.delete(sink);
       if (cur.sinks.size === 0) {
-        this.cvs.delete(sid);
-        this.req({ m: "cv_detach", p: { sid } }).catch(() => {});
+        this.cvs.delete(key);
+        this.req({ m: "cv_detach", p: cur.agent ? { sid, agent: cur.agent } : { sid } }).catch(() => {});
       }
     };
   }
 
-  private async doAttachCv(sid: string, only?: CvSink) {
-    const a = this.cvs.get(sid);
+  /** Makes the CLI do something (mode, answer, background, rewind, …); the daemon types the keys. */
+  cvAction(sid: string, action: CvAction): Promise<void> {
+    return this.req<null>({ m: "cv_action", p: { sid, action } }).then(() => undefined);
+  }
+
+  /** The end of a background task's output (`CvTask.output_file`). */
+  cvTaskOutput(sid: string, task: string, max?: number): Promise<CvTextResult> {
+    return this.req<CvTextResult>({ m: "cv_task_output", p: max ? { sid, task, max } : { sid, task } });
+  }
+
+  /** A text file the conversation named (plan file, saved full output). */
+  cvFile(sid: string, path: string): Promise<CvTextResult> {
+    return this.req<CvTextResult>({ m: "cv_file", p: { sid, path } });
+  }
+
+  private async doAttachCv(key: string, only?: CvSink) {
+    const a = this.cvs.get(key);
     if (!a) return;
     const gen = ++a.gen;
     try {
-      const r = await this.req<CvAttachResult>({ m: "cv_attach", p: { sid } });
-      if (this.cvs.get(sid) !== a || a.gen !== gen) return;
+      // `features`: event kinds this client handles beyond the original four (the daemon holds them back otherwise).
+      const p = a.agent ? { sid: a.sid, agent: a.agent, features: CV_FEATURES } : { sid: a.sid, features: CV_FEATURES };
+      const r = await this.req<CvAttachResult>({ m: "cv_attach", p });
+      if (this.cvs.get(key) !== a || a.gen !== gen) return;
       for (const s of only && a.sinks.has(only) ? [only] : a.sinks) s.reset(r);
     } catch {
       // retried on the next reconnect
@@ -536,6 +574,9 @@ export class DaemonClient {
     this.req({ m: "term_write", p: { sid, data } }).catch(() => {});
   }
 }
+
+/** Map key of a Claude view stream: the session, or one of its subagents. */
+export const cvKey = (sid: string, agent?: string | null) => (agent ? `${sid}|${agent}` : sid);
 
 function b64(s: string): Uint8Array {
   const bin = atob(s);

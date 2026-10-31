@@ -16,8 +16,10 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
-use crate::core::{Core, err};
-use crate::cv_image;
+use crate::core::{Core, err, now_ms};
+use crate::cv_parse::{self, QueueOp, ShellLine};
+use crate::cv_tasks::{self, Tasks};
+use crate::{cv_commands, cv_image, cv_screen};
 
 /// How much of the end of a big transcript is read at first.
 const INITIAL_BYTES: u64 = 3 << 20;
@@ -32,10 +34,28 @@ const MAX_UPLOAD: usize = 12 << 20;
 const UPLOAD_TTL: Duration = Duration::from_secs(7 * 24 * 3600);
 const STT_KEEP: Duration = Duration::from_secs(300);
 
+/// Biggest file `cv_file` / `cv_task_output` return.
+const MAX_READ: u64 = 512 << 10;
+/// How often the subagent files next to a transcript are looked at.
+const SCAN_EVERY: Duration = Duration::from_millis(1500);
+/// Task list updates are sent at most this often.
+const TASKS_EVERY: Duration = Duration::from_millis(500);
+
 #[derive(Default)]
 pub struct ClaudeView {
     tails: Mutex<HashMap<Id, Arc<Tail>>>,
+    /// Read-only streams of subagent transcripts, by session and agent id.
+    subs: Mutex<HashMap<(Id, String), Arc<Tail>>>,
     stt: Mutex<Option<(Arc<na_voice::stt::Stt>, Instant)>>,
+    /// One `cv_action` at a time per session, so two actions never interleave their keys.
+    pub(crate) action_locks: Mutex<HashMap<Id, Arc<tokio::sync::Mutex<()>>>>,
+}
+
+impl ClaudeView {
+    /// The session is a Claude Code session the view knows (hooks or an attach created its tail).
+    pub fn has_tail(&self, sid: &Id) -> bool {
+        self.tails.lock().contains_key(sid)
+    }
 }
 
 struct Tail {
@@ -60,6 +80,19 @@ struct TailState {
     effort_seen: bool,
     /// The last effort read off the screen: only a change there overrides the transcript.
     screen_effort: Option<String>,
+    /// A subagent transcript: its lines are all `isSidechain`.
+    sidechain: bool,
+    tasks: Tasks,
+    /// TaskCreate calls waiting for their id.
+    todo_pending: Vec<(String, usize)>,
+    /// AskUserQuestion / ExitPlanMode calls without a result yet: what the menu on screen is about.
+    asking: Vec<(String, String, Value)>,
+    /// The tool the last PermissionRequest hook asked about.
+    perm: Option<CvPromptTool>,
+    /// The last statusline input (its fields survive a reload of the transcript).
+    status: Option<Value>,
+    spinner_seen: Option<Instant>,
+    pending_checkpoints: HashSet<String>,
 }
 
 /// What one transcript line means.
@@ -73,6 +106,20 @@ pub struct Parsed {
     /// `Some("")`: back to the default (`/effort auto`).
     pub effort: Option<String>,
     pub skills: Vec<(String, String)>,
+    /// `/rename` (custom title).
+    pub session_name: Option<String>,
+    pub plan_file: Option<String>,
+    pub queue: Option<QueueOp>,
+    /// Tool calls of an assistant line: (id, name, input).
+    pub tool_uses: Vec<(String, String, Value)>,
+    /// Tool results of a user line: (tool_use_id, toolUseResult, is_error).
+    pub tool_results: Vec<(String, Value, bool)>,
+    /// A `task_status` attachment.
+    pub task_status: Option<Value>,
+    /// Output of a `!` command for the input line with this uuid: (parent uuid, stdout, stderr).
+    pub shell_out: Option<(String, Option<String>, Option<String>)>,
+    /// A file checkpoint for the user message with this uuid.
+    pub checkpoint: Option<String>,
 }
 
 /// Effort levels Claude Code takes, lowest first.
@@ -191,22 +238,60 @@ fn tool_result_content(c: &Value, images: &[&Value], off: u64) -> (String, Vec<C
 }
 
 /// One transcript line → message / metadata. `off` is the line's position in the file.
+#[cfg(test)]
 pub fn parse_line(v: &Value, off: u64) -> Parsed {
+    parse_line_in(v, off, false)
+}
+
+/// As `parse_line`; `sidechain`: the file is a subagent's transcript (all its lines are sidechain lines).
+pub fn parse_line_in(v: &Value, off: u64, sidechain: bool) -> Parsed {
     let mut p = Parsed::default();
     let ty = v["type"].as_str().unwrap_or("");
+    let uuid = v["uuid"].as_str().unwrap_or("").to_string();
+    let sys = |kind: &str, blocks: Vec<CvBlock>| CvMessage {
+        i: off,
+        id: uuid.clone(),
+        role: CvRole::System,
+        ts: millis(v),
+        kind: Some(kind.into()),
+        blocks,
+        ..Default::default()
+    };
+    if !sidechain && v["isSidechain"].as_bool() == Some(true) {
+        return p;
+    }
     match ty {
         "permission-mode" => p.mode = v["permissionMode"].as_str().map(str::to_string),
         "ai-title" => p.title = v["aiTitle"].as_str().map(str::to_string),
+        "custom-title" => p.session_name = v["customTitle"].as_str().or(v["title"].as_str()).map(str::to_string),
+        "queue-operation" => p.queue = cv_parse::queue_op(v),
+        "file-history-snapshot" => {
+            let backups = v["snapshot"]["trackedFileBackups"].as_object().is_some_and(|o| !o.is_empty());
+            if backups {
+                p.checkpoint = v["messageId"].as_str().map(str::to_string);
+            }
+        }
         "attachment" => {
             let a = &v["attachment"];
-            if a["type"] == "skill_listing"
-                && let Some(c) = a["content"].as_str()
-            {
-                for line in c.lines() {
-                    if let Some(rest) = line.strip_prefix("- ")
-                        && let Some((n, d)) = rest.split_once(": ")
-                    {
-                        p.skills.push((n.trim().to_string(), d.trim().to_string()));
+            match a["type"].as_str().unwrap_or("") {
+                "skill_listing" => {
+                    if let Some(c) = a["content"].as_str() {
+                        for line in c.lines() {
+                            if let Some(rest) = line.strip_prefix("- ")
+                                && let Some((n, d)) = rest.split_once(": ")
+                            {
+                                p.skills.push((n.trim().to_string(), d.trim().to_string()));
+                            }
+                        }
+                    }
+                }
+                "task_status" => p.task_status = Some(a.clone()),
+                "plan_mode" | "plan_mode_exit" | "plan_mode_reentry" => {
+                    p.plan_file = a["planFilePath"].as_str().filter(|f| !f.is_empty()).map(str::to_string)
+                }
+                _ => {
+                    if let Some(b) = cv_parse::hook_attachment(a) {
+                        p.msg = Some(sys("hook", vec![b]));
                     }
                 }
             }
@@ -215,7 +300,24 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
             let sub = v["subtype"].as_str().unwrap_or("");
             let text = v["content"].as_str().unwrap_or("");
             let (kind, text) = match sub {
-                "compact_boundary" => ("compact", "Conversation compacted".to_string()),
+                "compact_boundary" => {
+                    let m = &v["compactMetadata"];
+                    let block =
+                        CvBlock::Compact { trigger: m["trigger"].as_str().map(str::to_string), pre_tokens: m["preTokens"].as_u64() };
+                    p.msg = Some(sys("compact", vec![CvBlock::Text { text: "Conversation compacted".into() }, block]));
+                    return p;
+                }
+                "turn_duration" => {
+                    let Some(ms) = v["durationMs"].as_u64() else { return p };
+                    p.msg = Some(sys("duration", vec![CvBlock::Duration { ms, messages: v["messageCount"].as_u64().map(|n| n as u32) }]));
+                    return p;
+                }
+                "stop_hook_summary" => {
+                    if let Some(b) = cv_parse::stop_hook_summary(v) {
+                        p.msg = Some(sys("hook", vec![b]));
+                    }
+                    return p;
+                }
                 "informational" | "scheduled_task_fire" | "bridge_status" | "api_error" | "away_summary" if !text.is_empty() => {
                     ("notice", text.to_string())
                 }
@@ -230,21 +332,14 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                 }
                 _ => return p,
             };
-            p.msg = Some(CvMessage {
-                i: off,
-                id: v["uuid"].as_str().unwrap_or("").to_string(),
-                role: CvRole::System,
-                ts: millis(v),
-                model: None,
-                kind: Some(kind.into()),
-                blocks: vec![CvBlock::Text { text: clip(&text, MAX_TEXT) }],
-            });
+            p.msg = Some(sys(kind, vec![CvBlock::Text { text: clip(&text, MAX_TEXT) }]));
         }
         "assistant" => {
-            if v["isSidechain"].as_bool() == Some(true) {
+            let m = &v["message"];
+            if let Some(e) = cv_parse::api_error(v) {
+                p.msg = Some(sys("error", vec![e]));
                 return p;
             }
-            let m = &v["message"];
             let model = m["model"].as_str().filter(|m| !m.starts_with('<')).map(str::to_string);
             if let Some(u) = m.get("usage").filter(|u| u.is_object()) {
                 let n = |k: &str| u[k].as_u64().unwrap_or(0);
@@ -254,6 +349,7 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                 }
             }
             p.model = model.clone();
+            let think_ms = v["thinkingDurationMs"].as_u64();
             let mut blocks = vec![];
             for b in m["content"].as_array().into_iter().flatten() {
                 match b["type"].as_str() {
@@ -263,26 +359,42 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                             blocks.push(CvBlock::Text { text: t.to_string() });
                         }
                     }
-                    Some("thinking") => blocks.push(CvBlock::Thinking { text: b["thinking"].as_str().unwrap_or("").to_string() }),
-                    Some("tool_use") => blocks.push(CvBlock::ToolUse {
-                        id: b["id"].as_str().unwrap_or("").to_string(),
-                        name: b["name"].as_str().unwrap_or("").to_string(),
-                        input: clip_value(&b["input"]),
-                    }),
+                    Some("thinking") => {
+                        blocks.push(CvBlock::Thinking { text: b["thinking"].as_str().unwrap_or("").to_string(), ms: think_ms })
+                    }
+                    Some("tool_use") => {
+                        let (id, name) = (b["id"].as_str().unwrap_or("").to_string(), b["name"].as_str().unwrap_or("").to_string());
+                        let input = clip_value(&b["input"]);
+                        p.tool_uses.push((id.clone(), name.clone(), input.clone()));
+                        blocks.push(CvBlock::ToolUse { id, name, input });
+                    }
                     _ => {}
                 }
             }
+            blocks.extend(cv_parse::refusal(m));
             if blocks.is_empty() {
                 return p;
             }
             let id = m["id"].as_str().or(v["uuid"].as_str()).unwrap_or("").to_string();
-            p.msg = Some(CvMessage { i: off, id, role: CvRole::Assistant, ts: millis(v), model, kind: None, blocks });
+            p.msg = Some(CvMessage { i: off, id, role: CvRole::Assistant, ts: millis(v), model, kind: None, blocks, ..Default::default() });
         }
         "user" => {
-            if v["isMeta"].as_bool() == Some(true) || v["isSidechain"].as_bool() == Some(true) {
+            let id = uuid.clone();
+            let c = &v["message"]["content"];
+            if v["isMeta"].as_bool() == Some(true) {
+                // Only messages from another agent; the rest is the CLI talking to the model.
+                let o = &v["origin"];
+                if o["kind"] == "peer" {
+                    let text = o["body"].as_str().or(c.as_str()).unwrap_or("").to_string();
+                    if !text.trim().is_empty() {
+                        let mut m = sys("peer", vec![CvBlock::Text { text: clip(&text, MAX_TEXT) }]);
+                        m.from = o["senderTaskId"].as_str().or(o["from"].as_str()).map(str::to_string);
+                        m.from_name = o["name"].as_str().or(o["from"].as_str()).map(str::to_string);
+                        p.msg = Some(m);
+                    }
+                }
                 return p;
             }
-            let id = v["uuid"].as_str().unwrap_or("").to_string();
             let mk = |kind: Option<&str>, blocks: Vec<CvBlock>| CvMessage {
                 i: off,
                 id: id.clone(),
@@ -291,11 +403,27 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                 model: None,
                 kind: kind.map(str::to_string),
                 blocks,
+                ..Default::default()
             };
-            let c = &v["message"]["content"];
-            if let Some(s) = c.as_str() {
+            // A one-text-block array reads like a string.
+            let single = c.as_array().filter(|a| a.len() == 1 && a[0]["type"] == "text").and_then(|a| a[0]["text"].as_str());
+            if let Some(s) = c.as_str().or(single) {
                 if v["isCompactSummary"].as_bool() == Some(true) {
                     p.msg = Some(mk(Some("summary"), vec![CvBlock::Text { text: clip(s, MAX_TEXT) }]));
+                } else if s.trim_start().starts_with("<task-notification>") {
+                    if let Some(b) = cv_parse::task_notification(s) {
+                        p.msg = Some(sys("task", vec![b]));
+                    }
+                } else if let Some(sh) = cv_parse::shell_line(s) {
+                    match sh {
+                        ShellLine::Input(command) => {
+                            p.msg = Some(mk(Some("shell"), vec![CvBlock::Shell { command, stdout: None, stderr: None }]))
+                        }
+                        ShellLine::Output { stdout, stderr } => {
+                            p.shell_out = Some((v["parentUuid"].as_str().unwrap_or("").to_string(), stdout.clone(), stderr.clone()));
+                            p.msg = Some(mk(Some("shell"), vec![CvBlock::Shell { command: String::new(), stdout, stderr }]));
+                        }
+                    }
                 } else if let Some(name) = between(s, "<command-name>", "</command-name>") {
                     let args = between(s, "<command-args>", "</command-args>").unwrap_or("").trim();
                     let line = if args.is_empty() { name.to_string() } else { format!("{name} {args}") };
@@ -306,43 +434,49 @@ pub fn parse_line(v: &Value, off: u64) -> Parsed {
                     if !out.is_empty() {
                         p.msg = Some(mk(Some("output"), vec![CvBlock::Text { text: clip(&out, MAX_TEXT) }]));
                     }
-                } else if !s.trim().is_empty() && !s.starts_with("<system-reminder>") && !s.starts_with("<task-notification>") {
-                    p.msg = Some(mk(None, vec![CvBlock::Text { text: s.to_string() }]));
+                } else if s.starts_with("[Request interrupted") {
+                    p.msg = Some(sys("notice", vec![CvBlock::Text { text: "Interrupted".into() }]));
+                } else if !s.trim().is_empty() && !s.starts_with("<system-reminder>") {
+                    let blocks = cv_parse::split_pasted(s).unwrap_or_else(|| vec![CvBlock::Text { text: s.to_string() }]);
+                    p.msg = Some(mk(None, blocks));
                 }
             } else if let Some(a) = c.as_array() {
                 let images = cv_image::images_in(c);
+                let results = a.iter().filter(|b| b["type"] == "tool_result").count();
                 let mut blocks = vec![];
                 for b in a {
                     match b["type"].as_str() {
                         Some("text") => {
                             let t = b["text"].as_str().unwrap_or("");
                             if !t.trim().is_empty() && !t.starts_with("<system-reminder>") && !t.starts_with("[Request interrupted") {
-                                blocks.push(CvBlock::Text { text: t.to_string() });
+                                match cv_parse::split_pasted(t) {
+                                    Some(bs) => blocks.extend(bs),
+                                    None => blocks.push(CvBlock::Text { text: t.to_string() }),
+                                }
                             } else if t.starts_with("[Request interrupted") {
-                                p.msg = Some(CvMessage {
-                                    i: off,
-                                    id: id.clone(),
-                                    role: CvRole::System,
-                                    ts: millis(v),
-                                    model: None,
-                                    kind: Some("notice".into()),
-                                    blocks: vec![CvBlock::Text { text: "Interrupted".into() }],
-                                });
+                                p.msg = Some(sys("notice", vec![CvBlock::Text { text: "Interrupted".into() }]));
                                 return p;
                             }
                         }
                         Some("image") => blocks.push(CvBlock::Image {
                             media_type: b["source"]["media_type"].as_str().unwrap_or("image").to_string(),
                             image: cv_image::index_of(&images, b).and_then(|n| cv_image::image_ref(b, off, n)),
+                            url: cv_image::image_url(b),
                         }),
                         Some("tool_result") => {
                             let (text, images) = tool_result_content(&b["content"], &images, off);
                             let stopped = text.starts_with("[Tool call interrupted") || text.starts_with("[Request interrupted");
+                            let tool_use_id = b["tool_use_id"].as_str().unwrap_or("").to_string();
+                            let is_error = !stopped && b["is_error"].as_bool().unwrap_or(false);
+                            // `toolUseResult` belongs to the line: only clear with one result in it.
+                            let r = if results == 1 { v["toolUseResult"].clone() } else { Value::Null };
+                            p.tool_results.push((tool_use_id.clone(), r.clone(), is_error));
                             blocks.push(CvBlock::ToolResult {
-                                tool_use_id: b["tool_use_id"].as_str().unwrap_or("").to_string(),
+                                tool_use_id,
                                 text: if stopped { "Interrupted by user".into() } else { text },
-                                is_error: !stopped && b["is_error"].as_bool().unwrap_or(false),
+                                is_error,
                                 images,
+                                meta: cv_parse::tool_meta(&r),
                             })
                         }
                         _ => {}
@@ -410,7 +544,8 @@ impl TailState {
                 continue;
             }
             let Ok(v) = serde_json::from_slice::<Value>(line) else { continue };
-            let p = parse_line(&v, off);
+            let p = parse_line_in(&v, off, self.sidechain);
+            let ts = millis(&v);
             if let Some(m) = p.mode {
                 meta_changed |= self.meta.mode.as_ref() != Some(&m);
                 self.meta.mode = Some(m);
@@ -418,6 +553,14 @@ impl TailState {
             if let Some(t) = p.title {
                 meta_changed |= self.meta.title.as_ref() != Some(&t);
                 self.meta.title = Some(t);
+            }
+            if let Some(t) = p.session_name {
+                meta_changed |= self.meta.session_name.as_ref() != Some(&t);
+                self.meta.session_name = Some(t);
+            }
+            if let Some(f) = p.plan_file {
+                meta_changed |= self.meta.plan_file.as_ref() != Some(&f);
+                self.meta.plan_file = Some(f);
             }
             if let Some(m) = p.model {
                 meta_changed |= self.meta.model.as_ref() != Some(&m);
@@ -436,7 +579,85 @@ impl TailState {
             for (n, d) in p.skills {
                 self.skills.insert(n, d);
             }
-            if let Some(m) = p.msg {
+            match p.queue {
+                Some(QueueOp::Add(text)) => {
+                    self.meta.queued.push(CvQueued { text: clip(&text, 2000), ts });
+                    if self.meta.queued.len() > 50 {
+                        self.meta.queued.remove(0);
+                    }
+                    meta_changed = true;
+                }
+                Some(QueueOp::Take(text)) if !self.meta.queued.is_empty() => {
+                    let ix = text.and_then(|t| self.meta.queued.iter().position(|q| q.text == clip(&t, 2000))).unwrap_or(0);
+                    self.meta.queued.remove(ix);
+                    meta_changed = true;
+                }
+                _ => {}
+            }
+            if !self.sidechain {
+                for (id, name, input) in &p.tool_uses {
+                    self.tasks.tool_use(name, id, input, ts);
+                    if let Some(op) = cv_parse::todo_from_tool_use(name, id, input) {
+                        cv_parse::apply_todo(&mut self.meta.todos, &mut self.todo_pending, op);
+                        meta_changed = true;
+                    }
+                    if matches!(name.as_str(), "AskUserQuestion" | "ExitPlanMode") {
+                        self.asking.push((id.clone(), name.clone(), input.clone()));
+                        if self.asking.len() > 8 {
+                            self.asking.remove(0);
+                        }
+                    }
+                }
+                for (tool_use_id, r, is_error) in &p.tool_results {
+                    self.tasks.tool_result(tool_use_id, r, *is_error, ts);
+                    if let Some(op) = cv_parse::todo_created(tool_use_id, r) {
+                        cv_parse::apply_todo(&mut self.meta.todos, &mut self.todo_pending, op);
+                        meta_changed = true;
+                    }
+                    self.asking.retain(|(id, _, _)| id != tool_use_id);
+                }
+                if let Some(a) = &p.task_status {
+                    self.tasks.status_attachment(a);
+                }
+                if let Some(m) = &p.msg
+                    && let Some(b @ CvBlock::TaskNote { .. }) = m.blocks.first()
+                {
+                    self.tasks.note(b, ts);
+                }
+            }
+            if let Some(id) = p.checkpoint {
+                match self.by_id.get(&id).copied() {
+                    Some(ix) if self.msgs[ix].checkpoint.is_none() => {
+                        self.msgs[ix].checkpoint = Some(true);
+                        events.push(CvEvent::Upsert { message: self.msgs[ix].clone() });
+                    }
+                    Some(_) => {}
+                    None => self.checkpoints_ahead(id),
+                }
+            }
+            // `!` output: into the input's message when it is loaded.
+            if let Some((parent, stdout, stderr)) = &p.shell_out
+                && let Some(&ix) = self.by_id.get(parent)
+                && let Some(CvBlock::Shell { stdout: o, stderr: e, .. }) = self.msgs[ix].blocks.first_mut()
+            {
+                *o = stdout.clone();
+                *e = stderr.clone();
+                events.push(CvEvent::Upsert { message: self.msgs[ix].clone() });
+                continue;
+            }
+            if let Some(mut m) = p.msg {
+                if m.role == CvRole::User && m.kind.is_none() {
+                    if self.pending_checkpoints.remove(&m.id) {
+                        m.checkpoint = Some(true);
+                    }
+                    // A queued message was delivered.
+                    if let Some(CvBlock::Text { text }) = m.blocks.first()
+                        && let Some(ix) = self.meta.queued.iter().position(|q| text.trim() == q.text.trim())
+                    {
+                        self.meta.queued.remove(ix);
+                        meta_changed = true;
+                    }
+                }
                 let full = self.add(m);
                 events.push(CvEvent::Upsert { message: full });
             }
@@ -450,7 +671,20 @@ impl TailState {
             meta_changed |= self.meta.effort != e;
             self.meta.effort = e;
         }
+        let running = (!self.tasks.is_empty()).then(|| self.tasks.running());
+        if self.meta.tasks_running != running {
+            self.meta.tasks_running = running;
+            meta_changed = true;
+        }
         (events, meta_changed)
+    }
+
+    /// A checkpoint line can come before its message.
+    fn checkpoints_ahead(&mut self, id: String) {
+        if self.pending_checkpoints.len() > 500 {
+            self.pending_checkpoints.clear();
+        }
+        self.pending_checkpoints.insert(id);
     }
 
     fn page(&self) -> Vec<CvMessage> {
@@ -473,9 +707,20 @@ impl TailState {
             self.msgs.clear();
             self.by_id.clear();
             self.skills.clear();
-            self.meta = CvMeta { transcript: path.file_name().map(|n| n.to_string_lossy().into_owned()), ..Default::default() };
+            self.meta = CvMeta {
+                transcript: path.file_name().map(|n| n.to_string_lossy().into_owned()),
+                actions: (!self.sidechain).then_some(true),
+                ..Default::default()
+            };
             self.effort_seen = false;
             self.screen_effort = None;
+            self.tasks = Tasks::default();
+            self.todo_pending.clear();
+            self.asking.clear();
+            self.pending_checkpoints.clear();
+            if let Some(st) = self.status.clone() {
+                apply_status(&mut self.meta, &st);
+            }
             self.more = start > 0;
             self.offset = start;
             self.started = true;
@@ -485,6 +730,10 @@ impl TailState {
                 let _ = f.seek(SeekFrom::Start(start));
                 let n = f.read(&mut buf).unwrap_or(0);
                 self.offset = start + buf[..n].iter().position(|b| *b == b'\n').map(|i| i as u64 + 1).unwrap_or(0);
+                // The skill list comes early in a session: read it from the part not loaded.
+                for (n, d) in head_skills(&mut f, start) {
+                    self.skills.entry(n).or_insert(d);
+                }
             }
         }
         if len <= self.offset && !reset {
@@ -499,14 +748,138 @@ impl TailState {
         if reset {
             // Skills seen while loading are reachable through `cv_commands`; send one reset.
             events.push(CvEvent::Reset { messages: self.page(), more: self.more_before(), meta: self.meta.clone() });
+            if !self.sidechain {
+                self.tasks.clear_dirty();
+                self.tasks.last_sent = Some(Instant::now());
+                events.push(CvEvent::Tasks { tasks: self.tasks.list() });
+            }
         } else {
             events.extend(evs);
             if meta_changed {
                 events.push(CvEvent::Meta { meta: self.meta.clone() });
             }
+            events.extend(self.tasks_event(false));
         }
         events
     }
+
+    /// The task list when it changed (at most every `TASKS_EVERY` unless `now`).
+    fn tasks_event(&mut self, now: bool) -> Option<CvEvent> {
+        if self.sidechain || !self.tasks.dirty() {
+            return None;
+        }
+        if !now && self.tasks.last_sent.is_some_and(|t| t.elapsed() < TASKS_EVERY) {
+            return None;
+        }
+        self.tasks.clear_dirty();
+        self.tasks.last_sent = Some(Instant::now());
+        Some(CvEvent::Tasks { tasks: self.tasks.list() })
+    }
+
+    /// The prompt on the screen with what the transcript and hooks know about it.
+    fn enrich(&self, p: Option<CvPrompt>) -> Option<CvPrompt> {
+        let mut p = p?;
+        let mut kind = cv_screen::classify(&p);
+        let asking = self.asking.last();
+        if let Some((id, name, input)) = asking
+            && name == "AskUserQuestion"
+            && kind != "permission"
+        {
+            kind = "question";
+            p.question = Some(question_of(id, input));
+        }
+        if let Some((_, name, input)) = asking
+            && name == "ExitPlanMode"
+            && (kind == "plan" || kind == "menu" || kind == "permission")
+        {
+            kind = "plan";
+            p.plan = input["plan"].as_str().map(str::to_string);
+        }
+        if kind == "permission" {
+            p.tool = self.perm.clone();
+        }
+        p.kind = Some(kind.into());
+        p.id = Some(cv_screen::fingerprint(&p));
+        Some(p)
+    }
+}
+
+/// AskUserQuestion's input → the question sheet.
+fn question_of(tool_use_id: &str, input: &Value) -> CvQuestion {
+    let str_of = |v: &Value| v.as_str().unwrap_or("").to_string();
+    CvQuestion {
+        questions: input["questions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|q| CvQuestionItem {
+                question: str_of(&q["question"]),
+                header: str_of(&q["header"]),
+                multi_select: q["multiSelect"].as_bool().unwrap_or(false),
+                options: q["options"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|o| CvQuestionOption { label: str_of(&o["label"]), description: str_of(&o["description"]) })
+                    .collect(),
+            })
+            .collect(),
+        tab: None,
+        tool_use_id: Some(tool_use_id.to_string()),
+    }
+}
+
+/// Claude Code's statusline input → meta. Returns whether anything but the durations changed.
+fn apply_status(meta: &mut CvMeta, v: &Value) -> bool {
+    let before = meta.clone();
+    let st = |p: &str| v.pointer(p).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    let num = |p: &str| v.pointer(p).and_then(Value::as_u64);
+    if let Some(m) = st("/model/id") {
+        meta.model = Some(m);
+    }
+    meta.context_window = num("/context_window/context_window_size").or(meta.context_window);
+    if let Some(p) = v.pointer("/context_window/used_percentage").and_then(Value::as_f64) {
+        meta.context_pct = Some(p as f32);
+    }
+    if let Some(u) = v.pointer("/context_window/current_usage").filter(|u| u.is_object()) {
+        let n = |k: &str| u[k].as_u64().unwrap_or(0);
+        let total = n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens");
+        if total > 0 {
+            meta.context_tokens = Some(total);
+        }
+    }
+    meta.cost_usd = v.pointer("/cost/total_cost_usd").and_then(Value::as_f64).or(meta.cost_usd);
+    meta.duration_ms = num("/cost/total_duration_ms").or(meta.duration_ms);
+    meta.api_duration_ms = num("/cost/total_api_duration_ms").or(meta.api_duration_ms);
+    meta.lines_added = num("/cost/total_lines_added").or(meta.lines_added);
+    meta.lines_removed = num("/cost/total_lines_removed").or(meta.lines_removed);
+    if let Some(f) = v["fast_mode"].as_bool() {
+        meta.fast = Some(f);
+    }
+    if let Some(t) = v.pointer("/thinking/enabled").and_then(Value::as_bool) {
+        meta.thinking = Some(t);
+    }
+    meta.output_style = st("/output_style/name").or(meta.output_style.take());
+    meta.session_name = st("/session_name").or(meta.session_name.take());
+    meta.version = st("/version").or(meta.version.take());
+    if let Some(w) = v.get("worktree").filter(|w| w.is_object()) {
+        meta.worktree = Some(CvWorktree {
+            name: w["name"].as_str().unwrap_or("").into(),
+            path: w["path"].as_str().unwrap_or("").into(),
+            branch: w["branch"].as_str().map(str::to_string),
+            original_cwd: w["original_cwd"].as_str().map(str::to_string),
+        });
+    }
+    if let Some(n) = num("/pr/number") {
+        meta.pr = Some(CvPr { number: n as u32, url: st("/pr/url").unwrap_or_default(), state: st("/pr/review_state") });
+    }
+    if let Some(d) = v.pointer("/workspace/added_dirs").and_then(Value::as_array) {
+        meta.added_dirs = d.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
+    }
+    // The session's running time grows with every call: alone it is not worth an update.
+    let mut cmp = meta.clone();
+    (cmp.duration_ms, cmp.api_duration_ms) = (before.duration_ms, before.api_duration_ms);
+    cmp != before
 }
 
 // ───────────── the menu on the screen ─────────────
@@ -561,7 +934,16 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
     let mut options: Vec<CvOption> = vec![];
     for l in &lines[start..=end] {
         if let Some((selected, n, label)) = menu_line(l) {
-            options.push(CvOption { n, label, selected });
+            let (checked, label) = cv_screen::checkbox(&label);
+            let text = cv_screen::wants_text(&label).then_some(true);
+            options.push(CvOption { n, label, selected, checked, text, ..Default::default() });
+        } else if let Some(o) = options.last_mut() {
+            // An indented line between options describes the one above.
+            let d = l.trim().trim_matches('│').trim().to_string();
+            o.description = Some(match o.description.take() {
+                Some(p) => format!("{p}\n{d}"),
+                None => d,
+            });
         }
     }
     if options.len() < 2 || !options.iter().any(|o| o.selected) || options[0].n != "1" {
@@ -609,18 +991,13 @@ pub fn detect_prompt(screen: &str) -> Option<CvPrompt> {
         // Cut off at the top: the opening fence is missing.
         title.insert(0, "```".into());
     }
-    Some(CvPrompt { title: title.join("\n"), options })
+    Some(CvPrompt { title: title.join("\n"), options, ..Default::default() })
 }
 
-/// "✻ Thinking… (12s · esc to interrupt)" → the status text, while the CLI is busy.
+/// "✶ Roosting… (12s · esc to interrupt)" → the status text, while the CLI is busy. With a
+/// statusline the CLI leaves out "esc to interrupt": the spinner glyph and "…" are enough.
 pub fn detect_activity(screen: &str) -> Option<String> {
-    screen
-        .lines()
-        .rev()
-        .take(14)
-        .find(|l| l.contains("esc to interrupt"))
-        .map(|l| l.trim().trim_matches('│').trim().to_string())
-        .filter(|l| !l.is_empty())
+    cv_screen::spinner(screen)
 }
 
 /// The permission mode shown in the CLI's footer ("⏸ plan mode on", "⏵⏵ accept edits on", …).
@@ -646,100 +1023,84 @@ pub fn detect_mode(screen: &str) -> Option<&'static str> {
 
 // ───────────── slash commands, files ─────────────
 
-const BUILTIN: &[(&str, &str)] = &[
-    ("add-dir", "Add a working directory"),
-    ("agents", "Manage subagents"),
-    ("btw", "Ask a side question"),
-    ("bug", "Report a bug"),
-    ("clear", "Start a new conversation"),
-    ("compact", "Summarize the conversation to free context"),
-    ("config", "Open settings"),
-    ("context", "Show context usage"),
-    ("copy", "Copy the last answer"),
-    ("cost", "Show cost and duration"),
-    ("diff", "View uncommitted changes"),
-    ("doctor", "Check the installation"),
-    ("exit", "Exit Claude Code"),
-    ("export", "Export the conversation"),
-    ("help", "Show help and commands"),
-    ("hooks", "Manage hooks"),
-    ("ide", "Connect to an IDE"),
-    ("init", "Create a CLAUDE.md for this project"),
-    ("install-github-app", "Set up the Claude GitHub app"),
-    ("login", "Sign in"),
-    ("logout", "Sign out"),
-    ("loop", "Run a prompt on an interval"),
-    ("mcp", "Manage MCP servers"),
-    ("memory", "Edit memory files"),
-    ("model", "Choose the model"),
-    ("output-style", "Choose the output style"),
-    ("permissions", "Manage tool permissions"),
-    ("plan", "Enter plan mode"),
-    ("plugin", "Manage plugins"),
-    ("pr-comments", "Show comments of a pull request"),
-    ("privacy-settings", "Privacy settings"),
-    ("release-notes", "Show release notes"),
-    ("remote-control", "Continue this session from another device"),
-    ("rename", "Rename the conversation"),
-    ("resume", "Resume a conversation"),
-    ("review", "Review a pull request"),
-    ("rewind", "Go back to an earlier point"),
-    ("security-review", "Review pending changes for security issues"),
-    ("skills", "List skills"),
-    ("status", "Show status"),
-    ("statusline", "Set up the status line"),
-    ("tasks", "Show background tasks"),
-    ("terminal-setup", "Set up terminal key bindings"),
-    ("theme", "Change the theme"),
-    ("todos", "Show the todo list"),
-    ("upgrade", "Upgrade the plan"),
-    ("usage", "Show plan usage limits"),
-    ("vim", "Toggle vim mode"),
-];
-
-fn front_description(text: &str) -> String {
-    let mut lines = text.lines();
-    if lines.next().map(str::trim) == Some("---") {
-        for l in lines.by_ref() {
-            if l.trim() == "---" {
-                break;
-            }
-            if let Some(d) = l.strip_prefix("description:") {
-                return d.trim().trim_matches(['"', '\'']).to_string();
-            }
-        }
-    }
-    // No front matter description: the first text line.
-    text.lines().map(str::trim).find(|l| !l.is_empty() && *l != "---" && !l.starts_with('#')).unwrap_or("").chars().take(120).collect()
-}
-
-fn collect_commands(dir: &Path, prefix: &str, source: &str, out: &mut Vec<CvCommand>, depth: usize) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
-    for e in rd.flatten() {
-        let p = e.path();
-        let name = e.file_name().to_string_lossy().into_owned();
-        if p.is_dir() && depth < 3 {
-            collect_commands(&p, &format!("{prefix}{name}:"), source, out, depth + 1);
-        } else if let Some(stem) = name.strip_suffix(".md") {
-            let text = std::fs::read_to_string(&p).unwrap_or_default();
-            out.push(CvCommand { name: format!("{prefix}{stem}"), description: front_description(&text), source: source.into() });
-        }
-    }
-}
-
-fn collect_skills(dir: &Path, source: &str, out: &mut Vec<CvCommand>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
-    for e in rd.flatten() {
-        let md = e.path().join("SKILL.md");
-        if let Ok(text) = std::fs::read_to_string(&md) {
-            let name = e.file_name().to_string_lossy().into_owned();
-            out.push(CvCommand { name, description: front_description(&text), source: source.into() });
-        }
-    }
-}
-
 pub fn claude_dir() -> Option<PathBuf> {
     std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".claude")))
+}
+
+/// The file is inside Claude Code's config dir (after resolving links).
+fn in_claude_dir(p: &Path) -> bool {
+    claude_dir().and_then(|d| d.canonicalize().ok()).zip(p.canonicalize().ok()).is_some_and(|(d, p)| p.starts_with(d))
+}
+
+/// Where `cv_file` / `cv_task_output` may read: Claude's session, plan and task folders, the
+/// CLI's temp folders (`<tmp>/claude-*`) and Markdown files of the project (a plans folder there).
+struct ReadRoots {
+    dirs: Vec<PathBuf>,
+    temps: Vec<PathBuf>,
+    project: Option<PathBuf>,
+}
+
+fn read_roots(cwd: Option<&str>) -> ReadRoots {
+    let canon = |p: PathBuf| p.canonicalize().ok();
+    ReadRoots {
+        dirs: claude_dir().iter().flat_map(|c| ["projects", "plans", "tasks"].map(|d| c.join(d))).filter_map(canon).collect(),
+        temps: [std::env::temp_dir(), PathBuf::from("/tmp")].into_iter().filter_map(canon).collect(),
+        project: cwd.filter(|c| !c.is_empty()).map(PathBuf::from).and_then(canon),
+    }
+}
+
+/// `path` resolved (symlinks too) when it is a regular file inside the roots; `None` otherwise.
+fn confined(path: &Path, r: &ReadRoots) -> Option<PathBuf> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let real = path.canonicalize().ok()?;
+    if !std::fs::metadata(&real).ok()?.is_file() {
+        return None;
+    }
+    let in_temp = r.temps.iter().any(|t| {
+        real.strip_prefix(t)
+            .ok()
+            .and_then(|rest| rest.components().next())
+            .is_some_and(|c| c.as_os_str().to_string_lossy().starts_with("claude-"))
+    });
+    let in_project = r.project.as_ref().is_some_and(|p| real.starts_with(p)) && real.extension().is_some_and(|e| e == "md");
+    (r.dirs.iter().any(|d| real.starts_with(d)) || in_temp || in_project).then_some(real)
+}
+
+/// A text file, at most `max` bytes: its end (`tail`) or its start.
+fn read_text(path: &Path, max: u64, tail: bool) -> Result<CvTextResult, ApiError> {
+    // Check before opening: opening a FIFO would block.
+    let meta = std::fs::metadata(path).map_err(|_| err(ErrorCode::NotFound, "the file is gone"))?;
+    if !meta.is_file() {
+        return Err(err(ErrorCode::BadRequest, "not a file"));
+    }
+    let mut f = std::fs::File::open(path).map_err(|_| err(ErrorCode::NotFound, "the file is gone"))?;
+    let size = meta.len();
+    let start = if tail { size.saturating_sub(max) } else { 0 };
+    f.seek(SeekFrom::Start(start)).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+    let mut buf = vec![];
+    f.take(max).read_to_end(&mut buf).map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
+    let text = strip_ansi(&String::from_utf8_lossy(&buf));
+    // Cut at a whole line where the read started in the middle.
+    let text = match text.split_once('\n') {
+        Some((_, rest)) if start > 0 && !rest.is_empty() => rest.to_string(),
+        _ => text,
+    };
+    Ok(CvTextResult { text, truncated: size > max, size })
+}
+
+/// Skills listed in the first part of a transcript (up to `upto`, at most 2 MB).
+fn head_skills(f: &mut std::fs::File, upto: u64) -> Vec<(String, String)> {
+    let mut buf = vec![];
+    if f.seek(SeekFrom::Start(0)).is_err() || f.take(upto.min(2 << 20)).read_to_end(&mut buf).is_err() {
+        return vec![];
+    }
+    buf.split(|b| *b == b'\n')
+        .filter(|l| l.windows(13).any(|w| w == b"skill_listing"))
+        .filter_map(|l| serde_json::from_slice::<Value>(l).ok())
+        .flat_map(|v| parse_line_in(&v, 0, false).skills)
+        .collect()
 }
 
 fn project_dir_name(cwd: &str) -> String {
@@ -836,19 +1197,17 @@ impl Core {
             .tails
             .lock()
             .entry(sid.clone())
-            .or_insert_with(|| Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(TailState::default()) }))
+            .or_insert_with(|| {
+                let st = TailState { meta: CvMeta { actions: Some(true), ..Default::default() }, ..Default::default() };
+                Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st) })
+            })
             .clone()
     }
 
     /// A hook told us where the session's transcript is (it changes after `/clear` and `/resume`).
     pub fn cv_note_path(&self, sid: &Id, path: &str) {
         // Only Claude's own transcripts (`<config dir>/**/*.jsonl`): a hook payload must not point the reader elsewhere.
-        let ok = Path::new(path).extension().is_some_and(|e| e == "jsonl")
-            && claude_dir()
-                .and_then(|d| d.canonicalize().ok())
-                .zip(Path::new(path).canonicalize().ok())
-                .is_some_and(|(d, p)| p.starts_with(d));
-        if !ok {
+        if !in_claude_dir(Path::new(path)) || Path::new(path).extension().is_none_or(|e| e != "jsonl") {
             return;
         }
         let tail = self.cv_tail(sid);
@@ -879,23 +1238,82 @@ impl Core {
         }
     }
 
+    /// The main transcript of a session (guessed from its Claude session id when no hook said it yet).
+    fn cv_main_path(&self, sid: &Id) -> Option<PathBuf> {
+        let tail = self.cv_tail(sid);
+        self.cv_guess_path(sid, &tail);
+        tail.st.lock().path.clone()
+    }
+
+    /// The transcript file to read: the session's, or one of its subagents'.
+    fn cv_path(&self, sid: &Id, agent: Option<&str>) -> Result<PathBuf, ApiError> {
+        let main = self.cv_main_path(sid).ok_or_else(|| err(ErrorCode::NotFound, "no transcript yet"))?;
+        match agent {
+            None => Ok(main),
+            Some(a) => {
+                let p = cv_tasks::subagent_path(&main, a).ok_or_else(|| err(ErrorCode::BadRequest, "not an agent id"))?;
+                if p.exists() { Ok(p) } else { Err(err(ErrorCode::NotFound, "this agent has no transcript")) }
+            }
+        }
+    }
+
     /// Reads new transcript lines now and tells whoever is attached.
     fn cv_poll(&self, sid: &Id, tail: &Tail) {
         if tail.tx.receiver_count() == 0 {
             return;
         }
-        let events = {
-            let mut st = tail.st.lock();
-            let evs = st.poll();
-            for e in &evs {
-                let _ = tail.tx.send(e.clone());
-            }
-            evs
-        };
-        let _ = (sid, events);
+        let mut st = tail.st.lock();
+        for e in st.poll() {
+            let _ = tail.tx.send(e);
+        }
+        let _ = sid;
     }
 
-    /// Once per tick: new lines, and the menu / activity on the screen, for attached sessions.
+    /// Whether Claude is working: the spinner (seen in the last moment), or a prompt was just
+    /// submitted and the spinner is not drawn yet. Never while a menu waits for the user.
+    fn cv_busy(&self, sid: &Id, st: &mut TailState, spinner: bool, prompt: bool) -> bool {
+        if spinner {
+            st.spinner_seen = Some(Instant::now());
+        }
+        if prompt {
+            return false;
+        }
+        let recent = st.spinner_seen.is_some_and(|t| t.elapsed() < Duration::from_millis(1200));
+        let just_sent = self
+            .read(|s| s.sessions.get(sid).map(|x| (x.status, x.status_since)))
+            .is_some_and(|(status, since)| status == AgentStatus::Working && now_ms() - since < 4000);
+        spinner || recent || just_sent
+    }
+
+    /// Screen state into the tail: menu, activity, busy, mode, effort. Returns (prompt changed, meta changed).
+    fn cv_screen_into(&self, sid: &Id, st: &mut TailState, screen: &str) -> (bool, bool) {
+        let prompt = st.enrich(detect_prompt(screen).or_else(|| cv_screen::detect_menu(screen)));
+        let activity = detect_activity(screen);
+        let busy = Some(self.cv_busy(sid, st, activity.is_some(), prompt.is_some()));
+        let mut meta_changed = st.see_effort(detect_effort(screen));
+        if let Some(m) = detect_mode(screen)
+            && st.meta.mode.as_deref() != Some(m)
+        {
+            st.meta.mode = Some(m.into());
+            meta_changed = true;
+        }
+        if st.meta.activity != activity {
+            st.meta.activity = activity;
+            meta_changed = true;
+        }
+        if st.meta.busy != busy {
+            st.meta.busy = busy;
+            meta_changed = true;
+        }
+        if prompt.is_none() {
+            st.perm = None;
+        }
+        let prompt_changed = st.prompt != prompt;
+        st.prompt = prompt;
+        (prompt_changed, meta_changed)
+    }
+
+    /// Once per tick: new lines, the menu / activity on the screen and the task list, for attached sessions.
     pub fn cv_tick(&self) {
         let tails: Vec<(Id, Arc<Tail>)> = self.cv.tails.lock().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         for (sid, tail) in tails {
@@ -905,30 +1323,35 @@ impl Core {
             self.cv_guess_path(&sid, &tail);
             self.cv_poll(&sid, &tail);
             let screen = self.pty(&sid).map(|p| p.screen_text()).unwrap_or_default();
-            let prompt = detect_prompt(&screen);
-            let activity = detect_activity(&screen);
-            let mode = detect_mode(&screen);
-            let effort = detect_effort(&screen);
             let mut st = tail.st.lock();
-            let mut meta_changed = false;
-            meta_changed |= st.see_effort(effort);
-            if let Some(m) = mode
-                && st.meta.mode.as_deref() != Some(m)
-            {
-                st.meta.mode = Some(m.into());
-                meta_changed = true;
+            let (prompt_changed, meta_changed) = self.cv_screen_into(&sid, &mut st, &screen);
+            if prompt_changed {
+                let _ = tail.tx.send(CvEvent::Prompt { prompt: st.prompt.clone() });
             }
-            if st.prompt != prompt {
-                st.prompt = prompt.clone();
-                let _ = tail.tx.send(CvEvent::Prompt { prompt });
+            // Subagent files: while something runs, or right after a SubagentStart hook.
+            let scan_due =
+                st.tasks.last_scan.is_none_or(|t| t.elapsed() > SCAN_EVERY) && (st.tasks.running() > 0 || st.tasks.last_scan.is_none());
+            if scan_due && let Some(path) = st.path.clone() {
+                st.tasks.scan(&path);
             }
-            if st.meta.activity != activity {
-                st.meta.activity = activity;
-                meta_changed = true;
-            }
+            let running = (!st.tasks.is_empty()).then(|| st.tasks.running());
+            let meta_changed = meta_changed || st.meta.tasks_running != running;
+            st.meta.tasks_running = running;
             if meta_changed {
                 let _ = tail.tx.send(CvEvent::Meta { meta: st.meta.clone() });
             }
+            if let Some(e) = st.tasks_event(false) {
+                let _ = tail.tx.send(e);
+            }
+        }
+        // Subagent streams: new lines; dropped when nobody watches.
+        let subs: Vec<((Id, String), Arc<Tail>)> = {
+            let mut g = self.cv.subs.lock();
+            g.retain(|_, t| t.tx.receiver_count() > 0);
+            g.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        };
+        for ((sid, _), tail) in subs {
+            self.cv_poll(&sid, &tail);
         }
         let mut stt = self.cv.stt.lock();
         if stt.as_ref().is_some_and(|(_, used)| used.elapsed() > STT_KEEP) {
@@ -936,27 +1359,106 @@ impl Core {
         }
     }
 
-    /// Claude Code hands its statusline command the live effort (`effort.level`): the surest
-    /// source, since the "◐ medium · /effort" hint on the screen is only shown now and then.
-    /// Kept even before anyone opened the Claude view (the statusline runs right at start, and
-    /// the settings default can differ from what the CLI really uses).
-    pub fn cv_status_effort(&self, sid: &Id, level: &str) {
-        let Some(level) = EFFORTS.iter().find(|e| **e == level).copied() else { return };
+    /// Claude Code's statusline input: the live effort (`effort.level`, the surest source since the
+    /// "◐ medium · /effort" hint is only shown now and then), context window, cost, worktree, PR…
+    /// Kept even before anyone opened the Claude view (the statusline runs right at start).
+    pub fn cv_status(&self, sid: &Id, payload: &Value) {
         let tail = self.cv_tail(sid);
         let mut st = tail.st.lock();
-        if st.see_effort(Some(level)) {
+        let mut changed = apply_status(&mut st.meta, payload);
+        st.status = Some(payload.clone());
+        if let Some(level) = payload.pointer("/effort/level").and_then(Value::as_str)
+            && let Some(level) = EFFORTS.iter().find(|e| **e == level).copied()
+        {
+            changed |= st.see_effort(Some(level));
+        }
+        if changed {
             let _ = tail.tx.send(CvEvent::Meta { meta: st.meta.clone() });
+        }
+    }
+
+    /// Hooks the Claude view uses: the tool a permission prompt is about, subagent start/stop,
+    /// the live subagent rows (`subagent-statusline`).
+    pub fn cv_hook(&self, sid: &Id, event: &str, payload: &Value) {
+        if !matches!(
+            event,
+            "PermissionRequest"
+                | "PostToolUse"
+                | "PostToolUseFailure"
+                | "UserPromptSubmit"
+                | "Stop"
+                | "SubagentStart"
+                | "SubagentStop"
+                | "subagent-statusline"
+        ) {
+            return;
+        }
+        let tail = self.cv_tail(sid);
+        let mut st = tail.st.lock();
+        let text = |k: &str| payload[k].as_str().filter(|s| !s.is_empty()).map(str::to_string);
+        match event {
+            "PermissionRequest" => {
+                st.perm = Some(CvPromptTool {
+                    name: text("tool_name").unwrap_or_default(),
+                    input: clip_value(&payload["tool_input"]),
+                    tool_use_id: text("tool_use_id"),
+                    agent_id: text("agent_id"),
+                    agent: text("agent_type"),
+                });
+                return;
+            }
+            "PostToolUse" | "PostToolUseFailure" | "UserPromptSubmit" | "Stop" => {
+                st.perm = None;
+                return;
+            }
+            // Look at the subagent files on the next tick.
+            "SubagentStart" => st.tasks.last_scan = None,
+            "SubagentStop" => st.tasks.subagent_stop(payload, now_ms()),
+            _ => {
+                if let Some(t) = payload["tasks"].as_array() {
+                    st.tasks.statusline(t);
+                }
+            }
+        }
+        let running = (!st.tasks.is_empty()).then(|| st.tasks.running());
+        if st.meta.tasks_running != running {
+            st.meta.tasks_running = running;
+            let _ = tail.tx.send(CvEvent::Meta { meta: st.meta.clone() });
+        }
+        if let Some(e) = st.tasks_event(event == "SubagentStop") {
+            let _ = tail.tx.send(e);
         }
     }
 
     pub fn cv_forget(&self, sid: &Id) {
         self.cv.tails.lock().remove(sid);
+        self.cv.subs.lock().retain(|(s, _), _| s != sid);
+        self.cv.action_locks.lock().remove(sid);
     }
 
-    /// Attach: the current conversation and a receiver for what follows.
-    pub fn cv_attach(&self, sid: &Id) -> Result<(CvAttachResult, broadcast::Receiver<CvEvent>), na_protocol::ApiError> {
+    /// Attach: the current conversation and a receiver for what follows. With `agent`: that
+    /// subagent's transcript (read-only, no prompts or tasks).
+    pub fn cv_attach(&self, sid: &Id, agent: Option<&str>) -> Result<(CvAttachResult, broadcast::Receiver<CvEvent>), ApiError> {
         if self.read(|s| !s.sessions.contains_key(sid)) {
             return Err(err(ErrorCode::NotFound, "no such session"));
+        }
+        if let Some(a) = agent {
+            let path = self.cv_path(sid, Some(a))?;
+            let tail = self
+                .cv
+                .subs
+                .lock()
+                .entry((sid.clone(), a.to_string()))
+                .or_insert_with(|| {
+                    let st = TailState { path: Some(path), sidechain: true, ..Default::default() };
+                    Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st) })
+                })
+                .clone();
+            let mut st = tail.st.lock();
+            let rx = tail.tx.subscribe();
+            let _ = st.poll();
+            let res = CvAttachResult { messages: st.page(), more: st.more_before(), meta: st.meta.clone(), prompt: None, tasks: vec![] };
+            return Ok((res, rx));
         }
         let tail = self.cv_tail(sid);
         self.cv_guess_path(sid, &tail);
@@ -965,26 +1467,27 @@ impl Core {
         let rx = tail.tx.subscribe();
         // Events from this poll reach only the receivers that exist (us, after the snapshot).
         let _ = st.poll();
-        let screen = self.pty(sid).map(|p| p.screen_text()).unwrap_or_default();
-        st.prompt = detect_prompt(&screen);
-        st.meta.activity = detect_activity(&screen);
-        if let Some(m) = detect_mode(&screen) {
-            st.meta.mode = Some(m.into());
+        if let Some(path) = st.path.clone() {
+            st.tasks.scan(&path);
         }
-        st.see_effort(detect_effort(&screen));
-        let res = CvAttachResult { messages: st.page(), more: st.more_before(), meta: st.meta.clone(), prompt: st.prompt.clone() };
+        let screen = self.pty(sid).map(|p| p.screen_text()).unwrap_or_default();
+        let _ = self.cv_screen_into(sid, &mut st, &screen);
+        st.meta.tasks_running = (!st.tasks.is_empty()).then(|| st.tasks.running());
+        st.tasks.clear_dirty();
+        let res = CvAttachResult {
+            messages: st.page(),
+            more: st.more_before(),
+            meta: st.meta.clone(),
+            prompt: st.prompt.clone(),
+            tasks: st.tasks.list(),
+        };
         Ok((res, rx))
     }
 
-    pub fn cv_history(&self, sid: &Id, before: u64) -> Result<CvHistoryResult, na_protocol::ApiError> {
-        let path = self
-            .cv
-            .tails
-            .lock()
-            .get(sid)
-            .and_then(|t| t.st.lock().path.clone())
-            .ok_or_else(|| err(ErrorCode::NotFound, "no transcript yet"))?;
+    pub fn cv_history(&self, sid: &Id, before: u64, agent: Option<&str>) -> Result<CvHistoryResult, ApiError> {
+        let path = self.cv_path(sid, agent)?;
         let mut f = std::fs::File::open(&path).map_err(|e| err(ErrorCode::NotFound, e.to_string()))?;
+        let before = before.min(f.metadata().map(|m| m.len()).unwrap_or(0));
         let mut window = 2u64 << 20;
         loop {
             let start = before.saturating_sub(window);
@@ -994,7 +1497,7 @@ impl Core {
             if start > 0 {
                 skip = buf.iter().position(|b| *b == b'\n').map(|i| i + 1).unwrap_or(buf.len());
             }
-            let mut st = TailState::default();
+            let mut st = TailState { sidechain: agent.is_some(), ..Default::default() };
             let _ = st.feed(&buf[skip..], start + skip as u64);
             if st.msgs.len() >= PAGE / 2 || start == 0 || window >= 64 << 20 {
                 let n = st.msgs.len();
@@ -1006,45 +1509,105 @@ impl Core {
         }
     }
 
-    /// The bytes of an image in the session's transcript (see `cv_image`).
-    pub fn cv_image(&self, sid: &Id, id: &str, max: Option<u32>) -> Result<CvImageData, na_protocol::ApiError> {
-        let path = self
-            .cv
-            .tails
-            .lock()
-            .get(sid)
-            .and_then(|t| t.st.lock().path.clone())
-            .ok_or_else(|| err(ErrorCode::NotFound, "no transcript yet"))?;
+    /// The bytes of an image in the session's (or a subagent's) transcript (see `cv_image`).
+    pub fn cv_image(&self, sid: &Id, id: &str, max: Option<u32>, agent: Option<&str>) -> Result<CvImageData, ApiError> {
+        let path = self.cv_path(sid, agent)?;
         cv_image::serve(&path, id, max)
     }
 
+    /// The prompt the session shows now (for actions).
+    pub(crate) fn cv_current_prompt(&self, sid: &Id) -> Option<CvPrompt> {
+        self.cv.tails.lock().get(sid).and_then(|t| t.st.lock().prompt.clone())
+    }
+
+    /// The text of a user prompt in the loaded conversation.
+    pub(crate) fn cv_user_text(&self, sid: &Id, message_id: &str) -> Option<String> {
+        let tail = self.cv.tails.lock().get(sid).cloned()?;
+        let st = tail.st.lock();
+        let m = st.msgs.iter().find(|m| m.id == message_id && m.role == CvRole::User)?;
+        m.blocks.iter().find_map(|b| match b {
+            CvBlock::Text { text } => Some(text.clone()),
+            _ => None,
+        })
+    }
+
+    /// The end of a background shell's output file. Agents: their final report (their output
+    /// file is their transcript; open it with `cv_attach(sid, agent)`).
+    pub fn cv_task_output(&self, sid: &Id, task: &str, max: Option<u32>) -> Result<CvTextResult, ApiError> {
+        let t = {
+            let tail = self.cv.tails.lock().get(sid).cloned().ok_or_else(|| err(ErrorCode::NotFound, "open the conversation first"))?;
+            let st = tail.st.lock();
+            st.tasks.get(task).cloned().ok_or_else(|| err(ErrorCode::NotFound, "no such task"))?
+        };
+        if t.kind == "agent" {
+            let text = t.result.or(t.summary).or(t.label).unwrap_or_default();
+            return Ok(CvTextResult { size: text.len() as u64, text, truncated: false });
+        }
+        let path = t.output_file.ok_or_else(|| err(ErrorCode::NotFound, "this task has no output file"))?;
+        let real = self.cv_confined(sid, &path)?;
+        read_text(&real, max.map(|m| m as u64).unwrap_or(64 << 10).min(MAX_READ), true)
+    }
+
+    /// A file the conversation named: the plan file, a saved full tool output, a task's output.
+    /// Nothing else can be read this way.
+    pub fn cv_file(&self, sid: &Id, path: &str) -> Result<CvTextResult, ApiError> {
+        let named = {
+            let tail = self.cv.tails.lock().get(sid).cloned().ok_or_else(|| err(ErrorCode::NotFound, "open the conversation first"))?;
+            let st = tail.st.lock();
+            st.meta.plan_file.as_deref() == Some(path)
+                || st.tasks.list().iter().any(|t| t.output_file.as_deref() == Some(path))
+                || st.msgs.iter().any(|m| {
+                    m.blocks
+                        .iter()
+                        .any(|b| matches!(b, CvBlock::ToolResult { meta: Some(x), .. } if x.full_output.as_deref() == Some(path)))
+                })
+        };
+        if !named {
+            return Err(err(ErrorCode::Forbidden, "this file is not part of the conversation"));
+        }
+        read_text(&self.cv_confined(sid, path)?, MAX_READ, false)
+    }
+
+    /// A file the conversation named, if it is one the phone may read (see `ReadRoots`).
+    fn cv_confined(&self, sid: &Id, path: &str) -> Result<PathBuf, ApiError> {
+        let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone()));
+        confined(Path::new(path), &read_roots(cwd.as_deref()))
+            .ok_or_else(|| err(ErrorCode::Forbidden, "this file is outside the conversation's folders"))
+    }
+
     pub fn cv_commands(&self, sid: &Id) -> Vec<CvCommand> {
-        let mut out: Vec<CvCommand> =
-            BUILTIN.iter().map(|(n, d)| CvCommand { name: (*n).into(), description: (*d).into(), source: "builtin".into() }).collect();
+        let mut out = cv_commands::builtin();
         let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())).unwrap_or_default();
-        if let Some(c) = claude_dir() {
-            collect_commands(&c.join("commands"), "", "user", &mut out, 0);
-            collect_skills(&c.join("skills"), "skill", &mut out);
-        }
         if !cwd.is_empty() {
-            collect_commands(&Path::new(&cwd).join(".claude/commands"), "", "project", &mut out, 0);
-            collect_skills(&Path::new(&cwd).join(".claude/skills"), "skill", &mut out);
+            cv_commands::collect_commands(&Path::new(&cwd).join(".claude/commands"), "", "project", &mut out, 0);
+            cv_commands::collect_skills(&Path::new(&cwd).join(".claude/skills"), "", "skill", &mut out);
         }
-        // Skills (also from plugins) as the session itself listed them.
+        if let Some(c) = claude_dir() {
+            cv_commands::collect_commands(&c.join("commands"), "", "user", &mut out, 0);
+            cv_commands::collect_skills(&c.join("skills"), "", "skill", &mut out);
+            cv_commands::collect_plugins(&c, &mut out);
+        }
+        // Skills (also from plugins and bundled ones) as the session itself listed them.
         if let Some(t) = self.cv.tails.lock().get(sid) {
-            let have: HashSet<String> = out.iter().map(|c| c.name.clone()).collect();
+            let have: HashSet<String> = out.iter().flat_map(|c| std::iter::once(c.name.clone()).chain(c.aliases.iter().cloned())).collect();
             for (n, d) in t.st.lock().skills.iter() {
                 if !have.contains(n) {
+                    let plugin = n.contains(':');
                     out.push(CvCommand {
                         name: n.clone(),
                         description: d.chars().take(160).collect(),
-                        source: if n.contains(':') { "plugin" } else { "skill" }.into(),
+                        source: if plugin { "plugin" } else { "skill" }.into(),
+                        group: Some(if plugin { "plugins" } else { "skills" }.into()),
+                        kind: Some("prompt".into()),
+                        ..Default::default()
                     });
                 }
             }
         }
+        // First one wins: built-in, then project, then user.
+        let mut seen = HashSet::new();
+        out.retain(|c| seen.insert(c.name.clone()));
         out.sort_by(|a, b| a.name.cmp(&b.name));
-        out.dedup_by(|a, b| a.name == b.name);
         out
     }
 
@@ -1111,16 +1674,16 @@ impl Core {
 
     pub async fn cv_handle(self: &Arc<Self>, req: Request) -> Option<Result<Value, na_protocol::ApiError>> {
         Some(match req {
-            Request::CvHistory { sid, before } => {
+            Request::CvHistory { sid, before, agent } => {
                 let core = self.clone();
-                match tokio::task::spawn_blocking(move || core.cv_history(&sid, before)).await {
+                match tokio::task::spawn_blocking(move || core.cv_history(&sid, before, agent.as_deref())).await {
                     Ok(r) => r.map(|r| json!(r)),
                     Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
                 }
             }
-            Request::CvImage { sid, id, max } => {
+            Request::CvImage { sid, id, max, agent } => {
                 let core = self.clone();
-                match tokio::task::spawn_blocking(move || core.cv_image(&sid, &id, max)).await {
+                match tokio::task::spawn_blocking(move || core.cv_image(&sid, &id, max, agent.as_deref())).await {
                     Ok(r) => r.map(|r| json!(r)),
                     Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
                 }
@@ -1140,6 +1703,21 @@ impl Core {
             Request::Upload { sid, name, data } => {
                 let core = self.clone();
                 match tokio::task::spawn_blocking(move || core.cv_upload(&sid, &name, &data)).await {
+                    Ok(r) => r.map(|r| json!(r)),
+                    Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
+                }
+            }
+            Request::CvAction { sid, action } => self.cv_action(&sid, action).await.map(|_| Value::Null),
+            Request::CvTaskOutput { sid, task, max } => {
+                let core = self.clone();
+                match tokio::task::spawn_blocking(move || core.cv_task_output(&sid, &task, max)).await {
+                    Ok(r) => r.map(|r| json!(r)),
+                    Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
+                }
+            }
+            Request::CvFile { sid, path } => {
+                let core = self.clone();
+                match tokio::task::spawn_blocking(move || core.cv_file(&sid, &path)).await {
                     Ok(r) => r.map(|r| json!(r)),
                     Err(e) => Err(err(ErrorCode::Internal, e.to_string())),
                 }
@@ -1279,6 +1857,117 @@ mod tests {
     }
 
     #[test]
+    fn background_tasks_from_the_transcript() {
+        let (st, evs) = feed(&[
+            json!({"type":"assistant","uuid":"a1","timestamp":"2026-10-31T10:00:00Z","message":{"id":"msg_1","model":"claude-haiku-5-5","content":[
+                {"type":"tool_use","id":"toolu_a","name":"Agent","input":{"description":"Survey","subagent_type":"Explore","prompt":"look","run_in_background":true}}]}}),
+            json!({"type":"user","uuid":"u1","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a0123456789abcdef","outputFile":"/t/a.output"},
+                "message":{"content":[{"type":"tool_result","tool_use_id":"toolu_a","content":[{"type":"text","text":"Async agent launched"}]}]}}),
+            json!({"type":"queue-operation","operation":"enqueue","content":"<task-notification>…</task-notification>"}),
+            json!({"type":"user","uuid":"n1","timestamp":"2026-10-31T10:01:00Z","origin":{"kind":"task-notification"},"message":{"role":"user","content":
+                "<task-notification>\n<task-id>a0123456789abcdef</task-id>\n<tool-use-id>toolu_a</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Survey\" completed</summary>\n<result>Found 3 files</result>\n</task-notification>"}}),
+        ]);
+        let kinds: Vec<_> = st.msgs.iter().map(|m| m.kind.clone().unwrap_or_default()).collect();
+        assert_eq!(kinds, ["", "", "task"]);
+        assert!(
+            matches!(&st.msgs[1].blocks[0], CvBlock::ToolResult { meta: Some(m), .. } if m.agent_id.as_deref() == Some("a0123456789abcdef"))
+        );
+        assert!(
+            matches!(&st.msgs[2].blocks[0], CvBlock::TaskNote { status, result, .. } if status == "completed" && result == "Found 3 files")
+        );
+        let t = st.tasks.get("a0123456789abcdef").unwrap();
+        assert_eq!((t.status.as_str(), t.tool_use_id.as_deref(), t.agent_type.as_deref()), ("completed", Some("toolu_a"), Some("Explore")));
+        assert!(st.meta.queued.is_empty(), "task notices are not typed-ahead messages");
+        assert_eq!(st.meta.tasks_running, Some(0));
+        let _ = evs;
+    }
+
+    #[test]
+    fn shell_paste_queue_peer_errors() {
+        let (st, evs) = feed(&[
+            json!({"type":"user","uuid":"b1","message":{"role":"user","content":"<bash-input>ls</bash-input>"}}),
+            json!({"type":"user","uuid":"b2","parentUuid":"b1","message":{"role":"user","content":"<bash-stdout>a.txt\nb.txt</bash-stdout><bash-stderr></bash-stderr>"}}),
+            json!({"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-31T10:00:00Z","content":"and then this"}),
+            json!({"type":"user","uuid":"p1","message":{"role":"user","content":"see\n<pasted_content id=\"x\">\nl1\nl2\n</pasted_content id=\"x\">"}}),
+            json!({"type":"user","uuid":"q1","message":{"role":"user","content":"and then this"}}),
+            json!({"type":"user","uuid":"peer","isMeta":true,"origin":{"kind":"peer","from":"agent-x","senderTaskId":"t9","name":"reviewer","body":"Looks good"},
+                "message":{"role":"user","content":"Another Claude session sent a message: Looks good"}}),
+            json!({"type":"user","uuid":"meta","isMeta":true,"message":{"role":"user","content":"Caveat: noise"}}),
+            json!({"type":"assistant","uuid":"e1","isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,
+                "message":{"id":"x","model":"<synthetic>","content":[{"type":"text","text":"You've hit your session limit"}]}}),
+            json!({"type":"assistant","uuid":"th","thinkingDurationMs":770,"message":{"id":"msg_t","model":"m","content":[{"type":"thinking","thinking":"hmm"}]}}),
+            json!({"type":"file-history-snapshot","messageId":"q1","snapshot":{"trackedFileBackups":{"a.rs":{}}}}),
+            json!({"type":"attachment","uuid":"h1","attachment":{"type":"hook_system_message","content":"Formatted","hookName":"PostToolUse:Edit","hookEvent":"PostToolUse"}}),
+            json!({"type":"attachment","attachment":{"type":"plan_mode","planFilePath":"/c/plans/p.md","planExists":true}}),
+            json!({"type":"custom-title","customTitle":"my-session"}),
+        ]);
+        let kinds: Vec<_> = st.msgs.iter().map(|m| m.kind.clone().unwrap_or_default()).collect();
+        assert_eq!(kinds, ["shell", "", "", "peer", "error", "", "hook"]);
+        assert!(matches!(&st.msgs[0].blocks[0], CvBlock::Shell { command, stdout: Some(o), .. } if command == "ls" && o == "a.txt\nb.txt"));
+        assert!(matches!(&st.msgs[1].blocks[1], CvBlock::Pasted { lines: 2, .. }));
+        assert_eq!(st.msgs[2].checkpoint, Some(true));
+        assert_eq!((st.msgs[3].from.as_deref(), st.msgs[3].from_name.as_deref()), (Some("t9"), Some("reviewer")));
+        assert!(matches!(&st.msgs[4].blocks[0], CvBlock::Error { status: Some(429), .. }));
+        assert!(matches!(&st.msgs[5].blocks[0], CvBlock::Thinking { ms: Some(770), .. }));
+        assert!(st.meta.queued.is_empty(), "delivered");
+        assert_eq!(st.meta.plan_file.as_deref(), Some("/c/plans/p.md"));
+        assert_eq!(st.meta.session_name.as_deref(), Some("my-session"));
+        // the shell output updated the input's message instead of adding one
+        let shell_upserts = evs.iter().filter(|e| matches!(e, CvEvent::Upsert { message } if message.id == "b1")).count();
+        assert_eq!(shell_upserts, 2);
+    }
+
+    #[test]
+    fn queue_and_todos_in_meta() {
+        let (st, _) = feed(&[
+            json!({"type":"queue-operation","operation":"enqueue","content":"one"}),
+            json!({"type":"queue-operation","operation":"enqueue","content":"two"}),
+            json!({"type":"queue-operation","operation":"dequeue"}),
+            json!({"type":"assistant","uuid":"a","message":{"id":"m1","model":"m","content":[
+                {"type":"tool_use","id":"t1","name":"TodoWrite","input":{"todos":[{"content":"A","status":"in_progress","activeForm":"Doing A"},{"content":"B","status":"pending"}]}}]}}),
+        ]);
+        assert_eq!(st.meta.queued.iter().map(|q| q.text.as_str()).collect::<Vec<_>>(), ["two"]);
+        assert_eq!(st.meta.todos.len(), 2);
+        assert_eq!(st.meta.todos[0].active.as_deref(), Some("Doing A"));
+    }
+
+    #[test]
+    fn subagent_transcripts_keep_sidechain_lines() {
+        let mut st = TailState { sidechain: true, ..Default::default() };
+        let line = json!({"type":"assistant","isSidechain":true,"uuid":"s","message":{"id":"m","model":"m","content":[{"type":"text","text":"from the subagent"}]}});
+        let data = format!("{line}\n");
+        let _ = st.feed(data.as_bytes(), 0);
+        assert_eq!(st.msgs.len(), 1);
+        let (main, _) = feed(&[line]);
+        assert!(main.msgs.is_empty());
+    }
+
+    #[test]
+    fn question_and_plan_prompts_get_their_details() {
+        let (mut st, _) = feed(&[json!({"type":"assistant","uuid":"a","message":{"id":"m1","model":"m","content":[
+            {"type":"tool_use","id":"tq","name":"AskUserQuestion","input":{"questions":[{"question":"Which color?","header":"Color","multiSelect":false,
+                "options":[{"label":"Red","description":"warm"},{"label":"Blue","description":"cold"}]}]}}]}})]);
+        let screen = "Which color?\n\n❯ 1. Red\n     warm\n  2. Blue\n     cold\n  3. Type something.\n\nEnter to select · Esc to cancel";
+        let p = st.enrich(detect_prompt(screen)).unwrap();
+        assert_eq!(p.kind.as_deref(), Some("question"));
+        let q = p.question.unwrap();
+        assert_eq!((q.questions[0].header.as_str(), q.questions[0].options[1].description.as_str()), ("Color", "cold"));
+        assert_eq!(q.tool_use_id.as_deref(), Some("tq"));
+        assert_eq!(p.options[0].description.as_deref(), Some("warm"));
+        assert_eq!(p.options[2].text, Some(true));
+        // answered: the next menu is not that question any more
+        let r = json!({"type":"user","uuid":"r","toolUseResult":{"answers":{"Which color?":"Red"}},"message":{"content":[{"type":"tool_result","tool_use_id":"tq","content":"ok"}]}});
+        let _ = st.feed(format!("{r}\n").as_bytes(), 1000);
+        st.perm =
+            Some(CvPromptTool { name: "Bash".into(), input: json!({"command":"ls"}), tool_use_id: None, agent_id: None, agent: None });
+        let perm = "Bash command\n\n  ls\n\nDo you want to proceed?\n❯ 1. Yes\n  2. Yes, and don't ask again for ls commands\n  3. No, and tell Claude what to do differently (esc)";
+        let p = st.enrich(detect_prompt(perm)).unwrap();
+        assert_eq!(p.kind.as_deref(), Some("permission"));
+        assert_eq!(p.tool.map(|t| t.name).as_deref(), Some("Bash"));
+        assert!(p.question.is_none());
+    }
+
+    #[test]
     fn commands_output_notices_and_noise() {
         let (st, _) = feed(&[
             json!({"type":"user","uuid":"m","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>x</local-command-caveat>"}}),
@@ -1293,7 +1982,7 @@ mod tests {
             json!({"type":"attachment","attachment":{"type":"skill_listing","content":"- brief: Make a brief\n- plugin:x: Does x"}}),
         ]);
         let kinds: Vec<_> = st.msgs.iter().map(|m| m.kind.clone().unwrap_or_default()).collect();
-        assert_eq!(kinds, ["command", "output", "compact"]);
+        assert_eq!(kinds, ["command", "output", "compact", "duration"]);
         assert!(matches!(&st.msgs[0].blocks[0], CvBlock::Text { text } if text == "/model haiku"));
         assert!(matches!(&st.msgs[1].blocks[0], CvBlock::Text { text } if text == "Set model to haiku"));
         assert_eq!(st.meta.mode.as_deref(), Some("plan"));
@@ -1312,7 +2001,7 @@ mod tests {
         assert_eq!(evs.len(), 1);
         assert_eq!(st.offset, full.len() as u64);
         assert!(
-            matches!(&st.msgs[0].blocks[1], CvBlock::Image { media_type, image: Some(r) } if media_type == "image/png" && r.bytes == 3)
+            matches!(&st.msgs[0].blocks[1], CvBlock::Image { media_type, image: Some(r), url: None } if media_type == "image/png" && r.bytes == 3)
         );
     }
 
@@ -1435,6 +2124,89 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    /// Dev aid: renders a terminal snapshot (`{snapshot, cols, rows}` JSON from `term_attach`, path in
+    /// `NA_SNAP`) like the daemon does and runs the screen detectors on it.
+    /// `NA_SNAP=/tmp/snap.json cargo test -p na-daemon dev_screen -- --ignored --nocapture`
+    #[test]
+    fn skills_from_the_head_of_a_long_transcript() {
+        let p = std::env::temp_dir().join(format!("na-cv-head-{}.jsonl", std::process::id()));
+        let listing = json!({"type":"attachment","attachment":{"type":"skill_listing","content":"- brief: Make a brief"}});
+        std::fs::write(&p, format!("{}\n{}\n", json!({"type":"user","message":{"role":"user","content":"hi"}}), listing)).unwrap();
+        let mut f = std::fs::File::open(&p).unwrap();
+        assert_eq!(head_skills(&mut f, 1 << 20), vec![("brief".to_string(), "Make a brief".to_string())]);
+        let mut f = std::fs::File::open(&p).unwrap();
+        assert!(head_skills(&mut f, 10).is_empty());
+        std::fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn readable_files_stay_inside_their_folders() {
+        let base = std::env::temp_dir().join(format!("na-cv-roots-{}", std::process::id()));
+        std::fs::create_dir_all(&base).unwrap();
+        let base = base.canonicalize().unwrap();
+        let (sess, proj, out) = (base.join("claude/projects/x"), base.join("proj"), base.join("outside"));
+        for d in [&sess, &proj, &out] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(sess.join("t.output"), "ok").unwrap();
+        std::fs::write(proj.join("plan.md"), "# plan").unwrap();
+        std::fs::write(proj.join(".env"), "SECRET=1").unwrap();
+        std::fs::write(out.join("id_rsa"), "key").unwrap();
+        let link = sess.join("escape.output");
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(out.join("id_rsa"), &link).unwrap();
+        let r = ReadRoots { dirs: vec![base.join("claude/projects")], temps: vec![], project: Some(proj.clone()) };
+        assert_eq!(confined(&sess.join("t.output"), &r), Some(sess.join("t.output")));
+        assert!(confined(&proj.join("plan.md"), &r).is_some());
+        assert_eq!(confined(&proj.join(".env"), &r), None, "only Markdown from the project");
+        assert_eq!(confined(&out.join("id_rsa"), &r), None);
+        assert_eq!(confined(&link, &r), None, "a link out of the folder");
+        assert_eq!(confined(&sess.join("../x/../x/t.output"), &r), Some(sess.join("t.output")));
+        assert_eq!(confined(&sess, &r), None, "a folder is not a file");
+        assert_eq!(confined(Path::new("t.output"), &r), None);
+        // The CLI's temp folders: `<tmp>/claude-*` only.
+        let tmp = ReadRoots { dirs: vec![], temps: vec![base.clone()], project: None };
+        std::fs::create_dir_all(base.join("claude-501/p/tasks")).unwrap();
+        std::fs::write(base.join("claude-501/p/tasks/b1.output"), "x").unwrap();
+        assert!(confined(&base.join("claude-501/p/tasks/b1.output"), &tmp).is_some());
+        assert_eq!(confined(&out.join("id_rsa"), &tmp), None);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn read_text_tails_keep_whole_lines_but_not_nothing() {
+        let p = std::env::temp_dir().join(format!("na-cv-read-{}.txt", std::process::id()));
+        std::fs::write(&p, "first line\nsecond line\nthird\n").unwrap();
+        let r = read_text(&p, 14, true).unwrap();
+        assert_eq!((r.text.as_str(), r.truncated, r.size), ("third\n", true, 29));
+        // One long line: the cut would leave nothing, so the raw end is kept.
+        std::fs::write(&p, format!("{}\n", "x".repeat(100))).unwrap();
+        let r = read_text(&p, 10, true).unwrap();
+        assert_eq!(r.text, "xxxxxxxxx\n");
+        let r = read_text(&p, 10, false).unwrap();
+        assert_eq!(r.text, "x".repeat(10));
+        std::fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    #[ignore]
+    fn dev_screen() {
+        let Ok(path) = std::env::var("NA_SNAP") else { return };
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let n = |k: &str| std::num::NonZeroU16::new(v[k].as_u64().unwrap() as u16).unwrap();
+        let mut p = vt100::Parser::new(n("rows"), n("cols"), 0);
+        p.process(v["snapshot"].as_str().unwrap().as_bytes());
+        let screen = p.screen().contents();
+        println!("{screen}\n-----");
+        println!(
+            "prompt: {:?}\nmenu: {:?}\nactivity: {:?}\nmode: {:?}",
+            detect_prompt(&screen),
+            cv_screen::detect_menu(&screen),
+            detect_activity(&screen),
+            detect_mode(&screen)
+        );
+    }
+
     #[tokio::test]
     async fn statusline_effort_is_kept_before_the_view_opens() {
         let root = std::env::temp_dir().join(format!("na-cv-test-{}-{}", std::process::id(), rand::random::<u32>()));
@@ -1442,10 +2214,60 @@ mod tests {
         let env = crate::env::LoginEnv { vars: Default::default(), shell: "/bin/sh".into(), home: root.clone() };
         let core = Core::load(crate::paths::Paths { root: root.clone() }, env);
         let sid: Id = "s1".into();
-        core.cv_status_effort(&sid, "medium");
+        core.cv_status(&sid, &json!({ "effort": { "level": "medium" } }));
         assert_eq!(core.cv_tail(&sid).st.lock().meta.effort.as_deref(), Some("medium"));
-        core.cv_status_effort(&sid, "bogus");
+        assert_eq!(core.cv_tail(&sid).st.lock().meta.actions, Some(true));
+        core.cv_status(&sid, &json!({ "effort": { "level": "bogus" } }));
         assert_eq!(core.cv_tail(&sid).st.lock().meta.effort.as_deref(), Some("medium"));
+        // The rest of the statusline input.
+        core.cv_status(
+            &sid,
+            &json!({
+                "model": { "id": "claude-haiku-x", "display_name": "Haiku" },
+                "context_window": { "context_window_size": 200000, "used_percentage": 13.5,
+                    "current_usage": { "input_tokens": 10, "cache_read_input_tokens": 26000, "cache_creation_input_tokens": 990 } },
+                "cost": { "total_cost_usd": 0.42, "total_duration_ms": 9000, "total_api_duration_ms": 4000, "total_lines_added": 5, "total_lines_removed": 2 },
+                "fast_mode": false, "thinking": { "enabled": true }, "output_style": { "name": "default" }, "version": "2.1.316",
+                "session_name": "fix-bug", "workspace": { "added_dirs": ["/tmp/other"] },
+                "worktree": { "name": "wt", "path": "/tmp/wt", "branch": "feat" },
+                "pr": { "number": 12, "url": "https://example.com/pr/12", "review_state": "approved" }
+            }),
+        );
+        {
+            let tail = core.cv_tail(&sid);
+            let st = tail.st.lock();
+            let m = &st.meta;
+            assert_eq!((m.context_window, m.context_pct, m.context_tokens), (Some(200000), Some(13.5), Some(27000)));
+            assert_eq!((m.cost_usd, m.duration_ms, m.lines_added, m.lines_removed), (Some(0.42), Some(9000), Some(5), Some(2)));
+            assert_eq!(
+                (m.fast, m.thinking, m.version.as_deref(), m.session_name.as_deref()),
+                (Some(false), Some(true), Some("2.1.316"), Some("fix-bug"))
+            );
+            assert_eq!(m.worktree.as_ref().map(|w| w.branch.as_deref()), Some(Some("feat")));
+            assert_eq!(m.pr.as_ref().map(|p| (p.number, p.state.as_deref())), Some((12, Some("approved"))));
+            assert_eq!(m.added_dirs, vec!["/tmp/other"]);
+            assert_eq!(m.model.as_deref(), Some("claude-haiku-x"));
+        }
+        // Subagent rows and hooks feed the task list.
+        core.cv_hook(
+            &sid,
+            "subagent-statusline",
+            &json!({ "tasks": [{ "id": "a77", "type": "local_agent", "description": "Scan", "label": "Grep foo", "status": "running" }] }),
+        );
+        core.cv_hook(
+            &sid,
+            "PermissionRequest",
+            &json!({ "tool_name": "Bash", "tool_input": { "command": "ls" }, "agent_id": "a77", "agent_type": "Explore" }),
+        );
+        {
+            let tail = core.cv_tail(&sid);
+            let st = tail.st.lock();
+            assert_eq!(st.tasks.get("a77").and_then(|t| t.label.clone()).as_deref(), Some("Grep foo"));
+            assert_eq!(st.meta.tasks_running, Some(1));
+            assert_eq!(st.perm.as_ref().map(|t| (t.name.as_str(), t.agent_id.as_deref())), Some(("Bash", Some("a77"))));
+        }
+        core.cv_hook(&sid, "SubagentStop", &json!({ "agent_id": "a77" }));
+        assert_eq!(core.cv_tail(&sid).st.lock().tasks.get("a77").map(|t| t.status.clone()).as_deref(), Some("completed"));
         let _ = std::fs::remove_dir_all(root);
     }
 }

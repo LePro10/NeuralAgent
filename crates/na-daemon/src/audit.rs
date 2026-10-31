@@ -101,6 +101,8 @@ const SKIP: &[&str] = &[
     "usage_report",
     "history_search",
     "cv_image",
+    "cv_task_output",
+    "cv_file",
     "term_resize",
     "catalog_refresh",
     "audit_list",

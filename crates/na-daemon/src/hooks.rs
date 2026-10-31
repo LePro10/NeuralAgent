@@ -21,12 +21,23 @@ pub fn client_main(event: &str, arg: Option<&str>) {
 /// Claude Code's `statusLine` command: forwards the input (it has the subscription limits) and then
 /// runs the user's own statusline command with the same input, so their statusline stays as it was.
 pub fn statusline_main() {
+    forward_and_run("statusline", "statusLine");
+}
+
+/// Claude Code's `subagentStatusLine` command (live rows of running subagents, ~3×/s while they
+/// run): forwards the input for the Claude view's task list. Prints nothing (the CLI keeps its own
+/// rows) unless the user configured their own command, whose output is passed on.
+pub fn subagent_statusline_main() {
+    forward_and_run("subagent-statusline", "subagentStatusLine");
+}
+
+fn forward_and_run(event: &str, key: &str) {
     let mut input = Vec::new();
     let _ = std::io::stdin().take(1 << 20).read_to_end(&mut input);
     let text = String::from_utf8_lossy(&input).into_owned();
-    let _ = send("statusline", Some(&text));
+    let _ = send(event, Some(&text));
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    let Some(cmd) = user_statusline(&v) else { return };
+    let Some(cmd) = user_statusline(&v, key) else { return };
     let mut sh = if cfg!(windows) {
         let mut c = std::process::Command::new("cmd");
         c.args(["/C", &cmd]);
@@ -49,8 +60,9 @@ pub fn statusline_main() {
     }
 }
 
-/// The statusline command the user configured: project-local, project, then user settings.
-fn user_statusline(input: &Value) -> Option<String> {
+/// The statusline command (`key`: `statusLine` / `subagentStatusLine`) the user configured:
+/// project-local, project, then user settings.
+fn user_statusline(input: &Value, key: &str) -> Option<String> {
     let cwd = input["workspace"]["current_dir"].as_str().or(input["cwd"].as_str()).map(std::path::PathBuf::from);
     let config =
         std::env::var_os("CLAUDE_CONFIG_DIR").map(std::path::PathBuf::from).or_else(|| dirs::home_dir().map(|h| h.join(".claude")));
@@ -62,7 +74,7 @@ fn user_statusline(input: &Value) -> Option<String> {
     files.extend(config.map(|c| c.join("settings.json")));
     files.iter().find_map(|f| {
         let v: Value = serde_json::from_str(&std::fs::read_to_string(f).ok()?).ok()?;
-        let cmd = v["statusLine"]["command"].as_str()?.trim();
+        let cmd = v[key]["command"].as_str()?.trim();
         // never call ourselves
         (!cmd.is_empty() && !cmd.contains("neuralagentd")).then(|| cmd.to_string())
     })

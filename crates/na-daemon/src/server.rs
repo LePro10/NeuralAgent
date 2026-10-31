@@ -154,13 +154,17 @@ pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<
     conn.close();
 }
 
+/// Claude view streams by (session, subagent).
+type CvStreams = HashMap<(Id, Option<String>), JoinHandle<()>>;
+
 pub struct Conn {
     pub core: Arc<Core>,
     pub client: ClientInfo,
     pub out: mpsc::Sender<ServerMsg>,
     state_task: Option<JoinHandle<()>>,
     attached: Arc<Mutex<HashMap<Id, JoinHandle<()>>>>,
-    cv: Arc<Mutex<HashMap<Id, JoinHandle<()>>>>,
+    /// Claude view streams by (session, subagent).
+    cv: Arc<Mutex<CvStreams>>,
     call: Option<crate::call::CallHandle>,
     id: u64,
 }
@@ -248,11 +252,18 @@ impl Conn {
                     };
                     let _ = self.out.send(ServerMsg::Res { id, ok: false, r: None, err: Some(res) }).await;
                 }
-                Request::CvAttach { sid } => {
-                    let msg = match self.core.cv_attach(&sid) {
+                Request::CvAttach { sid, agent, features } => {
+                    // Reading the transcript is file IO: off the async workers.
+                    let attached = {
+                        let (core, sid, agent) = (self.core.clone(), sid.clone(), agent.clone());
+                        tokio::task::spawn_blocking(move || core.cv_attach(&sid, agent.as_deref())).await
+                    };
+                    let attached = attached.unwrap_or_else(|e| Err(crate::core::err(ErrorCode::Internal, e.to_string())));
+                    let msg = match attached {
                         Ok((res, rx)) => {
-                            let task = tokio::spawn(forward_cv(self.core.clone(), sid.clone(), rx, self.out.clone()));
-                            if let Some(old) = self.cv.lock().insert(sid, task) {
+                            let tasks = features.iter().any(|f| f == "tasks");
+                            let task = tokio::spawn(forward_cv(self.core.clone(), sid.clone(), agent.clone(), rx, self.out.clone(), tasks));
+                            if let Some(old) = self.cv.lock().insert((sid, agent), task) {
                                 old.abort();
                             }
                             ServerMsg::Res { id, ok: true, r: Some(json!(res)), err: None }
@@ -261,8 +272,8 @@ impl Conn {
                     };
                     let _ = self.out.send(msg).await;
                 }
-                Request::CvDetach { sid } => {
-                    if let Some(t) = self.cv.lock().remove(&sid) {
+                Request::CvDetach { sid, agent } => {
+                    if let Some(t) = self.cv.lock().remove(&(sid, agent)) {
                         t.abort();
                     }
                     let _ = self.out.send(ServerMsg::Res { id, ok: true, r: None, err: None }).await;
@@ -370,22 +381,44 @@ async fn forward_term(sid: Id, pty: Arc<crate::pty::Pty>, mut rx: broadcast::Rec
     }
 }
 
-/// Claude view events of one session. A client that falls behind gets a fresh attach result as a reset.
-async fn forward_cv(core: Arc<Core>, sid: Id, mut rx: broadcast::Receiver<CvEvent>, out: mpsc::Sender<ServerMsg>) {
+/// Claude view events of one session. A client that falls behind gets a fresh attach result as a
+/// reset (plus the prompt and the task list). `tasks`: the client announced the `tasks` event (an
+/// older web remote would break on an event kind it does not know).
+async fn forward_cv(
+    core: Arc<Core>,
+    sid: Id,
+    agent: Option<String>,
+    mut rx: broadcast::Receiver<CvEvent>,
+    out: mpsc::Sender<ServerMsg>,
+    tasks: bool,
+) {
     loop {
-        let ev = match rx.recv().await {
-            Ok(ev) => ev,
-            Err(broadcast::error::RecvError::Lagged(_)) => match core.cv_attach(&sid) {
-                Ok((res, new_rx)) => {
-                    rx = new_rx;
-                    CvEvent::Reset { messages: res.messages, more: res.more, meta: res.meta }
+        let evs = match rx.recv().await {
+            Ok(ev) => vec![ev],
+            Err(broadcast::error::RecvError::Lagged(_)) => {
+                let (c, s, a) = (core.clone(), sid.clone(), agent.clone());
+                match tokio::task::spawn_blocking(move || c.cv_attach(&s, a.as_deref())).await {
+                    Ok(Ok((res, new_rx))) => {
+                        rx = new_rx;
+                        let mut evs = vec![CvEvent::Reset { messages: res.messages, more: res.more, meta: res.meta }];
+                        if agent.is_none() {
+                            evs.push(CvEvent::Prompt { prompt: res.prompt });
+                            evs.push(CvEvent::Tasks { tasks: res.tasks });
+                        }
+                        evs
+                    }
+                    _ => return,
                 }
-                Err(_) => return,
-            },
+            }
             Err(broadcast::error::RecvError::Closed) => return,
         };
-        if out.send(ServerMsg::Cv { sid: sid.clone(), ev }).await.is_err() {
-            return;
+        for ev in evs {
+            if matches!(ev, CvEvent::Tasks { .. }) && !tasks {
+                continue;
+            }
+            if out.send(ServerMsg::Cv { sid: sid.clone(), ev, agent: agent.clone() }).await.is_err() {
+                return;
+            }
         }
     }
 }

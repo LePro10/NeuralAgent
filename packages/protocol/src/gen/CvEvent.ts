@@ -2,5 +2,6 @@
 import type { CvMessage } from "./CvMessage";
 import type { CvMeta } from "./CvMeta";
 import type { CvPrompt } from "./CvPrompt";
+import type { CvTask } from "./CvTask";
 
-export type CvEvent = { "k": "upsert", message: CvMessage, } | { "k": "reset", messages: Array<CvMessage>, more: boolean, meta: CvMeta, } | { "k": "meta", meta: CvMeta, } | { "k": "prompt", prompt: CvPrompt | null, };
+export type CvEvent = { "k": "upsert", message: CvMessage, } | { "k": "reset", messages: Array<CvMessage>, more: boolean, meta: CvMeta, } | { "k": "meta", meta: CvMeta, } | { "k": "prompt", prompt: CvPrompt | null, } | { "k": "tasks", tasks: Array<CvTask>, };

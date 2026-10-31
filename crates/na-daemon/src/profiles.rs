@@ -118,6 +118,8 @@ pub const CLAUDE_EVENTS: &[&str] = &[
     "Stop",
     "StopFailure",
     "SessionEnd",
+    "SubagentStart",
+    "SubagentStop",
 ];
 
 pub fn claude_settings(hook_exe: &Path) -> Value {
@@ -127,7 +129,13 @@ pub fn claude_settings(hook_exe: &Path) -> Value {
         .map(|ev| (ev.to_string(), json!([{ "hooks": [{ "type": "command", "command": format!("{exe} hook {ev}"), "timeout": 10 }] }])))
         .collect();
     // The statusline command reports the subscription limits, then runs the user's own one.
-    json!({ "hooks": hooks, "statusLine": { "type": "command", "command": format!("{exe} statusline"), "padding": 0 } })
+    json!({
+        "hooks": hooks,
+        "statusLine": { "type": "command", "command": format!("{exe} statusline"), "padding": 0 },
+        // Live rows of running subagents for the Claude view; prints nothing (keeps the CLI's rows)
+        // unless the user has their own.
+        "subagentStatusLine": { "type": "command", "command": format!("{exe} subagent-statusline") }
+    })
 }
 
 /// Quotes a path for the shell that runs hook commands (sh on unix, cmd/PowerShell on Windows).

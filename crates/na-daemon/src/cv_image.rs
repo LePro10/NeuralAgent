@@ -69,6 +69,17 @@ pub fn image_ref(b: &Value, off: u64, n: usize) -> Option<CvImage> {
     })
 }
 
+/// The address of an image given by URL (`source.type = url`): https only, no credentials, bounded.
+pub fn image_url(b: &Value) -> Option<String> {
+    let src = &b["source"];
+    if src["type"] != "url" {
+        return None;
+    }
+    let u = src["url"].as_str()?.trim();
+    let host = u.strip_prefix("https://")?.split(['/', '?', '#']).next()?;
+    (u.len() <= 2048 && !host.is_empty() && !host.contains('@') && !u.chars().any(char::is_whitespace)).then(|| u.to_string())
+}
+
 fn be16(b: &[u8], i: usize) -> Option<u32> {
     Some(u16::from_be_bytes([*b.get(i)?, *b.get(i + 1)?]) as u32)
 }
@@ -214,6 +225,16 @@ mod tests {
         };
         img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
         out
+    }
+
+    #[test]
+    fn url_images_are_https_only() {
+        let img = |u: &str| json!({"type":"image","source":{"type":"url","url":u}});
+        assert_eq!(image_url(&img("https://example.com/a.png")).as_deref(), Some("https://example.com/a.png"));
+        assert_eq!(image_url(&img("http://example.com/a.png")), None);
+        assert_eq!(image_url(&img("https://user:pw@example.com/a.png")), None);
+        assert_eq!(image_url(&img("file:///etc/passwd")), None);
+        assert_eq!(image_url(&json!({"type":"image","source":{"type":"base64","data":"AA=="}})), None);
     }
 
     #[test]

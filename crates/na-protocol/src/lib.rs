@@ -135,6 +135,10 @@ pub enum ServerMsg {
     Cv {
         sid: Id,
         ev: CvEvent,
+        /// Set for a subagent's transcript (attached with `agent`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        agent: Option<String>,
     },
     /// To the host UI: do `op` and answer with `ClientMsg::HostUiReply`.
     HostCall {
@@ -1058,15 +1062,31 @@ pub enum Request {
     /// Start streaming the conversation → `CvAttachResult`, then `ServerMsg::Cv` events.
     CvAttach {
         sid: Id,
+        /// A subagent's own transcript (`CvTask.id` / `CvToolMeta.agent_id`) instead of the main one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        agent: Option<String>,
+        /// Newer event kinds this client handles (`"tasks"`). Old clients send none and get only
+        /// `upsert`/`reset`/`meta`/`prompt`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(as = "Option<Vec<String>>", optional)]
+        features: Vec<String>,
     },
     CvDetach {
         sid: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        agent: Option<String>,
     },
     /// Messages before position `before` → `CvHistoryResult`.
     CvHistory {
         sid: Id,
         #[ts(type = "number")]
         before: u64,
+        /// A subagent's own transcript (`CvTask.id` / `CvToolMeta.agent_id`) instead of the main one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        agent: Option<String>,
     },
     /// The bytes of an image in the transcript (`CvImage.id`) → `CvImageData`. `max`: longest
     /// edge wanted (remote clients ask for less); big pictures are scaled down and re-encoded.
@@ -1076,6 +1096,30 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         max: Option<u32>,
+        /// A subagent's own transcript (`CvTask.id` / `CvToolMeta.agent_id`) instead of the main one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        agent: Option<String>,
+    },
+    /// Make the CLI do something (mode, answer a prompt or question, background, rewind, …): the
+    /// daemon types the keys → `null`.
+    CvAction {
+        sid: Id,
+        action: CvAction,
+    },
+    /// The end of a background task's output file (`CvTask.output_file`) → `CvTextResult`.
+    CvTaskOutput {
+        sid: Id,
+        task: String,
+        /// Bytes from the end (default 64 KiB, at most 1 MiB).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        max: Option<u32>,
+    },
+    /// A text file the conversation named (plan file, saved full output) → `CvTextResult`.
+    CvFile {
+        sid: Id,
+        path: String,
     },
     /// Slash commands the session can run now (built-ins, custom commands, skills) → `Vec<CvCommand>`.
     CvCommands {

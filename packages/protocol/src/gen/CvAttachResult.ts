@@ -2,9 +2,14 @@
 import type { CvMessage } from "./CvMessage";
 import type { CvMeta } from "./CvMeta";
 import type { CvPrompt } from "./CvPrompt";
+import type { CvTask } from "./CvTask";
 
 export type CvAttachResult = { messages: Array<CvMessage>, 
 /**
  * Older messages exist (`cv_history`).
  */
-more: boolean, meta: CvMeta, prompt?: CvPrompt, };
+more: boolean, meta: CvMeta, prompt?: CvPrompt, 
+/**
+ * Background tasks (main conversation only; then `tasks` events).
+ */
+tasks?: Array<CvTask>, };

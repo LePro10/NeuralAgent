@@ -2,6 +2,23 @@
 
 export type CvOption = { 
 /**
- * What to type to choose it (the number shown by the CLI).
+ * What to type to choose it (the number shown by the CLI). Empty for menus without numbers:
+ * then `nav` says how to get there.
  */
-n: string, label: string, selected: boolean, };
+n: string, label: string, selected: boolean, 
+/**
+ * Menus without numbers: Down presses from the highlighted row (negative: Up).
+ */
+nav?: number, 
+/**
+ * Checkbox rows (`[✔]` / `[ ]`, multi-select questions).
+ */
+checked?: boolean, 
+/**
+ * The dimmed line under the option.
+ */
+description?: string, 
+/**
+ * Choosing it asks for text (e.g. "No, and tell Claude what to do", "Type something").
+ */
+text?: boolean, };
