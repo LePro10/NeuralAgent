@@ -39,9 +39,10 @@ overrides it wherever they differ (see D45).
 is exempt; mark a deliberate exception with `token-ok`.
 
 ## 3. Navigation (phones)
-- Tabs: **Neural · Agents · Workspaces · Swarm · More**. Workspaces lists the projects; one opens
-  pushed. More holds History, Usage and Settings (Remote access and MCP servers are Settings sections). Each tab remembers its
-  sub-page; tapping the active tab returns to its root.
+- Tabs: **Agents · Neural · Projects · Settings** (the phone overhaul replaced Workspaces, Swarm and
+  More: D52, [`mobile-overhaul.md`](mobile-overhaul.md)). Navigation is the hash router
+  (`lib/phoneRoute.ts`); an agent is a full screen with the Island and no Dock (D53). Phone look:
+  D57 (calm background, `Glow` renders nothing, light titles).
 - `App.tsx` wraps the body in `<NavPage id depth back>`. A deeper page pushes in from the right,
   a shallower one pops, tab switches cross-fade. Pages with `back` get an edge swipe from the left.
 - `<Page title …>` is the iOS screen: a large title that scrolls under a translucent nav bar with

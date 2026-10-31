@@ -5,7 +5,11 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
-## Where we are (2026-10-30)
+## Where we are (2026-10-31)
+- **Mobile overhaul done on branch `mobile-overhaul`: uncommitted, not released.** Phone IA (4 tabs,
+  hash router), agent screen with Island, new transcript, composer and controls, subagents/tasks,
+  daemon `cv_action` (D52-D57, [notes/mobile-overhaul.md](notes/mobile-overhaul.md)). Owner tests it
+  on real devices before it is committed and released (0.4.0).
 - M0–M9 done; **M10 (own ideas, polish, final report) is current**.
 - Released: 0.2.0 (design + remote round, D40–D42), installed and deployed.
 - 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, never built.
@@ -35,14 +39,16 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
 
 ## Next
-1. Next release when the owner says so. Actions minutes reset monthly; for a release
-   run without minutes, the owner agreed to make the repo public just for the run (scan first).
-2. Owner checks on real devices (STATUS checklist), then M10 final report.
-3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, Android
-   status bar colour in light mode (needs a new APK), iOS PWA status text stays white in light
-   mode, "done, not seen" is not persisted by the daemon.
+1. Owner tests the overhaul on a real phone and Android device; fix findings; commit the branch.
+2. Release when the owner says so (new APK needed for the APK-only items in the overhaul note).
+3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, iOS PWA status
+   text stays white in light mode, "done, not seen" is not persisted by the daemon.
 
 ## Open issues
+- Overhaul, not run against a live CLI: `answer_question`, rewind, `set_mode`, `stop_agents`,
+  `send_queued_now`, inbox Allow/Deny with a real prompt. Real Android device checks and APK-only
+  items: see the note. https image blocks have no tap-to-load; dictation starting with "!" can arm
+  shell mode; swarm page header on a phone opens at the end of the log.
 - "Last seen" for a device that never connected shows its creation date.
 - Agents page says "No agents running" while only a plain shell runs.
 - Design-system gaps listed at the end of `docs/notes/design-system.md`.

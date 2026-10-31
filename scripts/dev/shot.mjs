@@ -92,7 +92,7 @@ for (const dev of devices) {
     };
     const tap = (loc) => tapAt(p, loc, phone);
     const desk = (name) => p.locator(`nav [aria-label="${name}"], nav :text-is("${name}")`).or(p.getByRole("button", { name: new RegExp(`(^|, )${name}$`, "i") })).first();
-    // Main navigation: phone tab bar or desktop sidebar; `more` opens an item behind "More".
+    // Main navigation: phone tab bar or desktop sidebar; `more` opens a page that has no tab.
     const go = async (name) => {
       if (phone) await tap(p.locator(`[role=tab][aria-label="${name}"]`).first());
       else await desk(name).click();
@@ -100,12 +100,23 @@ for (const dev of devices) {
     };
     // Settings sections that used to be pages of their own.
     const IN_SETTINGS = ["MCP servers", "Remote access"];
+    // Phones (four tabs: Agents, Neural, Projects, Settings): everything else is a row on the
+    // Agents page (Swarms) or on Settings (History, Usage, MCP servers, Remote access, …).
+    const ON_AGENTS = ["Swarm", "Swarms"];
     const more = async (name) => {
       const section = IN_SETTINGS.includes(name);
       if (phone) {
-        await tap(p.locator('[role=tab][aria-label="More"]').first());
-        await sleep(700);
-        await tap(p.getByText(section ? "Settings" : name, { exact: true }).first());
+        await go(ON_AGENTS.includes(name) ? "Agents" : "Settings");
+        if (name !== "Settings") {
+          const row = p.getByRole("button", { name: new RegExp(`^${ON_AGENTS.includes(name) ? "Swarms" : name}`) }).first();
+          // Centre it: at the bottom edge it sits under the Dock. A re-tapped tab scrolls to the top first.
+          await sleep(500);
+          await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
+          await sleep(400);
+          await tap(row);
+        }
+        await sleep(1300);
+        return;
       } else if (name === "Settings" || section) {
         // Desktop: the account at the foot of the sidebar opens Settings.
         await p.locator('[aria-label$=", settings"]').first().click();

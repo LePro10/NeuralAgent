@@ -8,7 +8,7 @@
 //
 // Chromium by default: in headless WebKit the test sign-in currently never reaches "Your
 // computers" (seen 2026-10-30, cause not investigated). Each device signs in with the relay's test login, opens the computer and takes screenshots
-// (computers list, workspace, Agents, More/This device). `--keep` leaves relay + daemon running
+// (computers list, workspace, Agents, Settings). `--keep` leaves relay + daemon running
 // until Ctrl+C (to explore by hand at http://127.0.0.1:<relay-port>/app/). Everything runs in a
 // fresh /tmp/na-web-remote-* folder and is stopped at the end.
 import { spawn } from "node:child_process";
@@ -96,9 +96,9 @@ for (const dev of o.devices.split(",")) {
         await tap(p, p.locator('[role=tab][aria-label="Agents"]').first(), true);
         await sleep(1200);
         await shot("4-agents");
-        await tap(p, p.locator('[role=tab][aria-label="More"]').first(), true);
+        await tap(p, p.locator('[role=tab][aria-label="Settings"]').first(), true);
         await sleep(1200);
-        await shot("5-more");
+        await shot("5-settings");
       } else {
         const proj = p.locator('nav :text-is("proj")').first();
         if (await proj.count()) {

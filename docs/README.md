@@ -26,4 +26,5 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/website.md`](notes/website.md) | The agent.neuralhub.dev website. |
 | [`notes/mobile-polish.md`](notes/mobile-polish.md) | The phone/Android polish round. |
 | [`notes/launch.md`](notes/launch.md) | The launch screen on desktop, web and Android: one frame, one motion (D49). |
+| [`notes/mobile-overhaul.md`](notes/mobile-overhaul.md) | The phone overhaul: 4 tabs + router, agent screen, transcript, composer and controls, subagents, `cv_action` (D52-D57). |
 | [`notes/design-system.md`](notes/design-system.md) | Design-system rules (D45): tokens, phone navigation, overlays, activity marks, page checklist. Read before building a screen. |

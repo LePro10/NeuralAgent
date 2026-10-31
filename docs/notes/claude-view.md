@@ -26,3 +26,5 @@
 - Viewer: pinch / wheel / double tap zoom, drag pan, swipe down (touch) or Esc / click beside closes, arrows between pictures, Copy (as PNG), Save (not on Android).
 - Check: `scripts/dev/scenes/claude-images.mjs` (fake transcript, needs `CLAUDE_CONFIG_DIR` for daemon and shot). Shots in `research-local/polish/img-shots/`. Not exercised: real pinch/swipe on a device, Save in the Tauri window, the remote 1600 px path end to end (covered by the Rust test).
 
+## Phone overhaul (2026-10-31)
+The phone parts of this note are superseded by [`mobile-overhaul.md`](mobile-overhaul.md): the composer, prompt cards, picker "pours", transcript entries/step rows, subagents and tasks, and `cv_action` (D54-D56). Where a line above describes the phone dock, the Sheet-based picker or the keys typed by the client, the new note wins.

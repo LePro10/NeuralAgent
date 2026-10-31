@@ -39,14 +39,15 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
   `small` 360×780, `kb` 390×450 (keyboard open), `tablet` 820×1180, `laptop` 1280×800,
   `desk` 1440×900. Phones run in Chromium with touch and a simulated 28 px Android status bar
   inset; desktop sizes in WebKit (like the macOS app). Default DPR 1 keeps images small.
-- Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Workspaces, Swarm,
-  History, Usage, MCP, Settings; pass names to limit), `call` (Call Neural with a fake mic),
+- Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Projects, Swarm,
+  History, Usage, MCP, Settings; pass names to limit), `phone` (phone walkthrough: inbox, agent,
+  palette, subagent, back chain), `call` (Call Neural with a fake mic),
   `swarm` (every swarm state, stop confirm, a member, sending, the new-swarm form, narrow windows;
   seed `swarms` first), `claude-images` (pictures in the Claude view and the viewer; daemon and
   shot need `CLAUDE_CONFIG_DIR=/tmp/<dir>`, see the scene's header).
   A scene is `export default async ({ p, shot, tap, go, more, sleep, phone, light, args, req }) => …`
-  where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the More
-  page / sidebar / account menu. Write a new scene for a new screen instead of a one-off script.
+  where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the phone
+  Settings/Agents rows or the desktop sidebar / account menu. Write a new scene for a new screen instead of a one-off script.
 - `--hash` passes fake update states to `apps/desktop/src/dev-browser.tsx` (its header lists them).
 - `launch.mjs [--targets desk,phone,remote-out,remote-in] [--schemes] [--slow] [--label]`: frame
   series of a cold start per surface (CDP screencast in Chromium, screenshot polling in WebKit;
@@ -58,7 +59,7 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
 ## Web remote and push (relay + daemon + browser)
 ```
 pnpm --filter @neuralagent/web build
-node scripts/dev/web-remote.mjs --montage      # sign-in, computers, app, Agents, More (phone + desk, dark + light)
+node scripts/dev/web-remote.mjs --montage      # sign-in, computers, app, Agents, Settings (phone + desk, dark + light)
 node scripts/dev/web-remote.mjs --keep         # leave it running and explore http://127.0.0.1:8093/app/
 node scripts/dev/web-push.mjs                  # Web Push with a mock push service (Chromium)
 node --experimental-strip-types scripts/dev/conn-repro.mts idle|flood|upload   # reconnect harness (throttled phone link)

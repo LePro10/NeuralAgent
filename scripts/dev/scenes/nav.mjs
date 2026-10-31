@@ -1,4 +1,5 @@
-// Navigation chrome: the More page, Settings (with Remote access and MCP servers inside), and on
+// Navigation chrome: Settings (with Remote access and MCP servers inside; phones: the Settings
+// tab, there is no More page any more), and on
 // desktop the sidebar collapsed, mid-peek and open, with its version / Update button.
 // Usage: node scripts/dev/shot.mjs nav [--hash "&update=0.3.1"]
 export default async ({ p, shot, sleep, go, more, tap, phone }) => {
@@ -10,10 +11,10 @@ export default async ({ p, shot, sleep, go, more, tap, phone }) => {
     await sleep(600);
   }
   if (phone) {
-    await go("More");
-    await shot("01-more");
-    await tap(p.getByText("Settings", { exact: true }).first());
-    await sleep(1300);
+    await go("Agents");
+    await shot("01-tabs");
+    await go("Settings");
+    await sleep(500);
     await shot("02-settings");
     await p.mouse.move(195, 500);
     await p.mouse.wheel(0, 900);

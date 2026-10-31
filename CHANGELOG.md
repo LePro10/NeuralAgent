@@ -13,6 +13,36 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ### New
 - NeuralAgent is now open source (AGPL-3.0). Anyone can read the code and suggest changes on GitHub.
+- **Phone redesign**: four tabs (Agents, Neural, Projects, Settings). Every screen has its own address, so back (button, edge swipe, Android back, browser back) always goes one step back, and opening an agent on the phone no longer moves your computer's panes.
+- **Agents inbox** on the phone: Needs you, Working, Done, with swarms grouped. Answer a waiting agent (Allow / Deny / Reply) right in the list; the tab shows how many need you. A notification opens that agent's conversation at once.
+- **New agent sheet** on the phone: pick project, agent and first prompt, optionally its own worktree, or start a new swarm. Projects tab with a page per project (its agents, changes, past conversations).
+- **Agent screen**: the agent fills the phone under one small floating bar. Tap it for the project, other agents and actions (stop, restart, rename, changes, copy id); swipe it to reach the next agent. Chat or Terminal is remembered per agent.
+- **Command palette** with every Claude Code command grouped, plus your own commands, skills and plugins, with search, recents and argument hints. Fast mode switch in the model picker; `!command` runs a shell command, `# note` asks Claude to remember it.
+- **Context and usage sheet**: real context size and cost, Compact, Start fresh, plan limits. Rewind to an earlier message (code, conversation, both or summarize) from its long-press menu.
+- **Tasks sheet and subagents**: running subagents, background shells and monitors are listed live; each subagent is a card that opens its own transcript inside the agent screen.
+- Messages typed while Claude works show as queued chips with Send now and Edit.
+
+### Improved
+- The Claude composer on phones rests as one slim row; tapping it adds mode, model, commands, files and the context ring. Menus open out of the composer.
+- Permission cards take the composer's place on phones, stay small with Show full, and let you tell Claude what to do instead. Plan approval and multiple-choice questions (tabs, multi-select, Other) look like Claude's own.
+- The conversation: tool steps collapse into one quiet line ("Ran 6 commands, read 3 files"), edits show real diffs, notices (hooks, compaction, "Worked for 3m", errors) are quiet lines, and tables and code read well at 360 px.
+- Scrolling stays at the end while Claude writes and stops following the moment you scroll up; a "N new" pill brings you back.
+- Tap a message for Copy, Copy as Markdown or Select text. One picture viewer for every image in the chat.
+- Calmer phone look: flat background, lighter titles, lighter glass on Android, and dim text now meets AA contrast in every colour scheme, light and dark.
+- Lists and the agent chat fade out softly under the status bar and the floating bar.
+- Failed agents say why in plain words (tap for the raw error). Hook calls no longer show as an agent's last line.
+- Phone notices: at most one, at the top. No "finished" toasts, one calm pill when the computer is out of reach, update notice once per start.
+- Android: Back walks back and minimises at the start; the keyboard no longer stays "stuck open"; status bar icons follow light and dark.
+- Phones: the terminal has one compact key row above the keyboard.
+
+### Fixed
+- "Working" is reliable again when Claude Code uses a status line.
+- A tool result is no longer lost when a hook line sits between the call and its result.
+- An answer can no longer land on a newer question, and phone actions can no longer press Enter into an open permission dialog.
+- Two quick agent switches on the phone land on the second agent; closing two sheets at once leaves no stray back step.
+- Errors from answering, Send now and mode switches show a short message.
+- Desktop: pasted text starting with "#" or "!" stays text.
+- Settings values that do not fit move under their label; phone lists say "Connecting to your computer..." instead of "No agents yet".
 
 ## [0.3.4] - 2026-10-30
 

@@ -597,3 +597,68 @@ the relay or the website goes live on the server within minutes (`relay-image.ym
 `deploy/relay/update.sh`), so review relay changes like a deploy. Alternatives: a private repo
 with a public mirror (PRs ported by hand), a separate private release repo (more moving parts),
 keeping the relay closed (open core; possible later).
+
+## D52 — Phone: four tabs, a hash router, and the phone never writes layout_set (2026-10-31)
+Tabs are Agents (inbox), Neural, Projects, Settings; "More" and "Swarm" are gone (their content
+lives in Settings and under Agents). Navigation is state `{tab, stack[]}` with one stack per tab,
+mirrored to the URL hash (`#/agent/<sid>`, `#/projects/<id>`, ...) with real history entries
+(`lib/phoneRoute.ts`): a tab switch replaces the entry, a push adds one, open overlays close first
+on back, and moves made before the router starts (a notification tap on cold start) are queued.
+Opening an agent on a phone goes through `phoneRouter().openAgent(sid)`; only
+`openAgentOnDesktop` writes `layout_set`, so using the phone never moves the computer's panes.
+Alternatives: keeping More as a grid tab (hides Settings, two taps to anything), in-memory
+navigation without URLs (Android and browser back break, no deep links from notifications),
+letting the phone drive the layout (surprises someone sitting at the computer).
+
+## D53 — Agent screen: Island plus composer, Dock hidden, nothing covers content (2026-10-31)
+An agent on a phone is a full screen with no tab bar. Chrome is one floating glass capsule (the
+Island: back with a needs-you dot, agent mark, two-line title, context ring) and the composer.
+The Island shrinks while scrolling down, hides while the keyboard is open, opens into a panel
+(project, agents of the project, Chat/Terminal, session actions) and swipes to the next agent.
+The transcript ends above the composer (normal flow, not an overlay), the "N new" pill sits in
+its own band, prompts replace the composer as a docked card (at most 45%), and the top fade is a
+CSS mask only. A subagent borrows the Island's title and back (`islandOverride.ts`). Alternatives:
+a second header row plus chip strip (eats height), a floating composer over text (hides lines),
+a blur or gradient fade (costly on Android WebView).
+
+## D54 — Transcript: entries and step rows, stick-to-bottom by intent (2026-10-31)
+`entries.ts` turns messages into entries: all tool steps between two texts merge into one step
+row; edits, images, subagents, todos, plans, questions and errors stay visible; empty thinking is
+dropped; system noise becomes notices, never user bubbles. A tool result pairs with its call even
+when a hook line sits between. Scrolling follows the end only while pinned; unpinning is
+intent-based (wheel, touch, keys) plus a jump rule (a non-user scroll of more than 48 px away from
+the end), which covers the iOS status-bar tap. Older history is prepended with an anchor on the
+`[data-entry]` element. Entries keep identity through a WeakMap cache and are memoised.
+Alternatives: showing every tool call (long, noisy on a phone), pinning by distance only (yanks
+the view when the user reads), virtual lists (anchoring and selection problems).
+
+## D55 — Subagents and tasks protocol (2026-10-31)
+The daemon keeps one task registry (tool calls, results, task notifications, statusline, hooks, a
+scan of the subagent files) and sends `tasks` events only to clients that attach with
+`features: ["tasks"]`, so old web remotes keep working. A subagent's own transcript is attached
+with `attachCv(sid, sink, {agent})`; its history and images take the same `agent`, streams are
+keyed by (sid, agent), and it is read-only. Subagent events do not change the session status.
+`cv_task_output` and `cv_file` read only regular files under `~/.claude/{projects,plans,tasks}`,
+`<tmp>/claude-*` or project Markdown. `CvMeta.actions` tells the app that `cv_action` is live.
+Alternatives: pushing tasks to everyone (breaks old clients), reading arbitrary paths for the
+plan view (a file-read hole), a second connection per subagent.
+
+## D56 — cv_action in the daemon, with guards (2026-10-31)
+Phone controls (interrupt, mode, model, effort, fast, background, stop agents, send queued now,
+answer, answer question, `!` shell, rewind) are key plans played by the daemon, which reads the
+screen before each step. Guards: every action except interrupt, stop agents and answers is
+refused while a dialog is open (Enter would approve it); `answer` carries the prompt's
+fingerprint (`CvPrompt.id` as `prompt_id`) and is refused when a newer prompt replaced it; an
+empty answer is refused; one tokio mutex per session serialises actions; the tail runs on its own
+thread. `cv_action` is audited. Alternatives: the client typing keys (timing guesses, no screen
+check, races across devices), trusting the cached prompt (answers land on the wrong question).
+
+## D57 — Design language "Two Drops" on phones (2026-10-31)
+A calm flat phone background (no Aurora, no page glows, `Glow` renders nothing), at most two glass
+layers on screen, lighter glass on Android, light-weight (300) large titles, small mono section
+labels, colour only for status and selection. Assistant prose has no bubble; the user message is a
+soft bubble on the right. `dim` and `faint` text and the tone colours on light were retuned so
+they meet WCAG AA in every scheme. Removed: the gradient orb avatar, cards inside cards, orange
+dot noise, the centred greeting. Motion stays transform and opacity with the existing springs.
+Alternatives: keeping the ground gradient on phones (costly, noisy behind text), a heavier glass
+look (jank on mid-range Android).
