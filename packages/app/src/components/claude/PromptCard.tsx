@@ -1,13 +1,21 @@
 /**
- * A menu the CLI shows right now (permission, question, plan approval), as a card docked above
- * the composer like Claude's: "Allow Claude to edit form.ts?" with Deny / Always allow / Allow
- * once, or a question with numbered options. Choosing types the option's number into the CLI.
+ * A menu the CLI shows right now, docked where the composer sits (on phones it takes the
+ * composer's place). `PromptCard` picks the card: permission ("Allow Claude to edit form.ts?"
+ * with Allow once / Always allow / Deny, and "Tell Claude what to do instead"), plan approval
+ * (`PlanCard`), AskUserQuestion (`QuestionCard`), or any other menu as a list of its options
+ * with the terminal as the fallback. Answers go through `act` (the daemon's `CvAction` when it
+ * plays them, else the client types the keys).
  */
-import type { CvPrompt } from "@neuralagent/protocol";
-import { cn } from "@neuralagent/ui";
-import { SquareTerminal, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CvMeta, CvOption, CvPrompt } from "@neuralagent/protocol";
+import { cn, toast } from "@neuralagent/ui";
+import { Check, MessageSquareText } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useClient } from "../../lib/store";
+import { act, runKeys, serverActions, takeRewind } from "./actions";
+import { AnswerField, Btn, DockCard } from "./DockCard";
+import { PlanCard } from "./PlanCard";
+import { denyKeys, freeTextKeys, pickKeys, promptKind, promptTool, screenOptions } from "./promptState";
+import { QuestionCard } from "./QuestionSheet";
 import { changeRows, Diff, toolTitle, type Use } from "./tools";
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -88,124 +96,224 @@ function verbFromHeader(header: string): { verb: string; target?: string } | nul
   return m ? { verb: m[1]!.toLowerCase(), target: "this file" } : null;
 }
 
-function Btn({ children, kind, onClick, phone }: { children: ReactNode; kind: "primary" | "secondary" | "ghost"; onClick: () => void; phone: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center rounded-full px-4 font-cv-sans text-cv-ui transition duration-150 active:scale-97",
-        phone ? "min-h-12 w-full py-2 text-center" : "h-9",
-        kind === "primary" && "bg-cv-primary text-cv-on-primary hover:opacity-90",
-        kind === "secondary" && "border border-cv-line bg-cv-surface text-cv-text hover:bg-cv-hover",
-        kind === "ghost" && "text-cv-text-2 hover:bg-cv-hover hover:text-cv-text",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-export function PromptCard({ sid, prompt, pending, cwd, phone, onTerminal }: {
+export interface PromptCardProps {
   sid: string;
   prompt: CvPrompt;
   /** The tool call waiting for this answer, if any. */
   pending: Use | null;
   cwd: string;
   phone: boolean;
+  meta?: CvMeta;
   onTerminal: () => void;
-}) {
+}
+
+const fail = (e: unknown): void => void toast(e instanceof Error ? e.message : "That did not work. Try again.", { tone: "danger" });
+
+/** The card for the CLI's current menu. */
+export function PromptCard(props: PromptCardProps) {
+  const { sid, prompt, pending, meta } = props;
   const client = useClient();
-  const choose = (n: string) => client.write(sid, n);
-  const perm = asPermission(prompt);
+  const live = serverActions(meta);
+  // `prompt_id`: the fingerprint of the prompt on screen, so the daemon refuses the answer when the
+  // terminal has moved on to another question (the refusal shows as a toast).
+  const answer = (o: Pick<CvOption, "n" | "nav">, text?: string) =>
+    act(client, sid, live, { k: "answer", n: o.n, ...(o.nav != null ? { nav: o.nav } : {}), ...(text ? { text } : {}), ...(prompt.id ? { prompt_id: prompt.id } : {}) }, text ? freeTextKeys(o.n, text) : pickKeys(o)).catch(fail);
+  const dismiss = () => void act(client, sid, live, { k: "interrupt" }, [{ write: "\x1b" }]).catch(fail);
+
+  // The restore menu of a rewind the user already chose in the app: answer it, show nothing.
+  const [skip, setSkip] = useState<CvPrompt | null>(null);
+  useEffect(() => {
+    const n = takeRewind(sid, prompt.options);
+    if (!n) return;
+    setSkip(prompt);
+    void runKeys(client, sid, [{ write: n }]);
+  }, [client, sid, prompt]);
+  if (skip === prompt) return null;
+
+  const kind = promptKind(prompt, pending);
+  const common = { ...props, answer, dismiss };
+  if (kind === "plan") return <PlanCard {...common} />;
+  if (kind === "question") return <QuestionCard {...common} />;
+  if (kind === "permission" && asPermission(prompt)) return <PermissionCard {...common} live={live} />;
+  return <MenuCard {...common} confirm={kind === "confirm" || kind === "review"} />;
+}
+
+export interface CardProps extends PromptCardProps {
+  answer: (o: Pick<CvOption, "n" | "nav">, text?: string) => Promise<void>;
+  dismiss: () => void;
+}
+
+function PermissionCard({ sid, prompt, pending, cwd, phone, onTerminal, answer, dismiss, live }: CardProps & { live: boolean }) {
+  const client = useClient();
+  const [telling, setTelling] = useState(false);
+  const perm = asPermission(prompt)!;
+  const tool = (promptTool(prompt, pending) as Use | null) ?? null;
+  const agent = (prompt.tool?.agent || null) as string | null;
   const { header, boxed, lines, question } = parseTitle(prompt.title);
   const rel = (p: string) => (cwd && p.startsWith(`${cwd.replace(/\/+$/, "")}/`) ? p.slice(cwd.replace(/\/+$/, "").length + 1) : p);
-  const v = perm ? (verbFor(pending) ?? verbFromHeader(header)) : null;
-  const input = (pending?.input ?? {}) as Record<string, unknown>;
-  const rows = pending ? changeRows(pending) : null;
-  const isCommand = pending ? pending.name === "Bash" : /^bash command/i.test(header);
-  const command = pending?.name === "Bash" ? str(input.command) : isCommand ? boxed : "";
+  const v = verbFor(tool) ?? verbFromHeader(header);
+  const input = (tool?.input ?? {}) as Record<string, unknown>;
+  const rows = tool ? changeRows(tool) : null;
+  const isCommand = tool ? tool.name === "Bash" : /^bash command/i.test(header);
+  const command = tool?.name === "Bash" ? str(input.command) : isCommand ? boxed : "";
   // What the CLI says beyond the question, minus the tool header and what the card already shows.
-  const shown = pending ? JSON.stringify(pending.input ?? {}) : "";
-  const extra = perm
-    ? lines
-        .filter((l) => l && l !== question && !(v && l === header) && !(shown && shown.includes(JSON.stringify(l).slice(1, -1))))
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-    : "";
+  const shown = tool ? JSON.stringify(tool.input ?? {}) : "";
+  const extra = lines
+    .filter((l) => l && l !== question && !(v && l === header) && !(shown && shown.includes(JSON.stringify(l).slice(1, -1))))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+  const opt = (n: string) => prompt.options.find((o) => o.n === n) ?? { n };
+  const denyOpt = perm.deny ? screenOptions(prompt).find((o) => o.n === perm.deny) : undefined;
+  const tell = (reason: string) => {
+    if (!perm.deny) return;
+    // The daemon types the reason into the menu's own field; the client says no and sends the reason.
+    if (live) void answer(opt(perm.deny), reason);
+    else void runKeys(client, sid, denyKeys(perm.deny, reason, !!denyOpt?.free)).catch(fail);
+  };
 
-  const head = perm ? (
-    v ? (
-      <>
-        Allow Claude to <span className="font-cv-strong">{v.verb}</span>{" "}
-        {v.target && (v.target.startsWith("this ") ? v.target : <span className="rounded-cv-xs bg-cv-chip px-1.5 py-px font-cv-mono text-cv-code text-cv-text-2 [overflow-wrap:anywhere]" title={v.target}>{/^(edit|write|read)$/.test(v.verb) ? (v.target.split(/[\\/]/).pop() ?? v.target) : rel(v.target)}</span>)}?
-      </>
-    ) : (
-      question || lines[0] || "Allow this action?"
-    )
+  const head = v ? (
+    <>
+      Allow Claude to <span className="font-cv-strong">{v.verb}</span>{" "}
+      {v.target && (v.target.startsWith("this ") ? v.target : <span className="rounded-cv-xs bg-cv-chip px-1.5 py-px font-cv-mono text-cv-code text-cv-text-2 [overflow-wrap:anywhere]" title={v.target}>{/^(edit|write|read)$/.test(v.verb) ? (v.target.split(/[\\/]/).pop() ?? v.target) : rel(v.target)}</span>)}?
+    </>
   ) : (
-    prompt.title.trim() || "Claude is asking"
+    question || lines[0] || "Allow this action?"
   );
+  const pairDenyAlways = phone && !!perm.always && !!perm.deny && !perm.rest.length;
 
   return (
-    <div
-      role="group"
-      aria-label={perm ? "Permission request" : "Claude is asking"}
-      className="cv-scroll relative mb-2 overflow-y-auto rounded-cv-card bg-cv-surface font-cv-sans text-cv-text shadow-cv-card animate-cv-rise"
-      style={{ maxHeight: "min(60vh, 560px)" }}
-    >
-      <div className="sticky top-0 z-10 flex items-start gap-2 bg-cv-surface px-4 pt-3.5 pb-1">
-        <div className={cn("min-w-0 flex-1 pt-1 text-cv-ui whitespace-pre-wrap [overflow-wrap:anywhere]", !perm && "font-cv-strong")}>{head}</div>
-        <button type="button" onClick={onTerminal} aria-label="Open the terminal" title="Open the terminal" className="relative grid size-8 shrink-0 place-items-center rounded-full text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text after:absolute after:-inset-1.5">
-          <SquareTerminal size={17} strokeWidth={1.7} />
-        </button>
-        <button type="button" onClick={() => client.write(sid, "\x1b")} aria-label="Dismiss (Esc)" title="Dismiss (Esc)" className="relative grid size-8 shrink-0 place-items-center rounded-full bg-cv-chip text-cv-text-2 transition-colors hover:bg-cv-press after:absolute after:-inset-1.5">
-          <X size={16} strokeWidth={2} />
-        </button>
-      </div>
-
-      {perm ? (
-        <div className="px-4 pt-2 pb-4">
-          {command && (
-            <div className="rounded-cv-md border border-cv-line-soft bg-cv-sunken px-3.5 py-2.5">
-              <pre className="cv-scroll max-h-40 overflow-auto font-cv-mono [[data-mode=phone]_&]:max-h-28 text-cv-code whitespace-pre-wrap text-cv-text [overflow-wrap:anywhere]">{command}</pre>
-              {str(input.description) && <div className="mt-1.5 text-cv-meta text-cv-muted">{str(input.description)}</div>}
+    <DockCard
+      label="Permission request"
+      head={head}
+      eyebrow={agent ? `${agent} (subagent) asks` : undefined}
+      phone={phone}
+      onTerminal={onTerminal}
+      onDismiss={dismiss}
+      footer={
+        <>
+          {telling && perm.deny ? (
+            <div className="mb-2">
+              <AnswerField placeholder="What should Claude do instead?" label="Tell Claude what to do instead" autoFocus onSend={tell} />
             </div>
-          )}
-          {rows && <Diff rows={rows} path={rel(str(input.file_path ?? input.notebook_path))} max={phone ? 10 : 14} />}
-          {!command && !rows && boxed && (
-            <pre className="cv-scroll max-h-48 overflow-auto rounded-cv-md border border-cv-line-soft bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2">{boxed}</pre>
-          )}
-          {extra && <div className={cn("text-cv-meta whitespace-pre-wrap text-cv-muted [overflow-wrap:anywhere]", (command || rows || boxed) && "mt-2.5")}>{extra}</div>}
-          {perm.always?.note && perm.always.label === "Always allow" && <div className="mt-3 text-cv-meta text-cv-muted">{perm.always.label}: {perm.always.note}</div>}
-          <div className={cn("mt-3.5 flex gap-2", phone ? "flex-col" : "flex-wrap items-center justify-end")}>
+          ) : null}
+          <div className={phone ? (pairDenyAlways ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2") : "flex flex-wrap items-center justify-end gap-2"}>
             {perm.rest.map((o) => (
-              <Btn key={o.n} kind="ghost" phone={phone} onClick={() => choose(o.n)}>{o.label}</Btn>
+              <Btn key={o.n} kind="ghost" phone={phone} className={cn(pairDenyAlways && "col-span-2")} onClick={() => void answer(opt(o.n))}>
+                {o.label}
+              </Btn>
             ))}
-            {perm.deny && <Btn kind={phone ? "secondary" : "ghost"} phone={phone} onClick={() => choose(perm.deny!)}>Deny</Btn>}
-            {perm.always && <Btn kind="secondary" phone={phone} onClick={() => choose(perm.always!.n)}>{perm.always.label}</Btn>}
-            <Btn kind="primary" phone={phone} onClick={() => choose(perm.allow)}>Allow once</Btn>
+            {perm.deny && !phone && !telling && (
+              <Btn kind="ghost" phone={phone} onClick={() => setTelling(true)}>
+                <MessageSquareText size={15} className="mr-1.5" />
+                Tell Claude instead
+              </Btn>
+            )}
+            {perm.deny && (
+              <Btn kind="secondary" phone={phone} onClick={() => void answer(opt(perm.deny!))}>
+                Deny
+              </Btn>
+            )}
+            {perm.always && (
+              <Btn kind="secondary" phone={phone} onClick={() => void answer(opt(perm.always!.n))}>
+                {perm.always.label}
+              </Btn>
+            )}
+            <Btn kind="primary" phone={phone} className={cn(pairDenyAlways && "col-span-2")} onClick={() => void answer(opt(perm.allow))}>
+              Allow once
+            </Btn>
           </div>
-        </div>
-      ) : (
-        <div className="px-2 pt-2 pb-2">
-          {prompt.options.map((o, i) => (
-            <button
-              key={o.n}
-              type="button"
-              onClick={() => choose(o.n)}
-              className={cn(
-                "flex min-h-12 w-full items-center gap-3 rounded-cv-sm px-2.5 py-2 text-left text-cv-ui transition-colors hover:bg-cv-hover active:bg-cv-press",
-                i > 0 && "border-t border-cv-line-soft",
-                phone && "min-h-13",
-              )}
-            >
-              <span className={cn("grid size-6 shrink-0 place-items-center rounded-full font-cv-mono text-cv-meta", o.selected ? "bg-cv-primary text-cv-on-primary" : "bg-cv-chip text-cv-text-2")}>{o.n}</span>
-              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{o.label}</span>
+          {perm.deny && phone && !telling && (
+            <button type="button" onClick={() => setTelling(true)} className="mx-auto mt-1 flex h-11 items-center gap-1.5 rounded-full px-3 text-cv-meta text-cv-text-2 hover:bg-cv-hover">
+              <MessageSquareText size={14} />
+              Tell Claude what to do instead
             </button>
+          )}
+        </>
+      }
+    >
+      <div className="px-4 pt-1 pb-3">
+        {command && (
+          <div className="rounded-cv-md border border-cv-line-soft bg-cv-sunken px-3.5 py-2.5">
+            <pre className="font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text [overflow-wrap:anywhere]">{command}</pre>
+            {str(input.description) && <div className="mt-1.5 text-cv-meta text-cv-muted">{str(input.description)}</div>}
+          </div>
+        )}
+        {rows && <Diff rows={rows} path={rel(str(input.file_path ?? input.notebook_path))} max={phone ? 40 : 60} />}
+        {!command && !rows && boxed && <pre className="rounded-cv-md border border-cv-line-soft bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2 [overflow-wrap:anywhere]">{boxed}</pre>}
+        {extra && <div className={cn("text-cv-meta whitespace-pre-wrap text-cv-muted [overflow-wrap:anywhere]", (command || rows || boxed) && "mt-2.5")}>{extra}</div>}
+        {perm.always?.note && perm.always.label === "Always allow" && <div className="mt-2.5 text-cv-meta text-cv-muted">Always allow: {perm.always.note}</div>}
+      </div>
+    </DockCard>
+  );
+}
+
+/** Any other menu: its options as rows (or buttons for a short yes/no), the terminal for the rest. */
+function MenuCard({ prompt, phone, onTerminal, answer, dismiss, confirm }: CardProps & { confirm: boolean }) {
+  const opts = screenOptions(prompt);
+  const [typing, setTyping] = useState<string | null>(null);
+  const { lines, boxed } = parseTitle(prompt.title);
+  const head = lines.filter(Boolean).join("\n") || "Claude Code is asking";
+  const pick = (i: number) => {
+    const o = opts[i]!;
+    if (o.free) return setTyping(o.n || String(i));
+    void answer(prompt.options[i]!);
+  };
+  const short = confirm && opts.length <= 3 && opts.every((o) => o.label.length <= 28 && !o.free);
+
+  return (
+    <DockCard
+      label="Claude Code is asking"
+      head={<span className="font-cv-strong">{head}</span>}
+      phone={phone}
+      onTerminal={onTerminal}
+      onDismiss={dismiss}
+      footer={
+        short ? (
+          <div className={cn("flex gap-2", phone ? "flex-col-reverse" : "justify-end")}>
+            {opts.map((o, i) => (
+              <Btn key={o.n || i} kind={o.selected ? "primary" : "secondary"} phone={phone} onClick={() => pick(i)}>
+                {o.label}
+              </Btn>
+            ))}
+          </div>
+        ) : (
+          <button type="button" onClick={onTerminal} className="flex h-11 w-full items-center justify-center rounded-full text-cv-meta text-cv-text-2 hover:bg-cv-hover">
+            Something missing? Open the terminal
+          </button>
+        )
+      }
+    >
+      {boxed && <pre className="mx-4 mb-2 rounded-cv-md border border-cv-line-soft bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2 [overflow-wrap:anywhere]">{boxed}</pre>}
+      {!short && (
+        <div className="px-2 pb-2" role="listbox" aria-label="Options">
+          {opts.map((o, i) => (
+            <div key={o.n || i} className={cn(i > 0 && "border-t border-cv-line-soft")}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={o.selected}
+                onClick={() => pick(i)}
+                className="flex min-h-12 w-full items-center gap-3 rounded-cv-sm px-2.5 py-2 text-left text-cv-ui transition-colors hover:bg-cv-hover active:bg-cv-press [[data-mode=phone]_&]:min-h-13"
+              >
+                {o.checked !== undefined ? (
+                  <span className={cn("grid size-5 shrink-0 place-items-center rounded-cv-xs border", o.checked ? "border-cv-primary bg-cv-primary text-cv-on-primary" : "border-cv-line-strong")}>{o.checked && <Check size={13} strokeWidth={2.6} />}</span>
+                ) : (
+                  <span className={cn("grid size-6 shrink-0 place-items-center rounded-full font-cv-mono text-cv-meta", o.selected ? "bg-cv-primary text-cv-on-primary" : "bg-cv-chip text-cv-text-2")}>{o.n || "·"}</span>
+                )}
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                  {o.label}
+                  {o.description && <span className="block text-cv-meta text-cv-muted">{o.description}</span>}
+                </span>
+              </button>
+              {typing === (o.n || String(i)) && (
+                <div className="px-2 pb-2">
+                  <AnswerField placeholder={o.label} label={o.label} autoFocus onSend={(t) => void answer(prompt.options[i]!, t)} />
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
-    </div>
+    </DockCard>
   );
 }

@@ -5,20 +5,27 @@
  * stays reachable.
  */
 import type { Session } from "@neuralagent/protocol";
-import { cn, useLayoutMode } from "@neuralagent/ui";
-import { ArrowDown, Check, SquareTerminal } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { cn, toast, useKeyboard, useLayoutMode } from "@neuralagent/ui";
+import { Check, SquareTerminal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClient } from "../../lib/store";
 import { KeyBar } from "../KeyBar";
 import { TerminalView } from "../TerminalView";
+import { TasksContext } from "./AgentCard";
+import { requestRewind } from "./actions";
+import { ChatScroll, type ChatScrollHandle } from "./ChatScroll";
 import { Composer } from "./Composer";
+import { lastTurn, openTools, pendingUse } from "./entries";
 import { ImageSidContext } from "./Images";
 import { modelName } from "./models";
 import { PromptCard } from "./PromptCard";
 import { Spark } from "./Spark";
-import { CwdContext, type Res, type Use } from "./tools";
-import { Transcript } from "./Transcript";
-import { useConversation } from "./useConversation";
+import { SubagentView, type AgentRef } from "./SubagentView";
+import { TasksSheet } from "./TasksSheet";
+import { CwdContext } from "./tools";
+import { useEntries } from "./Transcript";
+import { useConversation, useTaskList } from "./useConversation";
+import { usePublishTasks, useTasksOpener } from "./useTasks";
 
 /** Sizes the CLI draws at while the view is shown (menus stay readable, nothing wraps oddly). */
 const VIEW_COLS = 110;
@@ -30,33 +37,29 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
   const phone = useLayoutMode() === "phone";
   const { conv, loadOlder, loadingOlder } = useConversation(sid, session.started_at);
   const [terminal, setTerminal] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
-  const [away, setAway] = useState(false);
+  const scroll = useRef<ChatScrollHandle>(null);
+  const keyboard = useKeyboard();
 
-  // Results by tool call, so a call shows its output under it.
-  const results = useMemo(() => {
-    const m = new Map<string, Res>();
-    for (const msg of conv.messages) for (const b of msg.blocks) if (b.k === "tool_result") m.set(b.tool_use_id, b);
-    return m;
-  }, [conv.messages]);
+  const entries = useEntries(conv.messages);
+  const tail = useMemo(() => lastTurn(entries), [entries]);
 
-  const working = session.alive && (session.status === "working" || !!conv.meta.activity);
+  // `busy` from a newer daemon (hooks + spinner); older ones: the session status or the spinner text.
+  const busy = session.alive && (conv.meta.busy ?? (session.status === "working" || !!conv.meta.activity));
+  const working = useHeld(busy, 400);
 
-  // The newest tool call without a result: running now, or waiting for the permission card.
-  const open = useMemo((): Use | null => {
-    for (let i = conv.messages.length - 1; i >= 0; i--) {
-      const blocks = conv.messages[i]!.blocks;
-      for (let j = blocks.length - 1; j >= 0; j--) {
-        const b = blocks[j]!;
-        if (b.k === "tool_use") return results.has(b.id) ? null : b;
-      }
-      if (conv.messages[i]!.role === "user" && !conv.messages[i]!.blocks.some((b) => b.k === "tool_result")) return null;
-    }
-    return null;
-  }, [conv.messages, results]);
-  const running = working || conv.prompt ? (open?.id ?? null) : null;
+  // Calls without a result: running now, or waiting for the permission card.
+  const open = useMemo(() => pendingUse(tail), [tail]);
+  const openIds = useMemo(() => openTools(tail), [tail]);
+  const running = working || conv.prompt ? openIds : NO_IDS;
+
+  // Background work: cards in the transcript, the Tasks sheet, badges elsewhere (`useTasks`).
+  const tasks = useTaskList(conv.tasks, conv.meta.tasks_running ?? undefined);
+  usePublishTasks(sid, conv.tasks, conv.meta.tasks_running ?? undefined);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  useTasksOpener(sid, useCallback(() => setTasksOpen(true), []));
+  const [trail, setTrail] = useState<AgentRef[]>([]);
+  useEffect(() => setTrail([]), [sid]);
+  const tasksApi = useMemo(() => ({ tasks: conv.tasks, open: (a: AgentRef) => setTrail((t) => (t.some((x) => x.id === a.id) ? t : [...t, a])) }), [conv.tasks]);
 
   // The CLI draws at a size that reads well while this view is the one in use.
   useEffect(() => {
@@ -73,97 +76,47 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
     };
   }, [client, sid, session.alive, session.started_at, terminal]);
 
-  // Stay at the bottom while new things arrive, unless the reader scrolled up.
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    if (stick.current) el.scrollTop = el.scrollHeight;
-    setAway(farFromEnd(el));
-  }, [conv.messages, conv.prompt, conv.meta.activity, working]);
-
-  // The keyboard or a growing composer shrinks the scroller: keep the newest line in view.
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // No scroll event fires when the content stops overflowing (the permission card closed):
-    // measure again, or "Scroll to latest" stays up at the bottom.
-    const ro = new ResizeObserver(() => {
-      if (stick.current) el.scrollTop = el.scrollHeight;
-      setAway(farFromEnd(el));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const onScroll = () => {
-    const el = scroller.current;
-    if (!el) return;
-    const near = !farFromEnd(el);
-    stick.current = near;
-    setAway(!near);
-    if (el.scrollTop < 200 && conv.more) void loadOlder();
-  };
-  // Keep the reading position when older messages are added on top.
-  const prevHeight = useRef(0);
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    if (loadingOlder) prevHeight.current = el.scrollHeight;
-    else if (prevHeight.current) {
-      el.scrollTop += el.scrollHeight - prevHeight.current;
-      prevHeight.current = 0;
-    }
-  }, [loadingOlder, conv.messages.length]);
-
-  const toBottom = useCallback(() => {
-    const el = scroller.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    stick.current = true;
-  }, []);
-
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const showToast = useCallback((m: string) => {
-    setToast(m);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 1600);
-  }, []);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const onCopied = useCallback((m: string) => void toast(m, { tone: "success", Icon: Check, duration: 1600 }), []);
 
   const empty = conv.ready && conv.messages.length === 0;
   // Desktop, new chat: greeting and composer sit together in the middle, like claude.ai.
   const centred = empty && !phone && !conv.prompt;
 
+  const showActivity = working && !conv.prompt;
+  const bottom = (
+    <>
+      {showActivity && <Activity text={conv.meta.activity} />}
+      {!session.alive && <div className="py-4 text-center text-cv-meta text-cv-muted">This session has ended.</div>}
+    </>
+  );
+
   return (
     <CwdContext.Provider value={session.cwd}>
       <ImageSidContext.Provider value={sid}>
+      <TasksContext.Provider value={tasksApi}>
       <div className="relative flex h-full min-h-0 flex-col bg-cv-bg font-cv-sans text-cv-text" onMouseDown={onFocus}>
-        <div ref={scroller} onScroll={onScroll} className={cn("cv-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain", centred && "flex flex-col justify-end")}>
-          <div className={cn("mx-auto flex w-full max-w-3xl flex-col px-4 pt-4 pb-6 [[data-mode=desktop]_&]:px-6", !centred && "min-h-full")}>
-            {conv.more && <div className="py-2 text-center text-cv-meta text-cv-muted">{loadingOlder ? "Loading earlier messages…" : "Scroll up for earlier messages"}</div>}
-            {empty && <Greeting model={conv.meta.model} cwd={session.cwd} centred={centred} />}
-            <Transcript messages={conv.messages} results={results} running={running} working={working} phone={phone} onCopied={showToast} />
-            {working && !conv.prompt && <Activity text={conv.meta.activity} />}
-            {!session.alive && <div className="py-4 text-center text-cv-meta text-cv-muted">This session has ended.</div>}
-          </div>
-        </div>
+        <ChatScroll
+          ref={scroll}
+          entries={entries}
+          resetKey={`${sid}|${session.started_at}`}
+          more={conv.more}
+          loadingOlder={loadingOlder}
+          loadOlder={loadOlder}
+          running={running}
+          working={working}
+          waiting={!!conv.prompt}
+          phone={phone}
+          onCopied={onCopied}
+          onRewind={session.alive ? (m) => void requestRewind(sid, m.id, conv.messages) : undefined}
+          island={phone}
+          centred={centred}
+          top={empty ? <Greeting model={conv.meta.model} cwd={session.cwd} centred={centred} /> : null}
+          bottom={bottom}
+        />
 
-        <div className={cn("relative mx-auto w-full max-w-3xl shrink-0 px-3 [[data-mode=desktop]_&]:px-5", centred && "flex-1")} style={{ paddingBottom: phone ? "max(10px, calc(var(--safe-bottom) - var(--tabbar-space, 0px)))" : 16 }}>
-          {/* Text fades out under the dock instead of being cut off. */}
-          {!centred && <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-linear-to-b from-transparent to-cv-bg" />}
-          <div className="pointer-events-none absolute inset-x-0 -top-12 z-10 flex justify-center">
-            {toast ? (
-              <div role="status" className="flex items-center gap-1.5 rounded-full bg-cv-primary px-3.5 py-1.5 text-cv-meta text-cv-on-primary shadow-cv-pill animate-cv-pop">
-                <Check size={14} strokeWidth={2.4} /> {toast}
-              </div>
-            ) : (
-              away && (
-                <button type="button" onClick={toBottom} aria-label="Scroll to latest" className="pointer-events-auto grid size-9 place-items-center rounded-full border border-cv-line bg-cv-surface text-cv-text-2 shadow-cv-pill transition-colors animate-cv-pop hover:text-cv-text">
-                  <ArrowDown size={17} strokeWidth={2} />
-                </button>
-              )
-            )}
-          </div>
-          {conv.prompt && session.alive && <PromptCard sid={sid} prompt={conv.prompt} pending={open} cwd={session.cwd} phone={phone} onTerminal={() => setTerminal("menu")} />}
+        {/* Composer region (I4): the composer sits in normal flow under the transcript. */}
+        <div className={cn("relative mx-auto w-full max-w-3xl shrink-0 px-3 [[data-mode=desktop]_&]:px-5", centred && "flex-1")} style={{ paddingBottom: phone ? (keyboard.open ? 8 : "max(10px, var(--safe-bottom))") : 16 }}>
+          {conv.prompt && session.alive && <PromptCard sid={sid} prompt={conv.prompt} pending={open} cwd={session.cwd} phone={phone} meta={conv.meta} onTerminal={() => setTerminal("menu")} />}
           <Composer
             sid={sid}
             meta={conv.meta}
@@ -171,16 +124,29 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
             phone={phone}
             empty={empty}
             disabled={!session.alive}
+            hidden={phone && !!conv.prompt && session.alive}
+            messages={conv.messages}
+            onTasks={() => setTasksOpen(true)}
             onTerminal={(why) => setTerminal(why)}
-            onSubmitted={() => {
-              stick.current = true;
-              requestAnimationFrame(toBottom);
-            }}
+            onSubmitted={() => requestAnimationFrame(() => scroll.current?.toBottom())}
           />
         </div>
 
+        {trail.length > 0 && (
+          <SubagentView
+            key={trail[trail.length - 1]!.id}
+            sid={sid}
+            startedAt={session.started_at}
+            trail={trail}
+            phone={phone}
+            onBack={() => setTrail((t) => t.slice(0, -1))}
+            onCopied={onCopied}
+          />
+        )}
+        <TasksSheet sid={sid} open={tasksOpen} tasks={tasks.list} onClose={() => setTasksOpen(false)} onAgent={tasksApi.open} />
+
         {terminal && (
-          <div className="absolute inset-0 z-40 flex flex-col bg-cv-bg animate-cv-rise">
+          <div className="absolute inset-0 z-40 flex flex-col bg-cv-bg animate-cv-rise" style={{ paddingTop: "var(--island-space, 0px)" }}>
             <div className="flex h-12 shrink-0 items-center gap-2 border-b border-cv-line-soft pr-2 pl-4">
               <SquareTerminal size={16} strokeWidth={1.7} className="text-cv-muted" />
               <span className="flex-1 truncate text-cv-ui text-cv-text-2">{terminal.startsWith("/") ? `${terminal} runs in the terminal` : "Terminal"}</span>
@@ -195,9 +161,23 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
           </div>
         )}
       </div>
+      </TasksContext.Provider>
       </ImageSidContext.Provider>
     </CwdContext.Provider>
   );
+}
+
+const NO_IDS: ReadonlySet<string> = new Set();
+
+/** `value`, but a `true` lasts at least `ms` (the activity line does not blink between steps). */
+function useHeld(value: boolean, ms: number): boolean {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    if (value) return setHeld(true);
+    const t = setTimeout(() => setHeld(false), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return value || held;
 }
 
 function greeting(): string {
@@ -248,6 +228,3 @@ function Activity({ text }: { text?: string | null }) {
     </div>
   );
 }
-
-/** More than a few lines below the visible part. */
-const farFromEnd = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight >= 80;

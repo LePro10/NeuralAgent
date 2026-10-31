@@ -1,11 +1,12 @@
 /**
- * Choices in the Claude view (model, effort, permission mode, attachments): a bottom sheet on
- * phones (the design system's Sheet, re-dressed in Claude's surface by `.cv-sheet`) and a popover
- * that opens upward above the composer on desktop, kept inside the composer's width so it never
- * clips off-screen.
+ * Choices in the Claude view (model, effort, permission mode, attachments). Phones: a "pour"
+ * that grows up out of the composer (same width, springs from its top edge, the transcript dims
+ * behind it; back and Escape close it through the layer stack). Desktop: a popover that opens
+ * upward above the composer, kept inside the composer's width so it never clips off-screen.
  */
-import { cn, Sheet } from "@neuralagent/ui";
+import { cn, prefersReducedMotion, SPRING, useLayer } from "@neuralagent/ui";
 import { Check } from "lucide-react";
+import { motion } from "motion/react";
 import { useEffect, useRef, type ReactNode } from "react";
 
 export function Picker({ open, onClose, phone, title, align = "start", wide, children }: {
@@ -18,17 +19,39 @@ export function Picker({ open, onClose, phone, title, align = "start", wide, chi
   wide?: boolean;
   children: ReactNode;
 }) {
-  if (phone) {
-    return (
-      <Sheet open={open} onClose={onClose} title={title} bodyClassName="pb-3">
-        <div className="cv-sheet -mx-1 pb-1 font-cv-sans text-cv-text" role="menu" aria-label={title}>
-          {children}
-        </div>
-      </Sheet>
-    );
-  }
+  if (phone) return open ? <Pour onClose={onClose} title={title}>{children}</Pour> : null;
   if (!open) return null;
   return <Popover onClose={onClose} title={title} align={align} wide={wide}>{children}</Popover>;
+}
+
+/** Phone: the composer's surface grows upward into a list; the transcript stays visible, dimmed. */
+export function Pour({ onClose, title, children, dim = true }: { onClose: () => void; title: string; children: ReactNode; dim?: boolean }) {
+  useLayer(true, onClose);
+  const still = prefersReducedMotion();
+  return (
+    <>
+      <motion.div
+        aria-hidden
+        className={cn("fixed inset-0 z-20", dim && "bg-cv-scrim")}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: still ? 0 : 0.18 }}
+        onPointerDown={(e) => (e.preventDefault(), onClose())}
+      />
+      <motion.div
+        role="menu"
+        aria-label={title}
+        className="cv-scroll absolute inset-x-0 bottom-full z-30 mb-2 origin-bottom overflow-y-auto overscroll-contain rounded-cv-card bg-cv-surface px-1.5 pt-1 pb-1.5 font-cv-sans text-cv-text shadow-cv-pop"
+        style={{ maxHeight: "min(60svh, 560px)" }}
+        initial={still ? { opacity: 0 } : { opacity: 0, y: 14, scaleY: 0.82, scaleX: 0.97 }}
+        animate={{ opacity: 1, y: 0, scaleY: 1, scaleX: 1 }}
+        transition={still ? { duration: 0 } : { ...SPRING.sheet, opacity: { duration: 0.14 } }}
+      >
+        <div className="flex h-10 items-center px-3 text-cv-meta text-cv-muted">{title}</div>
+        {children}
+      </motion.div>
+    </>
+  );
 }
 
 function Popover({ onClose, title, align, wide, children }: { onClose: () => void; title: string; align: "start" | "end"; wide?: boolean; children: ReactNode }) {

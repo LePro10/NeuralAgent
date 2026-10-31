@@ -1,314 +1,473 @@
 /**
- * The conversation, laid out like Claude: user messages in a soft bubble on the right, Claude's
- * turns without a bubble in the reading serif, tool calls as quiet rows (reads and searches folded
- * into one), thinking folded away, and Copy under every message (hover on desktop, long-press on
- * phones opens an action sheet).
+ * The conversation, laid out like Claude's apps (A3): the owner's messages in a soft bubble on the
+ * right, Claude's turns without a bubble in the reading serif. Between two texts the machinery is
+ * one quiet steps line; file changes, pictures, subagents, the task list and plans stay visible as
+ * their own cards. Time separators sit before a prompt after a pause or on a new day.
+ *
+ * Text is selectable everywhere (native selection). Desktop: Copy under a turn on hover. Phones: a
+ * tap on a turn shows its action row for a few seconds; "⋯" opens Copy / Copy as Markdown /
+ * Select text.
+ *
+ * Grouping lives in `entries.ts` (pure, tested). Entries keep their identity while their messages
+ * do, and every entry is `memo`, so a live update re-renders only the turn it touches.
  */
 import type { CvBlock, CvMessage } from "@neuralagent/protocol";
 import { cn, Sheet } from "@neuralagent/ui";
-import { ChevronRight, Copy, FileText } from "lucide-react";
-import { memo, useMemo, useRef, useState, type ReactNode } from "react";
-import { NoImage, Pictures, type Pic } from "./Images";
+import { ChevronRight, ClipboardList, Copy, Ellipsis, FileText, History, Layers, OctagonAlert, TextSelect, Users } from "lucide-react";
+import { canRewind } from "./actions";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AgentCards } from "./AgentCard";
+import { entryCache, gallery, lastTurn, latestTodo, sepLabel, textOf, toEntries, type Entry, type Piece, type Turn } from "./entries";
+import { GalleryContext, NoImage, Pictures, Viewer, type Pic } from "./Images";
 import { copyText, CopyButton, Markdown, plainText } from "./Markdown";
-import { Spark } from "./Spark";
-import { isExplore, ToolCall, ToolGroup, type Res, type Use } from "./tools";
-
-type Text = Extract<CvBlock, { k: "text" }>;
-
-type Piece =
-  | { t: "text"; key: string; text: string }
-  | { t: "thinking"; key: string; text: string; ms: number | null }
-  | { t: "tool"; key: string; use: Use }
-  | { t: "group"; key: string; uses: Use[] };
-
-export type Entry =
-  | { t: "user"; key: string; m: CvMessage }
-  | { t: "system"; key: string; m: CvMessage }
-  | { t: "turn"; key: string; pieces: Piece[]; ts: number; text: string };
-
-const textOf = (m: CvMessage) => m.blocks.filter((b): b is Text => b.k === "text").map((b) => b.text).join("\n\n");
-
-/** Messages → user bubbles, notices and Claude turns (consecutive assistant output). */
-export function toEntries(messages: CvMessage[]): Entry[] {
-  const out: Entry[] = [];
-  let turn: Extract<Entry, { t: "turn" }> | null = null;
-  let prevTs = 0;
-  const close = () => {
-    if (turn) {
-      turn.text = turn.pieces.filter((p): p is Extract<Piece, { t: "text" }> => p.t === "text").map((p) => p.text).join("\n\n");
-      out.push(turn);
-    }
-    turn = null;
-  };
-  for (const m of messages) {
-    const key = m.id || String(m.i);
-    if (m.role === "user") {
-      const text = textOf(m);
-      const images = m.blocks.some((b) => b.k === "image");
-      // Tool results ride along with their calls.
-      if (!text.trim() && !images) {
-        prevTs = m.ts || prevTs;
-        continue;
-      }
-      close();
-      out.push({ t: "user", key, m });
-      prevTs = m.ts || prevTs;
-      continue;
-    }
-    if (m.role === "system") {
-      close();
-      out.push({ t: "system", key, m });
-      continue;
-    }
-    if (!turn) turn = { t: "turn", key, pieces: [], ts: m.ts, text: "" };
-    turn.ts = m.ts || turn.ts;
-    m.blocks.forEach((b, i) => {
-      const k = `${key}-${i}`;
-      const t = turn!;
-      if (b.k === "text") {
-        if (b.text.trim()) t.pieces.push({ t: "text", key: k, text: b.text });
-      } else if (b.k === "thinking") {
-        const ms = m.ts && prevTs && m.ts > prevTs && m.ts - prevTs < 30 * 60_000 ? m.ts - prevTs : null;
-        t.pieces.push({ t: "thinking", key: k, text: b.text, ms });
-      } else if (b.k === "tool_use") {
-        const last = t.pieces[t.pieces.length - 1];
-        if (isExplore(b.name)) {
-          if (last?.t === "group") last.uses.push(b);
-          else if (last?.t === "tool" && isExplore(last.use.name)) t.pieces[t.pieces.length - 1] = { t: "group", key: last.key, uses: [last.use, b] };
-          else t.pieces.push({ t: "tool", key: b.id || k, use: b });
-        } else t.pieces.push({ t: "tool", key: b.id || k, use: b });
-      }
-    });
-    prevTs = m.ts || prevTs;
-  }
-  close();
-  return out;
-}
+import { StepLabel, StepRun } from "./Steps";
+import { Answered, EditCards, Output, picName, picsOf, PlanCard, TodoCard } from "./tools";
+import { duration, inputOf, toolArg, type Res, type Use } from "./toolText";
 
 export const time = (ts: number) => (ts ? new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 
-/** Long-press (touch only): opens the action sheet without firing a tap; moving cancels it. */
-function useLongPress(on: () => void, enabled: boolean) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const cancel = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-  };
-  if (!enabled) return {};
-  return {
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.pointerType !== "touch") return;
-      start.current = { x: e.clientX, y: e.clientY };
-      cancel();
-      timer.current = setTimeout(() => {
-        timer.current = null;
-        navigator.vibrate?.(8);
-        on();
-      }, 480);
-    },
-    onPointerMove: (e: React.PointerEvent) => {
-      const s = start.current;
-      if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) cancel();
-    },
-    onPointerUp: cancel,
-    onPointerCancel: cancel,
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-  };
+/** Entries with stable identity across updates (one cache per view). */
+export function useEntries(messages: CvMessage[]): Entry[] {
+  const cache = useRef(entryCache()).current;
+  return useMemo(() => toEntries(messages, cache), [messages, cache]);
 }
 
-/** Copy / Copy as Markdown, as an action sheet (phones). */
-function ActionSheet({ text, onClose, onCopied }: { text: string | null; onClose: () => void; onCopied: (what: string) => void }) {
-  const row = (label: string, value: string, icon: ReactNode) => (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={() => {
-        void copyText(value).then((ok) => ok && onCopied(label === "Copy" ? "Copied" : "Copied as Markdown"));
-        onClose();
-      }}
-      className="flex min-h-14 w-full items-center gap-3.5 rounded-cv-sm px-3 text-left text-cv-ui text-cv-text active:bg-cv-press"
-    >
+const NONE: ReadonlySet<string> = new Set();
+const LatestTodoContext = createContext<string | null>(null);
+type Menu = (text: string, m?: CvMessage) => void;
+const MenuContext = createContext<Menu>(() => {});
+/** Rewind the conversation (and code) to before a prompt (main chat only; I4's Rewind sheet). */
+const RewindContext = createContext<((m: CvMessage) => void) | null>(null);
+
+// ───────────── tap actions (phones) ─────────────
+
+const ACTIONS_MS = 4000;
+const INTERACTIVE = "button,a,input,textarea,select,summary,pre,img,[role=button],[data-no-tap]";
+
+/** Phones: a tap (not on a control, not ending a selection) shows the action row for a while. */
+function useTapActions(enabled: boolean) {
+  const [shown, setShown] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const onClick = useCallback(
+    (ev: React.MouseEvent) => {
+      if (!enabled) return;
+      if ((ev.target as Element).closest(INTERACTIVE)) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      setShown(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setShown(false), ACTIONS_MS);
+    },
+    [enabled],
+  );
+  return { shown, onClick };
+}
+
+/** Copy / Copy as Markdown / Select text, as a sheet (phones). */
+function ActionSheet({ text, onClose, onCopied, onRewind }: { text: string | null; onClose: () => void; onCopied: (what: string) => void; onRewind?: () => void }) {
+  const [select, setSelect] = useState(false);
+  useEffect(() => {
+    if (text === null) setSelect(false);
+  }, [text]);
+  const row = (label: string, icon: ReactNode, act: () => void) => (
+    <button type="button" role="menuitem" onClick={act} className="flex min-h-14 w-full items-center gap-3.5 rounded-cv-sm px-3 text-left text-cv-ui text-cv-text active:bg-cv-press">
       <span className="text-cv-text-2">{icon}</span>
       {label}
     </button>
   );
+  const copy = (value: string, what: string) => () => {
+    void copyText(value).then((ok) => ok && onCopied(what));
+    onClose();
+  };
   return (
-    <Sheet open={text !== null} onClose={onClose} title="Message" bodyClassName="pb-3">
-      <div className="cv-sheet -mx-1 font-cv-sans" role="menu" aria-label="Message">
-        {text !== null && (
-          <>
-            <div className="mx-3 mb-2 line-clamp-3 rounded-cv-md bg-cv-chip px-3.5 py-2.5 font-cv-serif text-cv-ui text-cv-text-2">{plainText(text)}</div>
-            {row("Copy", plainText(text), <Copy size={20} strokeWidth={1.7} />)}
-            {row("Copy as Markdown", text, <FileText size={20} strokeWidth={1.7} />)}
-          </>
-        )}
+    <Sheet open={text !== null} onClose={onClose} title={select ? "Select text" : "Message"} bodyClassName="pb-3">
+      <div className="-mx-1 font-cv-sans" role={select ? undefined : "menu"} aria-label="Message">
+        {text !== null &&
+          (select ? (
+            <div className="mx-3 mb-2 rounded-cv-md bg-cv-chip px-3.5 py-3 font-cv-serif text-cv-prose whitespace-pre-wrap text-cv-text select-text [overflow-wrap:anywhere]">{plainText(text)}</div>
+          ) : (
+            <>
+              <div className="mx-3 mb-2 line-clamp-3 rounded-cv-md bg-cv-chip px-3.5 py-2.5 font-cv-serif text-cv-ui text-cv-text-2">{plainText(text)}</div>
+              {row("Copy", <Copy size={20} strokeWidth={1.7} />, copy(plainText(text), "Copied"))}
+              {row("Copy as Markdown", <FileText size={20} strokeWidth={1.7} />, copy(text, "Copied as Markdown"))}
+              {row("Select text", <TextSelect size={20} strokeWidth={1.7} />, () => setSelect(true))}
+              {onRewind &&
+                row("Rewind to here", <History size={20} strokeWidth={1.7} />, () => {
+                  onClose();
+                  onRewind();
+                })}
+            </>
+          ))}
       </div>
     </Sheet>
   );
 }
 
-function Thinking({ text, ms }: { text: string; ms: number | null }) {
-  const [open, setOpen] = useState(false);
-  const label = ms && ms >= 1000 ? `Thought for ${Math.round(ms / 1000)}s` : "Thought process";
-  if (!text.trim()) {
+function Actions({ text, ts, show, phone }: { text: string; ts: number; show: boolean; phone: boolean }) {
+  const menu = useContext(MenuContext);
+  if (phone) {
+    if (!show) return null;
     return (
-      <div className="my-2 flex min-h-9 items-center gap-2 font-cv-sans text-cv-ui text-cv-muted">
-        <Spark size={14} className="text-cv-muted" />
-        {label}
+      <div className="-ml-1.5 flex h-9 items-center gap-1 font-cv-sans animate-cv-pop">
+        <CopyButton text={plainText(text)} label="Copy" />
+        <button type="button" onClick={() => menu(text)} aria-label="More" className="grid size-9 place-items-center rounded-cv-sm text-cv-muted active:bg-cv-press">
+          <Ellipsis size={17} strokeWidth={1.8} />
+        </button>
+        {ts > 0 && <span className="ml-1 text-cv-meta text-cv-muted">{time(ts)}</span>}
       </div>
     );
   }
   return (
-    <div className="my-2 font-cv-sans">
-      <div className="-mx-2">
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-9 w-full items-center gap-2 rounded-cv-sm px-2 text-left text-cv-ui text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text-2 [[data-mode=phone]_&]:min-h-11">
-          <Spark size={14} className="text-cv-muted" />
-          <span className="flex-1">{label}</span>
-          <ChevronRight size={15} strokeWidth={1.8} className={cn("shrink-0 transition-transform duration-200", open && "rotate-90")} />
-        </button>
-      </div>
-      <div className="cv-fold" data-open={open}>
-        <div>
-          <div className="mt-1 mb-2 ml-1 border-l-2 border-cv-line pl-4 text-cv-meta whitespace-pre-wrap text-cv-text-2">{text}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Actions({ text, ts, show }: { text: string; ts: number; show: boolean }) {
-  return (
-    <div className={cn("-ml-1.5 flex h-8 items-center gap-1 font-cv-sans transition-opacity duration-150", show ? "opacity-100" : "opacity-0 group-hover/turn:opacity-100 focus-within:opacity-100 [[data-mode=phone]_&]:hidden")}>
+    <div className={cn("-ml-1.5 flex h-8 items-center gap-1 font-cv-sans transition-opacity duration-150", show ? "opacity-100" : "opacity-0 group-hover/turn:opacity-100 focus-within:opacity-100")}>
       <CopyButton text={plainText(text)} label="Copy" />
-      <CopyButton text={text} label="Copy as Markdown" className="[[data-mode=phone]_&]:hidden" withLabel={false} />
+      <CopyButton text={text} label="Copy as Markdown" withLabel={false} />
       {ts > 0 && <span className="ml-1.5 text-cv-meta text-cv-muted">{time(ts)}</span>}
     </div>
   );
 }
 
-const Turn = memo(function Turn({ e, results, running, last, phone, onHold }: {
-  e: Extract<Entry, { t: "turn" }>;
-  results: Map<string, Res>;
-  running: string | null;
-  last: boolean;
-  phone: boolean;
-  onHold: (text: string) => void;
-}) {
-  const hold = useLongPress(() => onHold(e.text), phone && !!e.text);
+// ───────────── notes: errors, hooks, notifications, compaction ─────────────
+
+const Rule = ({ children }: { children: ReactNode }) => (
+  <div className="my-5 flex items-center gap-3 font-cv-sans text-cv-meta text-cv-muted">
+    <span className="h-px flex-1 bg-cv-line-soft" />
+    <span className="flex max-w-4/5 min-w-0 items-center gap-1.5 truncate">{children}</span>
+    <span className="h-px flex-1 bg-cv-line-soft" />
+  </div>
+);
+
+function Fold({ icon, title, tone, children }: { icon: ReactNode; title: ReactNode; tone?: "danger"; children?: ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="group/turn my-3 animate-cv-rise">
-      {e.pieces.map((p) => {
-        switch (p.t) {
-          case "text":
-            return (
-              <div key={p.key} className={cn("my-3", phone && "select-none [-webkit-touch-callout:none]")} {...hold}>
-                <Markdown text={p.text} />
-              </div>
-            );
-          case "thinking":
-            return <Thinking key={p.key} text={p.text} ms={p.ms} />;
-          case "tool":
-            return <ToolCall key={p.key} use={p.use} res={results.get(p.use.id)} running={p.use.id === running} />;
-          case "group":
-            return <ToolGroup key={p.key} uses={p.uses} results={results} running={running} />;
-        }
-      })}
-      {e.text && <Actions text={e.text} ts={e.ts} show={last} />}
+    <div className={cn("my-2 rounded-cv-md border font-cv-sans", tone === "danger" ? "border-cv-danger-soft bg-cv-danger-soft" : "border-cv-line-soft")}>
+      <button type="button" disabled={!children} onClick={() => setOpen(!open)} aria-expanded={children ? open : undefined} className="flex min-h-cv-row w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left text-cv-step">
+        <span className={cn("shrink-0", tone === "danger" ? "text-cv-danger" : "text-cv-muted")}>{icon}</span>
+        <span className={cn("min-w-0 flex-1", tone === "danger" ? "text-cv-danger" : "text-cv-text-2", !open && "line-clamp-2")}>{title}</span>
+        {children && <ChevronRight size={14} strokeWidth={1.8} className={cn("shrink-0 text-cv-muted transition-transform", open && "rotate-90")} />}
+      </button>
+      {open && children && <div className="px-3 pb-2.5 animate-cv-pop">{children}</div>}
+    </div>
+  );
+}
+
+const ERROR_TITLE: Record<string, string> = {
+  rate_limit: "Usage limit reached",
+  overloaded: "Claude is overloaded",
+  server_error: "Server error",
+  invalid_request: "Request was rejected",
+  refusal: "Claude declined",
+};
+
+export function BlockNote({ block }: { block: CvBlock }) {
+  switch (block.k) {
+    case "error":
+      return (
+        <Fold icon={<OctagonAlert size={15} strokeWidth={1.8} />} title={(block.code && ERROR_TITLE[block.code]) || "Something went wrong"} tone="danger">
+          <div className="text-cv-meta whitespace-pre-wrap text-cv-text-2 [overflow-wrap:anywhere]">{block.text}</div>
+        </Fold>
+      );
+    case "hook":
+      return (
+        <Fold icon={<Layers size={15} strokeWidth={1.8} />} title={`${block.event} hook${block.error ? " failed" : ""}`} tone={block.error ? "danger" : undefined}>
+          {block.text.trim() ? <div className="font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2 [overflow-wrap:anywhere]">{block.text}</div> : undefined}
+        </Fold>
+      );
+    case "duration":
+      return <div className="my-3 font-cv-sans text-cv-meta text-cv-muted">Worked for {duration(block.ms)}</div>;
+    case "compact":
+      return (
+        <Rule>
+          Conversation compacted{block.trigger === "auto" ? " automatically" : ""}
+          {block.pre_tokens ? ` · ${Math.round(block.pre_tokens / 1000)}k tokens before` : ""}
+        </Rule>
+      );
+    case "task_note": {
+      const bad = block.status === "failed" || block.status === "killed";
+      return (
+        <Fold icon={<ClipboardList size={15} strokeWidth={1.8} />} title={block.summary || "A background task finished"} tone={bad ? "danger" : undefined}>
+          {block.result?.trim() ? <Markdown text={block.result} compact /> : undefined}
+        </Fold>
+      );
+    }
+    case "shell":
+      return <Output text={block.stdout ?? ""} stderr={block.stderr} cmd={block.command} label="Shell" />;
+    default:
+      return null;
+  }
+}
+
+/** A notice line: command output, the carried-over summary, notifications, other agents. */
+const Notice = memo(function Notice({ m }: { m: CvMessage }) {
+  const text = textOf(m);
+  const special = m.blocks.find((b) => b.k !== "text" && b.k !== "image");
+  if (m.kind === "output") return <Output text={text} label="Output" />;
+  if (m.kind === "summary") {
+    return (
+      <Fold icon={<FileText size={15} strokeWidth={1.8} />} title="Summary of the earlier conversation">
+        <Markdown text={text} compact />
+      </Fold>
+    );
+  }
+  if (m.kind === "peer") {
+    return (
+      <div className="my-4 rounded-cv-md border border-cv-line-soft px-3.5 py-2.5 font-cv-sans">
+        <div className="mb-1 flex items-center gap-1.5 text-cv-meta text-cv-muted">
+          <Users size={13} strokeWidth={1.8} /> From {m.from_name || m.from || "another agent"}
+        </div>
+        <Markdown text={text} compact />
+      </div>
+    );
+  }
+  if (special) {
+    return (
+      <>
+        {m.blocks.map((b, i) => (b.k === "text" ? null : <BlockNote key={i} block={b} />))}
+        {m.kind === "compact" && special.k !== "compact" && text && <Rule>{text}</Rule>}
+      </>
+    );
+  }
+  return text ? <Rule>{text}</Rule> : null;
+});
+
+// ───────────── Claude's turn ─────────────
+
+function PieceView({ p, e, running, live, waiting }: { p: Piece; e: Turn; running: ReadonlySet<string>; live: boolean; waiting: boolean }) {
+  const latest = useContext(LatestTodoContext);
+  switch (p.t) {
+    case "text":
+      return (
+        <div className="my-3">
+          <Markdown text={p.text} />
+        </div>
+      );
+    case "steps":
+      return <StepRun steps={p.steps} res={e.res} running={running} live={live} waiting={waiting} />;
+    case "edits":
+      return <EditCards uses={p.uses} results={e.res} running={running} />;
+    case "agents":
+      return <AgentCards uses={p.uses} results={e.res} running={running} />;
+    case "media": {
+      const r = e.res.get(p.use.id);
+      return <Media use={p.use} res={r} />;
+    }
+    case "todos":
+      return <TodoCard use={p.use} latest={p.use.id === latest} />;
+    case "plan":
+      return <PlanCard use={p.use} res={e.res.get(p.use.id)} />;
+    case "ask":
+      return e.res.has(p.use.id) ? <Answered use={p.use} res={e.res.get(p.use.id)} /> : null;
+    case "note":
+      return <BlockNote block={p.block} />;
+  }
+}
+
+const Media = memo(function Media({ use, res }: { use: Use; res?: Res }) {
+  const pics = useMemo(() => picsOf(use, res), [use, res]);
+  return (
+    <div className="my-2 font-cv-sans">
+      <div className="flex min-h-cv-row min-w-0 items-center gap-2 text-cv-step">
+        <StepLabel step={{ t: "tool", key: use.id, use }} res={res} />
+      </div>
+      <Pictures pics={pics} size="full" />
     </div>
   );
 });
 
-function UserBubble({ m, phone, onHold }: { m: CvMessage; phone: boolean; onHold: (text: string) => void }) {
+const TurnView = memo(function TurnView({ e, running, live, waiting, last, phone }: {
+  e: Turn;
+  /** Open calls (only for the newest turn; NONE otherwise). */
+  running: ReadonlySet<string>;
+  /** Claude is working on this turn. */
+  live: boolean;
+  waiting: boolean;
+  /** The newest finished turn: its actions stay visible on desktop. */
+  last: boolean;
+  phone: boolean;
+}) {
+  const tap = useTapActions(phone && !!e.text);
+  const end = e.pieces.length - 1;
+  return (
+    <div className="group/turn my-3" onClick={tap.onClick}>
+      {e.pieces.map((p, i) => (
+        <PieceView key={p.key} p={p} e={e} running={running} live={live && i === end} waiting={waiting} />
+      ))}
+      {e.text && !live && <Actions text={e.text} ts={e.ts} show={phone ? tap.shown : last} phone={phone} />}
+    </div>
+  );
+});
+
+// ───────────── the owner's messages ─────────────
+
+const CLAMP_LINES = 12;
+
+function Pasted({ block }: { block: Extract<CvBlock, { k: "pasted" }> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="max-w-4/5 min-w-0 rounded-cv-md border border-cv-line-soft bg-cv-surface font-cv-sans">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-10 w-full items-center gap-2 px-3 text-left text-cv-meta text-cv-text-2">
+        <ClipboardList size={14} strokeWidth={1.8} className="shrink-0 text-cv-muted" />
+        <span className="min-w-0 flex-1 truncate">Pasted text · {block.lines} {block.lines === 1 ? "line" : "lines"}</span>
+        <ChevronRight size={14} strokeWidth={1.8} className={cn("shrink-0 text-cv-muted transition-transform", open && "rotate-90")} />
+      </button>
+      {open && <pre className="cv-thin max-h-80 overflow-auto border-t border-cv-line-soft px-3 py-2 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2 [overflow-wrap:anywhere]">{block.text}</pre>}
+    </div>
+  );
+}
+
+const UserBubble = memo(function UserBubble({ m, sep, phone }: { m: CvMessage; sep: number | null; phone: boolean }) {
   const text = textOf(m);
   const imageBlocks = m.blocks.filter((b): b is Extract<CvBlock, { k: "image" }> => b.k === "image");
-  const pics: Pic[] = imageBlocks.flatMap((b) => (b.image ? [{ img: b.image, caption: `Image ${imageBlocks.indexOf(b) + 1}` }] : []));
+  const pics = useMemo((): Pic[] => imageBlocks.flatMap((b, i) => (b.image ? [{ img: b.image, caption: `Image ${i + 1}` }] : [])), [m]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = imageBlocks.length - pics.length;
-  const hold = useLongPress(() => onHold(text), phone && !!text);
-  if (m.kind === "output") {
-    return <pre className="cv-scroll my-2 overflow-x-auto rounded-cv-md bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2">{text}</pre>;
-  }
-  if (m.kind === "summary") {
-    return (
-      <details className="group/sum my-4 rounded-cv-md border border-cv-line-soft px-4 py-2.5 font-cv-sans text-cv-ui text-cv-muted">
-        <summary className="flex cursor-pointer list-none items-center gap-2">
-          <span className="flex-1">Summary of the earlier conversation</span>
-          <ChevronRight size={15} className="transition-transform group-open/sum:rotate-90" />
-        </summary>
-        <div className="mt-3"><Markdown text={text} compact /></div>
-      </details>
-    );
-  }
-  return (
-    <div className="group/user my-5 flex flex-col items-end gap-1.5 animate-cv-rise">
-      {pics.length > 0 && <Pictures pics={pics} size="tile" className="max-w-4/5 justify-end" />}
-      {missing > 0 && (
-        <div className="flex gap-1.5">
-          {Array.from({ length: Math.min(missing, 4) }, (_, i) => <NoImage key={i} />)}
-          {missing > 4 && <div className="grid size-14 place-items-center rounded-cv-md bg-cv-chip font-cv-sans text-cv-meta text-cv-muted">+{missing - 4}</div>}
-        </div>
-      )}
-      {text && (
-        <div className="flex w-full items-end justify-end gap-1.5">
-          <div className="flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100 [[data-mode=phone]_&]:hidden">
-            {m.ts > 0 && <span className="mr-1 font-cv-sans text-cv-meta text-cv-muted">{time(m.ts)}</span>}
-            <CopyButton text={text} label="Copy" />
-          </div>
-          <div
-            {...hold}
-            className={cn(
-              "max-w-4/5 rounded-cv-bubble bg-cv-bubble px-4 py-2.5 font-cv-sans text-cv-ui whitespace-pre-wrap text-cv-text [overflow-wrap:anywhere]",
-              m.kind === "command" && "font-cv-mono text-cv-code",
-              phone && "select-none [-webkit-touch-callout:none]",
-            )}
-          >
-            {text}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Notice({ m }: { m: CvMessage }) {
-  const text = textOf(m);
-  if (m.kind === "output") return <pre className="cv-scroll my-2 overflow-x-auto rounded-cv-md bg-cv-sunken px-3.5 py-2.5 font-cv-mono text-cv-code whitespace-pre-wrap text-cv-text-2">{text}</pre>;
-  return (
-    <div className="my-5 flex items-center gap-3 font-cv-sans text-cv-meta text-cv-muted">
-      <span className="h-px flex-1 bg-cv-line-soft" />
-      <span className="max-w-4/5 truncate">{text}</span>
-      <span className="h-px flex-1 bg-cv-line-soft" />
-    </div>
-  );
-}
-
-export function Transcript({ messages, results, running, working, phone, onCopied }: {
-  messages: CvMessage[];
-  results: Map<string, Res>;
-  /** The tool call that is running now, if any. */
-  running: string | null;
-  working: boolean;
-  phone: boolean;
-  onCopied: (what: string) => void;
-}) {
-  const entries = useMemo(() => toEntries(messages), [messages]);
-  const [held, setHeld] = useState<string | null>(null);
-  const lastTurn = useMemo(() => {
-    for (let i = entries.length - 1; i >= 0; i--) if (entries[i]!.t === "turn") return entries[i]!.key;
-    return null;
-  }, [entries]);
+  const pasted = m.blocks.filter((b): b is Extract<CvBlock, { k: "pasted" }> => b.k === "pasted");
+  const shell = m.blocks.find((b): b is Extract<CvBlock, { k: "shell" }> => b.k === "shell");
+  const long = text.split("\n").length > CLAMP_LINES || text.length > 1200;
+  const [all, setAll] = useState(false);
+  const tap = useTapActions(phone && !!text);
+  const rewind = useContext(RewindContext);
+  const cmd = m.kind === "command";
   return (
     <>
-      {entries.map((e) =>
-        e.t === "user" ? (
-          <UserBubble key={e.key} m={e.m} phone={phone} onHold={setHeld} />
-        ) : e.t === "system" ? (
-          <Notice key={e.key} m={e.m} />
-        ) : (
-          <Turn key={e.key} e={e} results={results} running={running} last={e.key === lastTurn && !working} phone={phone} onHold={setHeld} />
-        ),
-      )}
-      {phone && <ActionSheet text={held} onClose={() => setHeld(null)} onCopied={onCopied} />}
+      {sep !== null && <div className="mt-6 mb-1 text-center font-cv-sans text-cv-meta text-cv-muted tabular-nums">{sepLabel(sep)}</div>}
+      <div className="group/user my-5 flex flex-col items-end gap-1.5" onClick={tap.onClick}>
+        {pics.length > 0 && <Pictures pics={pics} size="tile" className="max-w-4/5 justify-end" />}
+        {missing > 0 && (
+          <div className="flex gap-1.5">
+            {Array.from({ length: Math.min(missing, 4) }, (_, i) => <NoImage key={i} />)}
+            {missing > 4 && <div className="grid size-14 place-items-center rounded-cv-md bg-cv-chip font-cv-sans text-cv-meta text-cv-muted">+{missing - 4}</div>}
+          </div>
+        )}
+        {pasted.map((b, i) => <Pasted key={i} block={b} />)}
+        {shell && (
+          <div className="w-full">
+            <Output text={shell.stdout ?? ""} stderr={shell.stderr} cmd={shell.command} label="Shell" />
+          </div>
+        )}
+        {text && !shell && (
+          <div className="flex w-full items-end justify-end gap-1.5">
+            {!phone && (
+              <div className="flex shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover/user:opacity-100 focus-within:opacity-100">
+                {m.ts > 0 && <span className="mr-1 font-cv-sans text-cv-meta text-cv-muted">{time(m.ts)}</span>}
+                <CopyButton text={text} label="Copy" />
+                {rewind && canRewind(m) && (
+                  <button type="button" onClick={() => rewind(m)} aria-label="Rewind to here" title="Rewind to here" className="grid size-8 place-items-center rounded-cv-sm text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text">
+                    <History size={15} strokeWidth={1.8} />
+                  </button>
+                )}
+              </div>
+            )}
+            <div
+              className={cn(
+                "max-w-4/5 min-w-0 font-cv-sans whitespace-pre-wrap text-cv-text [overflow-wrap:anywhere]",
+                cmd ? "rounded-full bg-cv-chip px-3.5 py-1.5 font-cv-mono text-cv-code" : "rounded-cv-bubble bg-cv-bubble px-4 py-2.5 text-cv-ui",
+              )}
+            >
+              <div className={cn(long && !all && "line-clamp-12")}>{text}</div>
+              {long && (
+                <button type="button" onClick={() => setAll(!all)} className="mt-1 text-cv-meta text-cv-muted underline-offset-2 hover:underline">
+                  {all ? "Show less" : "Show more"}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {phone && text && tap.shown && <UserActions text={text} m={m} />}
+      </div>
     </>
+  );
+});
+
+function UserActions({ text, m }: { text: string; m: CvMessage }) {
+  const menu = useContext(MenuContext);
+  const ts = m.ts;
+  return (
+    <div className="-mr-1.5 flex h-9 items-center gap-1 font-cv-sans animate-cv-pop">
+      {ts > 0 && <span className="mr-1 text-cv-meta text-cv-muted">{time(ts)}</span>}
+      <CopyButton text={text} label="Copy" />
+      <button type="button" onClick={() => menu(text, m)} aria-label="More" className="grid size-9 place-items-center rounded-cv-sm text-cv-muted active:bg-cv-press">
+        <Ellipsis size={17} strokeWidth={1.8} />
+      </button>
+    </div>
+  );
+}
+
+// ───────────── the list ─────────────
+
+/**
+ * Remembers which entries arrived live (after the first paint, at the end), so only those rise
+ * in; history and prepended pages appear without motion.
+ */
+function useBorn(entries: Entry[]) {
+  const known = useRef<Set<string> | null>(null);
+  const born = useRef(new Set<string>());
+  const lastKey = useRef<string | null>(null);
+  return useMemo(() => {
+    if (!entries.length) return born.current;
+    if (!known.current) {
+      known.current = new Set(entries.map((e) => e.key));
+    } else {
+      const from = lastKey.current ? entries.findIndex((e) => e.key === lastKey.current) + 1 : 0;
+      for (let i = Math.max(from, 0); i < entries.length; i++) {
+        const k = entries[i]!.key;
+        if (!known.current.has(k)) born.current.add(k);
+      }
+      for (const e of entries) known.current.add(e.key);
+    }
+    lastKey.current = entries[entries.length - 1]!.key;
+    return born.current;
+  }, [entries]);
+}
+
+export function Transcript({ entries, running, working, waiting, phone, onCopied, onRewind }: {
+  entries: Entry[];
+  /** Calls of the newest turn without a result (running, or waiting for the permission card). */
+  running: ReadonlySet<string>;
+  working: boolean;
+  /** A prompt card waits for the owner. */
+  waiting: boolean;
+  phone: boolean;
+  onCopied: (what: string) => void;
+  /** Main chat: "Rewind to here" on the owner's prompts. */
+  onRewind?: (m: CvMessage) => void;
+}) {
+  const [held, setHeldState] = useState<{ text: string; m?: CvMessage } | null>(null);
+  const setHeld = useCallback<Menu>((text, m) => setHeldState({ text, m }), []);
+  const tail = useMemo(() => lastTurn(entries), [entries]);
+  const latest = useMemo(() => latestTodo(entries), [entries]);
+  const born = useBorn(entries);
+
+  // One viewer that swipes across every picture of the conversation.
+  const items = useMemo(() => gallery(entries, (u, r) => picName(u, r) || toolArg(u.name, inputOf(u)) || undefined), [entries]);
+  const [at, setAt] = useState<string | null>(null);
+  const galleryApi = useMemo(() => ({ open: (id: string) => setAt(id) }), []);
+  const viewerPics = useMemo((): Pic[] => items.map((g) => ({ img: g.img, caption: g.caption })), [items]);
+  const start = at ? items.findIndex((g) => g.key === at) : -1;
+
+  return (
+    <GalleryContext.Provider value={galleryApi}>
+      <LatestTodoContext.Provider value={latest}>
+        <MenuContext.Provider value={setHeld}>
+        <RewindContext.Provider value={onRewind ?? null}>
+          {entries.map((e) => {
+            const own = e === tail;
+            return (
+              <div key={e.key} data-entry={e.key} className={born.has(e.key) ? "animate-cv-rise" : undefined}>
+                {e.t === "user" ? (
+                  <UserBubble m={e.m} sep={e.sep} phone={phone} />
+                ) : e.t === "system" ? (
+                  <Notice m={e.m} />
+                ) : (
+                  <TurnView e={e} running={own ? running : NONE} live={own && working} waiting={own && waiting} last={own && !working} phone={phone} />
+                )}
+              </div>
+            );
+          })}
+          {phone && <ActionSheet text={held?.text ?? null} onClose={() => setHeldState(null)} onCopied={onCopied} onRewind={held?.m && onRewind && canRewind(held.m) ? () => onRewind(held.m!) : undefined} />}
+          {start >= 0 && <Viewer pics={viewerPics} start={start} onClose={() => setAt(null)} />}
+        </RewindContext.Provider>
+        </MenuContext.Provider>
+      </LatestTodoContext.Provider>
+    </GalleryContext.Provider>
   );
 }

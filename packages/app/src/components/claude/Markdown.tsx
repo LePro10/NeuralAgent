@@ -1,6 +1,6 @@
 /** A small Markdown renderer for assistant text in Claude's reading style (no HTML is ever injected). */
 import { cn } from "@neuralagent/ui";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Image as ImageIcon, WrapText } from "lucide-react";
 import { Fragment, memo, useState, type ReactNode } from "react";
 import { usePlatform } from "../../lib/store";
 
@@ -9,9 +9,11 @@ type Block =
   | { t: "h"; level: number; text: string }
   | { t: "code"; lang: string; text: string }
   | { t: "quote"; text: string }
-  | { t: "list"; ordered: boolean; items: { text: string; depth: number; n: number }[] }
+  | { t: "list"; ordered: boolean; items: Item[] }
   | { t: "table"; head: string[]; rows: string[][] }
   | { t: "hr" };
+
+type Item = { text: string; depth: number; n: number; code?: { lang: string; text: string }[] };
 
 const split = (row: string) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 
@@ -63,12 +65,24 @@ export function parseBlocks(src: string): Block[] {
     const li = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (li) {
       const ordered = /\d/.test(li[2]!);
-      const items: { text: string; depth: number; n: number }[] = [];
+      const items: Item[] = [];
       while (i < lines.length) {
         const m = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]!);
+        const inner = items.length ? /^\s{2,}(```+|~~~+)\s*([\w+#.-]*)/.exec(lines[i]!) : null;
         if (m) {
           items.push({ text: m[3]!, depth: Math.min(3, Math.floor(m[1]!.replace(/\t/g, "  ").length / 2)), n: parseInt(m[2]!, 10) || items.length + 1 });
           i++;
+        } else if (inner) {
+          // A fenced block inside a list item stays in the item (the list goes on after it).
+          const indent = /^\s*/.exec(lines[i]!)![0].length;
+          const body: string[] = [];
+          i++;
+          while (i < lines.length && !lines[i]!.trim().startsWith(inner[1]!)) body.push(lines[i++]!.slice(Math.min(indent, /^\s*/.exec(lines[i - 1]!)![0].length)));
+          i++;
+          const it = items[items.length - 1]!;
+          (it.code ??= []).push({ lang: inner[2] ?? "", text: body.join("\n") });
+        } else if (!lines[i]!.trim() && /^(\s*)([-*+]|\d+[.)])\s+/.test(lines[i + 1] ?? "")) {
+          i++; // a loose list: a blank line between items
         } else if (lines[i]!.trim() && /^\s{2,}\S/.test(lines[i]!) && items.length) {
           items[items.length - 1]!.text += `\n${lines[i]!.trim()}`;
           i++;
@@ -85,7 +99,7 @@ export function parseBlocks(src: string): Block[] {
   return out;
 }
 
-const INLINE = /(`+)([^`]+?)\1|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\s][^*]*?)\*|(?<![\w])_([^_\s][^_]*?)_(?![\w])|~~([^~]+?)~~|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g;
+const INLINE = /!\[([^\]]*)\]\(([^)\s]+)\)|(`+)([^`]+?)\3|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\s][^*]*?)\*|(?<![\w])_([^_\s][^_]*?)_(?![\w])|~~([^~]+?)~~|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g;
 
 function Inline({ text }: { text: string }) {
   const platform = usePlatform();
@@ -95,13 +109,21 @@ function Inline({ text }: { text: string }) {
   for (const m of text.matchAll(INLINE)) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
     const key = k++;
-    if (m[2] !== undefined) nodes.push(<code key={key} className="rounded-cv-xs bg-cv-code-bg px-1 py-px font-cv-mono text-cv-code text-cv-code-ink [overflow-wrap:anywhere]">{m[2]}</code>);
-    else if (m[3] !== undefined || m[4] !== undefined) nodes.push(<strong key={key} className="font-cv-strong text-cv-text">{m[3] ?? m[4]}</strong>);
-    else if (m[5] !== undefined || m[6] !== undefined) nodes.push(<em key={key}>{m[5] ?? m[6]}</em>);
-    else if (m[7] !== undefined) nodes.push(<del key={key} className="text-cv-muted">{m[7]}</del>);
+    if (m[2] !== undefined) {
+      // Pictures in Markdown are never fetched: a quiet chip with the alt text.
+      nodes.push(
+        <span key={key} title={m[2]} className="inline-flex max-w-full items-center gap-1 rounded-cv-xs bg-cv-chip px-1.5 align-baseline font-cv-sans text-cv-meta text-cv-text-2">
+          <ImageIcon size={12} strokeWidth={1.8} className="shrink-0" />
+          <span className="truncate">{m[1] || m[2].split("/").pop()}</span>
+        </span>,
+      );
+    } else if (m[4] !== undefined) nodes.push(<code key={key} className="rounded-cv-xs bg-cv-code-bg px-1 py-px font-cv-mono text-cv-code text-cv-code-ink [overflow-wrap:anywhere]">{m[4]}</code>);
+    else if (m[5] !== undefined || m[6] !== undefined) nodes.push(<strong key={key} className="font-cv-strong text-cv-text"><Inline text={(m[5] ?? m[6])!} /></strong>);
+    else if (m[7] !== undefined || m[8] !== undefined) nodes.push(<em key={key}><Inline text={(m[7] ?? m[8])!} /></em>);
+    else if (m[9] !== undefined) nodes.push(<del key={key} className="text-cv-muted"><Inline text={m[9]} /></del>);
     else {
-      const href = m[9] ?? m[10]!;
-      const label = m[8] ?? m[10]!;
+      const href = m[11] ?? m[12]!;
+      const label = m[10] ?? m[12]!;
       nodes.push(
         <a key={key} href={href} className="text-cv-text underline decoration-cv-line-strong underline-offset-3 transition-colors hover:decoration-cv-text" onClick={(e) => (e.preventDefault(), platform.openExternal(href))}>
           {label}
@@ -168,14 +190,34 @@ export function CopyButton({ text, label = "Copy", withLabel, className }: { tex
   );
 }
 
+const CODE_LINES = 24;
+
+/**
+ * Code in a sunken box: language and Copy in a header strip, no wrap by default (scrolls
+ * sideways; "Wrap" toggles), long blocks clamp to 24 lines. On phones it spans the full screen
+ * width (the column gutter is 16 px) to gain room for code.
+ */
 export function CodeBlock({ code, lang, bare }: { code: string; lang?: string; bare?: boolean }) {
+  const [wrap, setWrap] = useState(false);
+  const [all, setAll] = useState(false);
+  const lines = code.split("\n");
+  const long = lines.length > CODE_LINES;
+  const shown = long && !all ? lines.slice(0, CODE_LINES).join("\n") : code;
   return (
-    <div className={cn("group/code overflow-hidden rounded-cv-md border border-cv-line-soft bg-cv-sunken", !bare && "my-4")}>
-      <div className="flex h-9 items-center justify-between pr-1.5 pl-3.5 font-cv-sans text-cv-meta text-cv-muted">
-        <span>{lang || "text"}</span>
-        <CopyButton text={code} label="Copy code" withLabel />
+    <div className={cn("group/code overflow-hidden border-cv-line-soft bg-cv-sunken font-cv-sans", bare ? "rounded-cv-md border" : "cv-bleed my-4")}>
+      <div className="flex h-8 items-center gap-1 pr-1 pl-3.5 text-cv-meta text-cv-muted">
+        <span className="min-w-0 flex-1 truncate">{lang || "text"}</span>
+        <button type="button" onClick={() => setWrap(!wrap)} aria-pressed={wrap} aria-label={wrap ? "Don't wrap lines" : "Wrap lines"} title="Wrap" className={cn("relative grid size-7 place-items-center rounded-cv-sm transition-colors after:absolute after:-inset-1.5 hover:bg-cv-hover", wrap ? "text-cv-text" : "text-cv-muted")}>
+          <WrapText size={14} strokeWidth={1.8} />
+        </button>
+        <CopyButton text={code} label="Copy code" />
       </div>
-      <pre className="cv-scroll overflow-x-auto px-3.5 pb-3.5 font-cv-mono text-cv-code text-cv-text">{code}</pre>
+      <pre className={cn("px-3.5 pb-3 font-cv-mono text-cv-code text-cv-text", wrap ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "cv-thin overflow-x-auto")}>{shown}</pre>
+      {long && (
+        <button type="button" onClick={() => setAll(!all)} className="h-9 w-full border-t border-cv-line-soft text-cv-meta text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text">
+          {all ? "Show less" : `Show all ${lines.length} lines`}
+        </button>
+      )}
     </div>
   );
 }
@@ -215,7 +257,7 @@ export const Markdown = memo(function Markdown({ text, compact }: { text: string
           case "p":
             return <p key={i} className="my-3 first:mt-0 last:mb-0"><Inline text={b.text} /></p>;
           case "h":
-            return <div key={i} role="heading" aria-level={b.level} className={cn("mt-6 mb-2 font-cv-strong text-cv-text first:mt-0", HEADING[b.level - 1])}><Inline text={b.text} /></div>;
+            return <div key={i} role="heading" aria-level={b.level} className={cn("mt-5 mb-1.5 font-cv-strong text-cv-text first:mt-0", HEADING[b.level - 1])}><Inline text={b.text} /></div>;
           case "code":
             return <CodeBlock key={i} code={b.text} lang={b.lang} />;
           case "quote":
@@ -229,9 +271,15 @@ export const Markdown = memo(function Markdown({ text, compact }: { text: string
                 {b.items.map((it, j) => {
                   const task = /^\[( |x|X)\]\s+/.exec(it.text);
                   return (
-                    <li key={j} className="flex gap-2.5" style={{ paddingLeft: it.depth * 22 }}>
+                    <li key={j} className="flex gap-2.5" style={{ paddingLeft: `calc(${it.depth} * var(--cv-indent))` }}>
                       {!task && <span className={cn("shrink-0 text-right text-cv-muted", b.ordered ? "min-w-5 tabular-nums" : "w-3")}>{b.ordered ? `${it.n}.` : it.depth % 2 ? "◦" : "•"}</span>}
-                      <span className="min-w-0 flex-1">{task && <Task done={task[1] !== " "} />}<Inline text={task ? it.text.slice(task[0].length) : it.text} /></span>
+                      <span className="min-w-0 flex-1">
+                        {task && <Task done={task[1] !== " "} />}
+                        <Inline text={task ? it.text.slice(task[0].length) : it.text} />
+                        {it.code?.map((c, k) => (
+                          <div key={k} className="mt-2"><CodeBlock code={c.text} lang={c.lang} bare /></div>
+                        ))}
+                      </span>
                     </li>
                   );
                 })}
@@ -240,21 +288,45 @@ export const Markdown = memo(function Markdown({ text, compact }: { text: string
           }
           case "table":
             return (
-              <div key={i} className="cv-scroll my-4 overflow-x-auto rounded-cv-md border border-cv-line">
-                <table className="w-full min-w-max border-collapse font-cv-sans text-cv-ui">
-                  <thead className="bg-cv-sunken">
-                    <tr>{b.head.map((c, j) => <th key={j} className="border-b border-cv-line px-3.5 py-2 text-left font-cv-strong text-cv-text"><Inline text={c} /></th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {b.rows.map((r, j) => (
-                      <tr key={j} className="border-b border-cv-line-soft last:border-0">{r.map((c, k) => <td key={k} className="max-w-96 px-3.5 py-2 align-top text-cv-text-2"><Inline text={c} /></td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table key={i} head={b.head} rows={b.rows} />
             );
         }
       })}
     </div>
   );
 });
+
+/**
+ * A table that scrolls sideways inside its own box (never the page). On phones it spans the
+ * screen width; with more than two columns the first one stays put while the rest scroll.
+ */
+function Table({ head, rows }: { head: string[]; rows: string[][] }) {
+  const sticky = head.length > 2;
+  const first = (k: number) => sticky && k === 0 && "sticky left-0 z-1 bg-cv-bg";
+  return (
+    <div className="cv-bleed cv-thin my-4 overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-max border-collapse font-cv-sans text-cv-ui">
+        <thead>
+          <tr>
+            {head.map((c, j) => (
+              <th key={j} className={cn("cv-cell border-b border-cv-line px-3 py-2 text-left align-bottom font-cv-strong text-cv-text", first(j))}>
+                <Inline text={c} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, j) => (
+            <tr key={j} className="border-b border-cv-line-soft last:border-0">
+              {r.map((c, k) => (
+                <td key={k} className={cn("cv-cell px-3 py-2 align-top text-cv-text-2", first(k))}>
+                  <Inline text={c} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

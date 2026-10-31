@@ -7,21 +7,29 @@
  * covers a zoomable photo viewer.
  */
 import type { CvImage, CvImageData } from "@neuralagent/protocol";
-import { cn, useLayoutMode } from "@neuralagent/ui";
+import { cn, useLayer, useLayoutMode } from "@neuralagent/ui";
 import { Check, ChevronLeft, ChevronRight, Copy, Download, ImageOff, Image as ImageIcon, RotateCw, X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { edgeFor, fitBox, fromData, ImageCache, kb, type Loaded, saveName } from "../../lib/cvImages";
 import { useClient, usePlatform } from "../../lib/store";
 
 /** The session the pictures belong to (they are fetched from its transcript). */
 export const ImageSidContext = createContext("");
+/** Set inside a subagent's transcript: its pictures come from the subagent's file. */
+export const ImageAgentContext = createContext<string | undefined>(undefined);
 
 export interface Pic {
   img: CvImage;
   /** A path or name shown under the picture and used to save it. */
   caption?: string;
 }
+
+/**
+ * Every picture of the conversation, so the viewer swipes on from one screenshot to the next.
+ * Without a provider, a set of pictures opens a viewer over just itself.
+ */
+export const GalleryContext = createContext<{ open: (id: string) => void } | null>(null);
 
 const cache = new ImageCache();
 
@@ -30,6 +38,7 @@ type State = { s: "idle" | "loading" } | { s: "ok"; l: Loaded } | { s: "error"; 
 function useImage(img: CvImage | undefined, active: boolean) {
   const client = useClient();
   const sid = useContext(ImageSidContext);
+  const agent = useContext(ImageAgentContext);
   const kind = usePlatform().kind;
   const [state, setState] = useState<State>({ s: "idle" });
   const [attempt, setAttempt] = useState(0);
@@ -40,7 +49,7 @@ function useImage(img: CvImage | undefined, active: boolean) {
     const max = edgeFor(kind);
     setState((st) => (st.s === "ok" ? st : { s: "loading" }));
     cache
-      .get(`${sid}|${id}|${max ?? 0}`, () => client.req<CvImageData>({ m: "cv_image", p: max ? { sid, id, max } : { sid, id } }).then(fromData))
+      .get(`${sid}|${agent ?? ""}|${id}|${max ?? 0}`, () => client.req<CvImageData>({ m: "cv_image", p: { sid, id, ...(max ? { max } : {}), ...(agent ? { agent } : {}) } }).then(fromData))
       .then(
         (l) => live && setState({ s: "ok", l }),
         (e: unknown) => live && setState({ s: "error", msg: (e as Error)?.message || "Could not load the image." }),
@@ -48,7 +57,7 @@ function useImage(img: CvImage | undefined, active: boolean) {
     return () => {
       live = false;
     };
-  }, [client, sid, kind, id, active, attempt]);
+  }, [client, sid, agent, kind, id, active, attempt]);
   return { state, retry: useCallback(() => setAttempt((a) => a + 1), []) };
 }
 
@@ -69,7 +78,7 @@ function useNear<T extends Element>() {
 
 const fileOf = (p?: string) => p?.split(/[\\/]/).pop() || "";
 
-type Size = "lg" | "sm" | "tile";
+type Size = "full" | "lg" | "sm" | "tile";
 
 /** One picture as a thumbnail; `onOpen` opens the viewer. */
 export function Thumb({ pic, size, onOpen }: { pic: Pic; size: Size; onOpen: () => void }) {
@@ -78,24 +87,28 @@ export function Thumb({ pic, size, onOpen }: { pic: Pic; size: Size; onOpen: () 
   const { state, retry } = useImage(pic.img, near);
   const { img } = pic;
   const known = !!(img.w && img.h);
-  const box = size === "lg" ? fitBox(img, phone ? 1200 : 560, phone ? 420 : 240) : size === "sm" ? fitBox(img, 160, 64) : fitBox(img, 200, 120);
+  const box = size === "lg" ? fitBox(img, phone ? 1200 : 560, phone ? 420 : 240) : size === "sm" ? fitBox(img, 160, 64) : size === "tile" ? fitBox(img, 160, 96) : fitBox(img, 4000, 4000);
+  // full: the column's width (never upscaled past the picture's own size), the height from the
+  // aspect ratio, capped (`cv-img-box`); the box is reserved before the bytes arrive.
   const style: CSSProperties =
-    size === "lg"
-      ? { width: phone ? `min(100%, ${box.w}px)` : box.w, maxWidth: "100%", aspectRatio: `${box.w} / ${box.h}` }
-      : size === "tile"
-        ? { width: Math.max(72, box.w), height: 120, maxWidth: "100%" }
-        : { width: Math.max(48, box.w), height: 64 };
+    size === "full"
+      ? { width: known ? `min(100%, ${Math.max(img.w!, 160)}px)` : "100%", aspectRatio: `${box.w} / ${box.h}` }
+      : size === "lg"
+        ? { width: phone ? `min(100%, ${box.w}px)` : box.w, maxWidth: "100%", aspectRatio: `${box.w} / ${box.h}` }
+        : size === "tile"
+          ? { width: Math.max(64, box.w), height: 96, maxWidth: "100%" }
+          : { width: Math.max(48, box.w), height: 64 };
   const label = fileOf(pic.caption) || "Image";
   return (
-    <div ref={ref} style={style} className={cn("relative shrink-0 overflow-hidden border border-cv-line-soft bg-cv-sunken", size === "sm" ? "rounded-cv-sm" : "rounded-cv-md")}>
+    <div ref={ref} style={style} className={cn("relative shrink-0 overflow-hidden border border-cv-line-soft bg-cv-sunken", size === "sm" ? "rounded-cv-sm" : "rounded-cv-md", size === "full" && "cv-img-box")}>
       {state.s === "ok" ? (
         <button type="button" onClick={onOpen} aria-label={`Open ${label}`} className="block size-full cursor-zoom-in transition-opacity hover:opacity-90">
-          <img src={state.l.url} alt={label} draggable={false} className={cn("size-full", known || size !== "lg" ? "object-cover" : "object-contain")} />
+          <img src={state.l.url} alt={label} draggable={false} className={cn("size-full", size === "full" ? "object-contain" : known || size !== "lg" ? "object-cover" : "object-contain")} />
         </button>
       ) : state.s === "error" ? (
         <div className="flex size-full flex-col items-center justify-center gap-1.5 p-2 text-center font-cv-sans text-cv-meta text-cv-muted">
           {size !== "sm" && <ImageOff size={18} strokeWidth={1.6} />}
-          {size === "lg" && <span className="line-clamp-2 max-w-full px-2">{state.msg}</span>}
+          {(size === "lg" || size === "full") && <span className="line-clamp-2 max-w-full px-2">{state.msg}</span>}
           <button type="button" onClick={retry} className="inline-flex min-h-8 items-center gap-1.5 rounded-cv-sm px-2.5 text-cv-text-2 transition-colors hover:bg-cv-hover [[data-mode=phone]_&]:min-h-10" aria-label="Retry loading the image">
             <RotateCw size={13} strokeWidth={1.8} />
             {size !== "sm" && "Retry"}
@@ -117,31 +130,95 @@ export function NoImage({ className }: { className?: string }) {
   );
 }
 
-/** Thumbnails in a row (wrapping), with the viewer for them. `lg` adds the name and size. */
-export function Pictures({ pics, size, className }: { pics: Pic[]; size: Size; className?: string }) {
-  const [open, setOpen] = useState<number | null>(null);
-  if (!pics.length) return null;
+const metaLine = (p: Pic) => [p.img.w && p.img.h ? `${p.img.w}×${p.img.h}` : "", kb(p.img.bytes)].filter(Boolean).join(" · ");
+
+function Caption({ pic, extra }: { pic: Pic; extra?: string }) {
   return (
-    <>
-      <div className={cn("flex flex-wrap gap-2", className)}>
-        {pics.map((p, i) =>
-          size === "lg" ? (
-            <figure key={p.img.id} className="flex max-w-full min-w-0 flex-col gap-1">
-              <Thumb pic={p} size="lg" onOpen={() => setOpen(i)} />
-              <figcaption className="flex min-w-0 gap-1.5 px-0.5 font-cv-sans text-cv-meta text-cv-muted">
-                {p.caption && <span className="min-w-0 truncate font-cv-mono">{fileOf(p.caption)}</span>}
-                <span className="shrink-0 tabular-nums">{[p.img.w && p.img.h ? `${p.img.w}×${p.img.h}` : "", kb(p.img.bytes)].filter(Boolean).join(" · ")}</span>
-              </figcaption>
-            </figure>
-          ) : (
-            <Thumb key={p.img.id} pic={p} size={size} onOpen={() => setOpen(i)} />
-          ),
-        )}
-      </div>
-      {open !== null && <Viewer pics={pics} start={open} onClose={() => setOpen(null)} />}
-    </>
+    <figcaption className="flex min-w-0 gap-1.5 px-0.5 font-cv-sans text-cv-meta text-cv-muted">
+      {pic.caption && <span className="min-w-0 truncate font-cv-mono">{fileOf(pic.caption)}</span>}
+      <span className="shrink-0 tabular-nums">{[metaLine(pic), extra].filter(Boolean).join(" · ")}</span>
+    </figcaption>
   );
 }
+
+/** Several full-width pictures from one call: a snapping carousel on phones, two columns on desktop. */
+function Carousel({ pics, open }: { pics: Pic[]; open: (i: number) => void }) {
+  const phone = useLayoutMode() === "phone";
+  const [at, setAt] = useState(0);
+  const strip = useRef<HTMLDivElement>(null);
+  if (!phone) {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        {pics.map((p, i) => (
+          <figure key={p.img.id} className="flex min-w-0 flex-col gap-1">
+            <Thumb pic={p} size="full" onOpen={() => open(i)} />
+            <Caption pic={p} />
+          </figure>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div
+        ref={strip}
+        onScroll={() => {
+          const el = strip.current;
+          if (el) setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+        className="cv-noscrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain"
+      >
+        {pics.map((p, i) => (
+          <figure key={p.img.id} className="flex w-full shrink-0 snap-center flex-col items-center gap-1">
+            <Thumb pic={p} size="full" onOpen={() => open(i)} />
+          </figure>
+        ))}
+      </div>
+      <Caption pic={pics[Math.min(at, pics.length - 1)]!} extra={`${Math.min(at, pics.length - 1) + 1}/${pics.length}`} />
+    </div>
+  );
+}
+
+/**
+ * Pictures with their viewer. `full`: column-wide (a carousel for several); `lg`: large
+ * thumbnails with name and size; `sm` / `tile`: small ones in a row.
+ */
+export const Pictures = memo(function Pictures({ pics, size, className }: { pics: Pic[]; size: Size; className?: string }) {
+  const gallery = useContext(GalleryContext);
+  const [local, setLocal] = useState<number | null>(null);
+  if (!pics.length) return null;
+  const open = (i: number) => (gallery ? gallery.open(pics[i]!.img.id) : setLocal(i));
+  return (
+    <>
+      {size === "full" ? (
+        <div className={className}>
+          {pics.length > 1 ? (
+            <Carousel pics={pics} open={open} />
+          ) : (
+            <figure className="flex min-w-0 flex-col gap-1">
+              <Thumb pic={pics[0]!} size="full" onOpen={() => open(0)} />
+              <Caption pic={pics[0]!} />
+            </figure>
+          )}
+        </div>
+      ) : (
+        <div className={cn("flex gap-2", size === "tile" ? "cv-noscrollbar overflow-x-auto" : "flex-wrap", className)}>
+          {pics.map((p, i) =>
+            size === "lg" ? (
+              <figure key={p.img.id} className="flex max-w-full min-w-0 flex-col gap-1">
+                <Thumb pic={p} size="lg" onOpen={() => open(i)} />
+                <Caption pic={p} />
+              </figure>
+            ) : (
+              <Thumb key={p.img.id} pic={p} size={size} onOpen={() => open(i)} />
+            ),
+          )}
+        </div>
+      )}
+      {local !== null && <Viewer pics={pics} start={local} onClose={() => setLocal(null)} />}
+    </>
+  );
+});
 
 // ───────────── the viewer ─────────────
 
@@ -163,7 +240,7 @@ async function toPng(l: Loaded): Promise<Blob> {
 
 const canCopy = () => typeof ClipboardItem !== "undefined" && !!navigator.clipboard?.write;
 
-function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose: () => void }) {
+export function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose: () => void }) {
   const phone = useLayoutMode() === "phone";
   const kind = usePlatform().kind;
   const [i, setI] = useState(start);
@@ -171,13 +248,17 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
   const { state, retry } = useImage(pic.img, true);
   const [t, setT] = useState({ z: 1, x: 0, y: 0 });
   const [drop, setDrop] = useState(0);
+  /** Horizontal drag between pictures (touch, not zoomed). */
+  const [slide, setSlide] = useState(0);
+  // Android back / browser back / Escape close the viewer first.
+  useLayer(true, onClose);
   const [live, setLive] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const stage = useRef<HTMLDivElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const picEl = useRef<HTMLImageElement>(null);
   const pts = useRef(new Map<number, { x: number; y: number }>());
-  const g = useRef<{ d0: number; z0: number; m0x: number; m0y: number; x0: number; y0: number; sx: number; sy: number; moved: boolean; pinch: boolean; touch: boolean } | null>(null);
+  const g = useRef<{ d0: number; z0: number; m0x: number; m0y: number; x0: number; y0: number; sx: number; sy: number; moved: boolean; pinch: boolean; touch: boolean; axis?: "x" | "y" } | null>(null);
   const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
   const tRef = useRef(t);
   tRef.current = t;
@@ -193,13 +274,12 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
   useEffect(() => {
     closeBtn.current?.focus();
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") (e.stopPropagation(), onClose());
-      else if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowLeft") go(-1);
       else if (e.key === "ArrowRight") go(1);
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
-  }, [onClose, go]);
+  }, [go]);
 
   // Centre-relative position of a pointer on the stage.
   const rel = (cx: number, cy: number) => {
@@ -238,6 +318,7 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
       const m = rel((a.x + b.x) / 2, (a.y + b.y) / 2);
       g.current = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: cur.z, m0x: m.x, m0y: m.y, x0: cur.x, y0: cur.y, sx: 0, sy: 0, moved: true, pinch: true, touch: true };
       setDrop(0);
+      setSlide(0);
     } else {
       g.current = { d0: 1, z0: cur.z, m0x: 0, m0y: 0, x0: cur.x, y0: cur.y, sx: e.clientX, sy: e.clientY, moved: false, pinch: false, touch: e.pointerType !== "mouse" };
     }
@@ -260,8 +341,10 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
     const dy = e.clientY - s.sy;
     if (Math.hypot(dx, dy) > 6) s.moved = true;
     if (!s.moved) return;
+    if (!s.axis) s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
     if (tRef.current.z > 1) setT((cur) => ({ ...cur, x: s.x0 + dx, y: s.y0 + dy }));
-    else if (s.touch && !s.pinch) setDrop(Math.max(0, dy));
+    else if (s.touch && !s.pinch && s.axis === "x" && pics.length > 1) setSlide(dx);
+    else if (s.touch && !s.pinch && s.axis === "y") setDrop(Math.max(0, dy));
   };
   const up = (e: React.PointerEvent) => {
     if (!pts.current.delete(e.pointerId)) return;
@@ -277,6 +360,12 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
     setLive(false);
     if (drop > 110) return onClose();
     setDrop(0);
+    if (slide) {
+      const d = slide < -60 ? 1 : slide > 60 ? -1 : 0;
+      setSlide(0);
+      if (d) go(d);
+      return;
+    }
     if (!s || s.moved || s.pinch) return;
     // A tap: double tap / double click zooms; a single click beside the picture closes (desktop).
     const now = Date.now();
@@ -354,7 +443,7 @@ function Viewer({ pics, start, onClose }: { pics: Pic[]; start: number; onClose:
             alt={fileOf(pic.caption) || "Image"}
             draggable={false}
             className="pointer-events-none max-h-full max-w-full object-contain"
-            style={{ transform: `translate(${t.x}px, ${t.y + drop}px) scale(${t.z})`, transition: live ? "none" : "transform 0.22s var(--ease-cv)" }}
+            style={{ transform: `translate(${t.x + slide}px, ${t.y + drop}px) scale(${t.z})`, transition: live ? "none" : "transform 0.22s var(--ease-cv)" }}
           />
         ) : state.s === "error" ? (
           <div className="flex flex-col items-center gap-3 text-cv-ui">

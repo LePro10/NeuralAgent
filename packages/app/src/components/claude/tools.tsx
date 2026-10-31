@@ -1,137 +1,40 @@
 /**
- * Tool calls the way Claude Code desktop shows them: one quiet row per call — bold verb,
- * monospace path chip, green +N / red −N — that opens into the diff or the output. Runs of
- * reads and searches fold into one sentence ("Read 3 files, searched code ›").
+ * What a tool call shows: the body of a step (Bash command and output, search results, tool
+ * input as readable lines), file changes as their own card with a short preview (real line
+ * numbers when the daemon sends the CLI's structuredPatch), the task list, the plan and the
+ * answered question. Words and diff maths live in `toolText.ts`.
  */
-import type { CvBlock } from "@neuralagent/protocol";
 import { cn } from "@neuralagent/ui";
-import { Check, ChevronRight, Circle, LoaderCircle } from "lucide-react";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { Check, ChevronDown, Circle, LoaderCircle, MessageCircleQuestion, WrapText } from "lucide-react";
+import { createContext, memo, useContext, useMemo, useState } from "react";
 import { sourceOf, withoutSources } from "../../lib/cvImages";
-import { Pictures, type Pic } from "./Images";
-import { CodeBlock, CopyButton, Markdown } from "./Markdown";
+import type { Pic } from "./Images";
+import { CopyButton, Markdown } from "./Markdown";
+import { changeHunks, deniedReason, diffStat, inputOf, metaOf, previewRows, problem, str, todosOf, type Res, type Row, type Todo, type Use } from "./toolText";
 
-export type Use = Extract<CvBlock, { k: "tool_use" }>;
-export type Res = Extract<CvBlock, { k: "tool_result" }>;
+export { changeRows, diffLines, toolArg, toolTitle, type Res, type Row, type Use } from "./toolText";
 
 /** The session's folder, so paths read relative to it. */
 export const CwdContext = createContext("");
 
-const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
-const short = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-const inputOf = (u: Use) => (u.input ?? {}) as Record<string, unknown>;
-
-function useRel() {
+export function useRel() {
   const cwd = useContext(CwdContext).replace(/\/+$/, "");
   return (p: string) => (cwd && p.startsWith(`${cwd}/`) ? p.slice(cwd.length + 1) : p);
 }
 
-/** "mcp__server__tool" → ["server", "tool"] */
-export function toolTitle(name: string): { title: string; mcp?: string } {
-  const m = /^mcp__(.+?)__(.+)$/.exec(name);
-  if (m) return { title: m[2]!.replace(/_/g, " "), mcp: m[1]! };
-  if (name === "Task") return { title: "Agent" };
-  return { title: name };
+/** The pictures a call returned, named by the file it read or the source the tool gave. */
+export function picsOf(use: Use, res?: Res): Pic[] {
+  const images = res?.images ?? [];
+  if (!images.length) return [];
+  return images.map((img) => ({ img, caption: picName(use, res!) }));
 }
+export const picName = (use: Use, res: Res): string | undefined => (use.name === "Read" ? str(inputOf(use).file_path) : (sourceOf(res.text) ?? undefined));
 
-const VERB: Record<string, string> = {
-  Read: "Read",
-  Write: "Write",
-  Edit: "Edit",
-  MultiEdit: "Edit",
-  NotebookEdit: "Edit",
-  Bash: "Bash",
-  BashOutput: "Read output",
-  KillShell: "Stop",
-  Grep: "Search",
-  Glob: "Find",
-  LS: "List",
-  WebFetch: "Fetch",
-  WebSearch: "Web search",
-  Task: "Agent",
-  Agent: "Agent",
-  Skill: "Skill",
-  ToolSearch: "Load tools",
-  SlashCommand: "Command",
-};
-
-/** The part next to the verb. */
-export function toolArg(name: string, input: Record<string, unknown>): string {
-  switch (name) {
-    case "Bash":
-      return short(str(input.command).split("\n")[0]!, 100) || short(str(input.description), 100);
-    case "Read":
-    case "Write":
-    case "Edit":
-    case "MultiEdit":
-    case "NotebookEdit":
-      return str(input.file_path ?? input.notebook_path);
-    case "Grep":
-      return `${str(input.pattern)}${input.path ? ` in ${str(input.path)}` : ""}`;
-    case "Glob":
-      return str(input.pattern);
-    case "LS":
-      return str(input.path);
-    case "WebFetch":
-      return str(input.url);
-    case "WebSearch":
-      return str(input.query);
-    case "Task":
-    case "Agent":
-      return str(input.description);
-    case "Skill":
-      return str(input.skill ?? input.name);
-    case "TodoWrite":
-      return "";
-    case "ToolSearch":
-      return str(input.query);
-    default: {
-      const first = Object.values(input).find((v) => typeof v === "string") as string | undefined;
-      return first ? short(first, 80) : "";
-    }
-  }
-}
-
-type Row = { kind: "+" | "-" | " "; text: string };
-
-/** Line diff of two strings (LCS on lines; inputs are small edits). */
-export function diffLines(a: string, b: string): Row[] {
-  const x = a ? a.split("\n") : [];
-  const y = b ? b.split("\n") : [];
-  if (x.length * y.length > 250_000) return [...x.map((t): Row => ({ kind: "-", text: t })), ...y.map((t): Row => ({ kind: "+", text: t }))];
-  const dp: number[][] = Array.from({ length: x.length + 1 }, () => new Array(y.length + 1).fill(0));
-  for (let i = x.length - 1; i >= 0; i--) for (let j = y.length - 1; j >= 0; j--) dp[i]![j] = x[i] === y[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
-  const out: Row[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < x.length && j < y.length) {
-    if (x[i] === y[j]) out.push({ kind: " ", text: x[i++]! }), j++;
-    else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) out.push({ kind: "-", text: x[i++]! });
-    else out.push({ kind: "+", text: y[j++]! });
-  }
-  while (i < x.length) out.push({ kind: "-", text: x[i++]! });
-  while (j < y.length) out.push({ kind: "+", text: y[j++]! });
-  return out;
-}
-
-/** The rows of a file change (Edit, MultiEdit, Write), or null for other tools. */
-export function changeRows(use: Use): Row[] | null {
-  const input = inputOf(use);
-  switch (use.name) {
-    case "Edit":
-      return diffLines(str(input.old_string), str(input.new_string));
-    case "MultiEdit":
-      return ((input.edits as { old_string?: string; new_string?: string }[] | undefined) ?? []).flatMap((e) => diffLines(e.old_string ?? "", e.new_string ?? ""));
-    case "Write":
-      return str(input.content).split("\n").map((t): Row => ({ kind: "+", text: t }));
-    default:
-      return null;
-  }
-}
+/** The result text to show: without the "[Image: source: …]" lines when the picture is shown. */
+export const resultText = (res: Res) => (res.images?.length ? withoutSources(res.text) : res.text);
 
 export function DiffStat({ rows, className }: { rows: Row[]; className?: string }) {
-  const add = rows.filter((r) => r.kind === "+").length;
-  const del = rows.filter((r) => r.kind === "-").length;
+  const { add, del } = diffStat(rows);
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1.5 font-cv-mono text-cv-code tabular-nums", className)}>
       {add > 0 && <span className="text-cv-diff-add">+{add}</span>}
@@ -140,131 +43,175 @@ export function DiffStat({ rows, className }: { rows: Row[]; className?: string 
   );
 }
 
-export function Diff({ rows, path, max = 40 }: { rows: Row[]; path?: string; max?: number }) {
+function DiffLines({ rows, wrap }: { rows: Row[]; wrap: boolean }) {
+  const numbered = rows.some((r) => r.n !== undefined);
+  return (
+    <div className={cn("py-1 font-cv-mono text-cv-code", !wrap && "cv-thin overflow-x-auto")}>
+      {rows.map((r, i) => (
+        <div key={i} className={cn("flex pr-3", wrap ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "min-w-fit whitespace-pre", r.kind === "+" && "bg-cv-diff-add-bg", r.kind === "-" && "bg-cv-diff-del-bg")}>
+          {numbered && <span className="w-9 shrink-0 pr-1.5 text-right text-cv-muted tabular-nums select-none [[data-mode=phone]_&]:w-8">{r.n ?? ""}</span>}
+          <span className={cn("w-4 shrink-0 text-center select-none", !numbered && "ml-1.5", r.kind === "+" ? "text-cv-diff-add" : r.kind === "-" ? "text-cv-diff-del" : "text-cv-muted")}>{r.kind === " " ? "" : r.kind === "-" ? "−" : "+"}</span>
+          <span className={cn("min-w-0", r.kind === " " ? "text-cv-text-2" : "text-cv-text")}>{r.text || " "}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const FoldButton = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
+  <button type="button" onClick={onClick} className="flex h-9 w-full items-center justify-center gap-1 border-t border-cv-line-soft font-cv-sans text-cv-meta text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text">
+    {children}
+  </button>
+);
+
+/** A diff in a box (also used by the permission card). */
+export function Diff({ rows, path, max = 40, wrap: wrapInit = true }: { rows: Row[]; path?: string; max?: number; wrap?: boolean }) {
   const [all, setAll] = useState(false);
+  const [wrap, setWrap] = useState(wrapInit);
   const shown = all ? rows : rows.slice(0, max);
-  // Line numbers on the new side (the old side is unknown without the file; count from 1 per hunk).
-  let n = 0;
   return (
     <div className="overflow-hidden rounded-cv-md border border-cv-line-soft bg-cv-surface">
-      {path && (
-        <div className="flex h-9 items-center gap-2 border-b border-cv-line-soft pr-1.5 pl-3.5 font-cv-sans text-cv-meta">
-          <span className="min-w-0 truncate font-cv-mono text-cv-text">{path.split("/").pop()}</span>
-          <span className="min-w-0 flex-1 truncate text-cv-muted">{path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ""}</span>
-          <DiffStat rows={rows} />
-        </div>
-      )}
-      <div className="cv-scroll overflow-x-auto py-1 font-cv-mono text-cv-code">
-        {shown.map((r, i) => {
-          if (r.kind !== "-") n++;
-          return (
-            <div key={i} className={cn("flex min-w-fit pr-4 whitespace-pre", r.kind === "+" && "bg-cv-diff-add-bg", r.kind === "-" && "bg-cv-diff-del-bg")}>
-              <span className="w-10 shrink-0 pr-2 text-right text-cv-muted tabular-nums select-none">{r.kind === "-" ? "" : n}</span>
-              <span className={cn("w-4 shrink-0 select-none", r.kind === "+" ? "text-cv-diff-add" : r.kind === "-" ? "text-cv-diff-del" : "text-cv-muted")}>{r.kind === " " ? "" : r.kind === "-" ? "−" : "+"}</span>
-              <span className={r.kind === " " ? "text-cv-text-2" : "text-cv-text"}>{r.text || " "}</span>
-            </div>
-          );
-        })}
-      </div>
-      {rows.length > max && (
-        <button type="button" onClick={() => setAll(!all)} className="h-9 w-full border-t border-cv-line-soft font-cv-sans text-cv-meta text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text">
-          {all ? "Show less" : `Show ${rows.length - max} more lines`}
-        </button>
-      )}
+      {path && <FileHeader path={path} rows={rows} wrap={wrap} onWrap={() => setWrap(!wrap)} />}
+      <DiffLines rows={shown} wrap={wrap} />
+      {rows.length > max && <FoldButton onClick={() => setAll(!all)}>{all ? "Show less" : `Show ${rows.length - max} more lines`}</FoldButton>}
     </div>
   );
 }
 
-/** Command output / tool output in a sunken box; `cmd` puts the command on top like a terminal. */
-function Output({ text, error, cmd, max = 14 }: { text: string; error?: boolean; cmd?: string; max?: number }) {
-  const [all, setAll] = useState(false);
-  const lines = text.replace(/\n+$/, "").split("\n");
-  const shown = all ? lines.join("\n") : lines.slice(0, max).join("\n");
+function FileHeader({ path, rows, wrap, onWrap, running, error }: { path: string; rows: Row[]; wrap: boolean; onWrap: () => void; running?: boolean; error?: boolean }) {
+  const name = path.split("/").pop();
+  const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
   return (
-    <div className="group/out relative overflow-hidden rounded-cv-md border border-cv-line-soft bg-cv-sunken">
-      <div className="absolute top-1 right-1 opacity-0 transition-opacity group-hover/out:opacity-100 [[data-mode=phone]_&]:opacity-100">
-        <CopyButton text={cmd ? `${cmd}\n${text}` : text} label="Copy output" />
-      </div>
-      <pre className="cv-scroll overflow-x-auto px-3.5 py-2.5 pr-10 font-cv-mono text-cv-code whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {cmd && <div className="text-cv-text"><span className="text-cv-muted select-none">$ </span>{cmd}</div>}
-        {(text || !cmd) && <div className={cn(cmd && "mt-1.5", error ? "text-cv-danger" : "text-cv-text-2")}>{shown || "(no output)"}</div>}
-      </pre>
-      {lines.length > max && (
-        <button type="button" onClick={() => setAll(!all)} className="h-9 w-full border-t border-cv-line-soft font-cv-sans text-cv-meta text-cv-muted transition-colors hover:bg-cv-hover hover:text-cv-text">
-          {all ? "Show less" : `Show ${lines.length - max} more lines`}
-        </button>
-      )}
+    <div className="flex h-9 items-center gap-2 border-b border-cv-line-soft pr-1 pl-3 font-cv-sans text-cv-meta">
+      {running && <LoaderCircle size={13} className="shrink-0 animate-spin text-cv-clay [animation-duration:1.2s]" />}
+      {error && <span className="size-1.5 shrink-0 rounded-full bg-cv-danger" />}
+      <span className="min-w-0 shrink truncate font-cv-mono font-cv-strong text-cv-text">{name}</span>
+      <span className="min-w-0 flex-1 truncate text-cv-muted">{dir}</span>
+      <DiffStat rows={rows} />
+      <button type="button" onClick={onWrap} aria-pressed={!wrap} aria-label={wrap ? "Don't wrap lines" : "Wrap lines"} title={wrap ? "No wrap" : "Wrap"} className={cn("relative grid size-7 shrink-0 place-items-center rounded-cv-sm transition-colors after:absolute after:-inset-1.5 hover:bg-cv-hover", wrap ? "text-cv-muted" : "text-cv-text")}>
+        <WrapText size={14} strokeWidth={1.8} />
+      </button>
     </div>
   );
 }
 
-interface Todo {
-  content: string;
-  status: string;
-  activeForm?: string;
-}
+const PREVIEW = 8;
+const WRITE_PREVIEW = 6;
 
-function Todos({ todos }: { todos: Todo[] }) {
-  return (
-    <ul className="space-y-1.5 rounded-cv-md border border-cv-line-soft bg-cv-surface px-3.5 py-3 font-cv-sans text-cv-ui">
-      {todos.map((t, i) => (
-        <li key={i} className={cn("flex items-start gap-2.5", t.status === "completed" ? "text-cv-muted line-through" : t.status === "in_progress" ? "text-cv-text" : "text-cv-text-2")}>
-          <span className="mt-0.5 grid size-4 shrink-0 place-items-center">
-            {t.status === "completed" ? (
-              <span className="grid size-4 place-items-center rounded-full bg-cv-success text-cv-on-clay"><Check size={10} strokeWidth={3} /></span>
-            ) : t.status === "in_progress" ? (
-              <LoaderCircle size={15} className="animate-spin text-cv-clay [animation-duration:1.6s]" />
-            ) : (
-              <Circle size={15} className="text-cv-line-strong" />
-            )}
-          </span>
-          <span>{t.status === "in_progress" && t.activeForm ? t.activeForm : t.content}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** The pictures a call returned, named by the file it read or the source the tool gave. */
-export function picsOf(use: Use, res?: Res): Pic[] {
-  const images = res?.images ?? [];
-  if (!images.length) return [];
-  const input = inputOf(use);
-  const caption = use.name === "Read" ? str(input.file_path) : (sourceOf(res!.text) ?? undefined);
-  return images.map((img) => ({ img, caption }));
-}
-
-/** The result text to show: without the "[Image: source: …]" lines when the picture is shown. */
-const resultText = (res: Res) => (res.images?.length ? withoutSources(res.text) : res.text);
-
-/** What a call shows when opened. */
-function Body({ use, res }: { use: Use; res?: Res }) {
-  const rel = useRel();
-  const input = inputOf(use);
-  const text = res ? resultText(res) : "";
-  const result = res && (text || !res.images?.length) ? <Output text={text} error={res.is_error} /> : null;
-  const rows = changeRows(use);
-  if (rows) {
+/** A file change as its own card: header, a short preview, "Show full diff" in place. */
+export const EditCard = memo(
+  function EditCard({ use, res, running }: { use: Use; res?: Res; running: boolean }) {
+    const rel = useRel();
+    const input = inputOf(use);
+    const path = rel(str(input.file_path ?? input.notebook_path));
+    // Diffs are computed once per call and result, not on every update.
+    const hunks = useMemo(() => changeHunks(use, res), [use.id, res]); // eslint-disable-line react-hooks/exhaustive-deps
+    const rows = useMemo(() => hunks.flat(), [hunks]);
+    const [all, setAll] = useState(false);
+    const [wrap, setWrap] = useState(true);
+    const issue = problem(res);
+    const max = use.name === "Write" ? WRITE_PREVIEW : PREVIEW;
+    const preview = useMemo(() => previewRows(hunks[0] ?? [], max), [hunks, max]);
+    const more = all ? 0 : rows.length - preview.length;
     return (
-      <>
-        <Diff rows={rows} path={rel(str(input.file_path ?? input.notebook_path))} max={use.name === "Write" ? 24 : 40} />
-        {res?.is_error && result}
-      </>
+      <div className="my-2 overflow-hidden rounded-cv-md border border-cv-line-soft bg-cv-surface font-cv-sans">
+        <FileHeader path={path || use.name} rows={rows} wrap={wrap} onWrap={() => setWrap(!wrap)} running={running && !res} error={issue?.error} />
+        {issue && <div className={cn("border-b border-cv-line-soft px-3 py-1.5 text-cv-meta [overflow-wrap:anywhere]", issue.error ? "text-cv-danger" : "text-cv-muted")}>{issue.text}</div>}
+        {rows.length > 0 && <DiffLines rows={all ? rows : preview} wrap={wrap} />}
+        {more > 0 && (
+          <FoldButton onClick={() => setAll(true)}>
+            {use.name === "Write" ? `Show all ${rows.length} lines` : `Show full diff (${rows.length} lines)`}
+          </FoldButton>
+        )}
+        {all && rows.length > preview.length && <FoldButton onClick={() => setAll(false)}>Show less</FoldButton>}
+      </div>
     );
-  }
+  },
+  (a, b) => a.use.id === b.use.id && a.res === b.res && a.running === b.running,
+);
+
+const EDITS_SHOWN = 3;
+
+/** Several changes in a row: stacked cards, the 4th and later behind one line. */
+export function EditCards({ uses, results, running }: { uses: Use[]; results: Map<string, Res>; running: ReadonlySet<string> }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? uses : uses.slice(0, EDITS_SHOWN);
+  const files = new Set(uses.slice(EDITS_SHOWN).map((u) => str(inputOf(u).file_path ?? inputOf(u).notebook_path))).size;
+  return (
+    <div className="my-2">
+      {shown.map((u) => (
+        <EditCard key={u.id} use={u} res={results.get(u.id)} running={running.has(u.id)} />
+      ))}
+      {!all && uses.length > EDITS_SHOWN && (
+        <button type="button" onClick={() => setAll(true)} className="flex h-cv-row w-full items-center gap-1.5 font-cv-sans text-cv-step text-cv-text-2 transition-colors hover:text-cv-text">
+          {files === 1 ? `${uses.length - EDITS_SHOWN} more changes` : `Edited ${files} more files`}
+          <ChevronDown size={15} strokeWidth={1.8} className="text-cv-muted" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+const OUT_MAX = 12;
+
+/** Command or tool output in a sunken box; the copy button sits in its own header strip. */
+export function Output({ text, error, cmd, stderr, label, max = OUT_MAX }: { text: string; error?: boolean; cmd?: string; stderr?: string; label?: string; max?: number }) {
+  const [all, setAll] = useState(false);
+  const body = text.replace(/\n+$/, "");
+  const lines = body ? body.split("\n") : [];
+  const errLines = (stderr ?? "").replace(/\n+$/, "");
+  const total = lines.length + (errLines ? errLines.split("\n").length : 0);
+  const shown = all ? body : lines.slice(0, max).join("\n");
+  return (
+    <div className="overflow-hidden rounded-cv-md border border-cv-line-soft bg-cv-sunken">
+      <div className="flex h-8 items-center gap-2 pr-1 pl-3 font-cv-sans text-cv-meta text-cv-muted">
+        <span className="min-w-0 flex-1 truncate">{label ?? (cmd ? "Command" : "Output")}</span>
+        <CopyButton text={[cmd, body, errLines].filter(Boolean).join("\n")} label="Copy output" />
+      </div>
+      <pre className="px-3 pb-2.5 font-cv-mono text-cv-code whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {cmd && (
+          <div className="text-cv-text">
+            <span className="text-cv-muted select-none">$ </span>
+            {cmd}
+          </div>
+        )}
+        {(body || !cmd) && <div className={cn(cmd && "mt-1.5", error && !stderr ? "text-cv-danger" : "text-cv-text-2")}>{shown || (errLines ? "" : "(no output)")}</div>}
+        {errLines && (all || lines.length < max) && <div className="mt-1 text-cv-danger">{errLines}</div>}
+      </pre>
+      {total > max && <FoldButton onClick={() => setAll(!all)}>{all ? "Show less" : `Show all ${total} lines`}</FoldButton>}
+    </div>
+  );
+}
+
+/** Tool input as quiet "key value" lines instead of JSON. */
+function InputLines({ input }: { input: Record<string, unknown> }) {
+  const keys = Object.keys(input).filter((k) => input[k] !== undefined && input[k] !== null && input[k] !== "");
+  if (!keys.length) return null;
+  return (
+    <dl className="space-y-1 rounded-cv-md bg-cv-sunken px-3 py-2 font-cv-sans text-cv-meta">
+      {keys.map((k) => {
+        const v = input[k];
+        const s = typeof v === "string" ? v : JSON.stringify(v);
+        return (
+          <div key={k} className="flex gap-3">
+            <dt className="w-20 shrink-0 truncate text-cv-muted">{k.replace(/_/g, " ")}</dt>
+            <dd className="line-clamp-4 min-w-0 flex-1 font-cv-mono text-cv-text-2 [overflow-wrap:anywhere] whitespace-pre-wrap">{s}</dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+/** What a step shows when opened. */
+export function StepBody({ use, res }: { use: Use; res?: Res }) {
+  const input = inputOf(use);
+  const meta = metaOf(res);
+  const text = res ? resultText(res) : "";
+  const result = res && text ? <Output text={text} error={res.is_error} /> : null;
   switch (use.name) {
     case "Bash":
-      return <Output cmd={str(input.command)} text={res?.text ?? ""} error={res?.is_error} />;
-    case "TodoWrite":
-      return <Todos todos={(input.todos as Todo[]) ?? []} />;
-    case "Task":
-    case "Agent":
-      return (
-        <div className="space-y-2">
-          {!!input.prompt && <Output text={str(input.prompt)} max={6} />}
-          {res && (res.is_error ? result : <div className="rounded-cv-md border border-cv-line-soft bg-cv-surface px-4 py-3"><Markdown text={res.text} compact /></div>)}
-        </div>
-      );
+      return <Output cmd={str(input.command)} text={meta?.stdout ?? res?.text ?? ""} stderr={meta?.stderr} error={res?.is_error} label={input.description ? str(input.description) : "Command"} />;
     case "Read":
     case "Glob":
     case "Grep":
@@ -272,190 +219,125 @@ function Body({ use, res }: { use: Use; res?: Res }) {
     case "WebSearch":
     case "WebFetch":
     case "ToolSearch":
-      return result ?? (res ? null : <Output text="Waiting for the result…" />);
+    case "BashOutput":
+      return result ?? <div className="font-cv-sans text-cv-meta text-cv-muted">{res ? "No output" : "Waiting for the result…"}</div>;
+    case "TodoWrite":
+      return <TodoList todos={todosOf(use)} />;
     default:
       return (
-        <>
-          {Object.keys(input).length > 0 && <CodeBlock code={JSON.stringify(input, null, 2)} lang="input" bare />}
+        <div className="space-y-2">
+          <InputLines input={input} />
           {result}
-        </>
+        </div>
       );
   }
 }
 
-/** Short line under a failed or interrupted call. */
-function problem(res?: Res): { text: string; error: boolean } | null {
-  if (!res) return null;
-  if (res.text === "Interrupted by user" || /^\[Request interrupted/.test(res.text)) return { text: "Interrupted", error: false };
-  if (res.is_error) return { text: short((res.text.replace(/<\/?tool_use_error>/g, "").split("\n").find((l) => l.trim()) ?? "Failed").trim(), 120), error: true };
-  return null;
+// ───────────── todos ─────────────
+
+function TodoMark({ status }: { status: string }) {
+  if (status === "completed") return <span className="grid size-4 place-items-center rounded-full bg-cv-success text-cv-on-clay"><Check size={10} strokeWidth={3} /></span>;
+  if (status === "in_progress") return <LoaderCircle size={15} className="animate-spin text-cv-clay [animation-duration:1.6s]" />;
+  return <Circle size={15} className="text-cv-line-strong" />;
 }
 
-/** "Updated todos · 2 of 5 done" and the like: the row's text for tools without a path. */
-function rowText(use: Use): string | null {
-  const input = inputOf(use);
-  if (use.name === "TodoWrite") {
-    const todos = (input.todos as Todo[] | undefined) ?? [];
-    const done = todos.filter((t) => t.status === "completed").length;
-    return `Updated todos · ${done} of ${todos.length} done`;
-  }
-  if (use.name === "Bash" && input.description) return str(input.description);
-  return null;
-}
-
-/** Disclosure with a smooth height animation; the body mounts on first open. */
-function Fold({ open, children }: { open: boolean; children: ReactNode }) {
-  const [seen, setSeen] = useState(open);
-  if (open && !seen) setSeen(true);
+function TodoList({ todos }: { todos: Todo[] }) {
   return (
-    <div className="cv-fold" data-open={open}>
-      <div>{seen && <div className="pt-2 pb-1">{children}</div>}</div>
-    </div>
+    <ul className="font-cv-sans text-cv-step">
+      {todos.map((t, i) => (
+        <li key={i} className={cn("flex min-h-7 items-start gap-2.5 py-0.5", t.status === "completed" ? "text-cv-muted" : t.status === "in_progress" ? "text-cv-text" : "text-cv-text-2")}>
+          <span className="mt-0.5 grid size-4 shrink-0 place-items-center">
+            <TodoMark status={t.status} />
+          </span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{t.status === "in_progress" && t.activeForm ? t.activeForm : t.content}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
-function Chevron({ open }: { open: boolean }) {
-  return <ChevronRight size={15} strokeWidth={1.8} className={cn("shrink-0 text-cv-muted transition-transform duration-200", open && "rotate-90")} />;
-}
+const TODO_MAX = 8;
 
-export function ToolCall({ use, res, running, nested }: { use: Use; res?: Res; running: boolean; nested?: boolean }) {
-  const rel = useRel();
-  const input = inputOf(use);
-  const { title, mcp } = toolTitle(use.name);
-  const verb = VERB[use.name] ?? title;
-  const arg = toolArg(use.name, input);
-  const isPath = /^(Read|Write|Edit|MultiEdit|NotebookEdit|LS)$/.test(use.name);
-  const rows = changeRows(use);
-  const special = use.name === "ExitPlanMode" || use.name === "AskUserQuestion";
-  const [open, setOpen] = useState(false);
-  const pending = !res && running;
-  const issue = problem(res);
-  const text = rowText(use);
-  const pics = picsOf(use, res);
-  // A read that only returned a picture has nothing more to open: the picture is shown.
-  const bare = pics.length > 0 && !resultText(res!) && isExplore(use.name);
-
-  if (use.name === "ExitPlanMode") {
+/** The newest task list as a card; older ones as one quiet line. */
+export const TodoCard = memo(function TodoCard({ use, latest }: { use: Use; latest: boolean }) {
+  const [all, setAll] = useState(false);
+  const todos = todosOf(use);
+  const done = todos.filter((t) => t.status === "completed").length;
+  if (!latest) {
     return (
-      <div className="my-4 overflow-hidden rounded-cv-card border border-cv-line bg-cv-surface">
-        <div className="flex items-center gap-2 border-b border-cv-line-soft px-4 py-2.5 font-cv-sans text-cv-meta text-cv-muted">Plan</div>
-        <div className="px-4 py-3.5"><Markdown text={str(input.plan)} /></div>
+      <div className="flex h-cv-row items-center gap-2 font-cv-sans text-cv-step text-cv-muted">
+        <Check size={14} strokeWidth={2} className="shrink-0" />
+        Updated tasks · {done} of {todos.length} done
       </div>
     );
   }
-  if (special) return <Answered use={use} res={res} />;
-
+  let shown = todos;
+  if (!all && todos.length > TODO_MAX) {
+    const at = Math.max(0, todos.findIndex((t) => t.status !== "completed"));
+    const start = Math.max(0, Math.min(at - 3, todos.length - (TODO_MAX - 1)));
+    shown = todos.slice(start, start + TODO_MAX - 1);
+  }
   return (
-    <div className={cn("font-cv-sans", nested ? "my-0.5" : "my-1.5")}>
-      <div className="-mx-2">
-      <button
-        type="button"
-        onClick={() => !bare && setOpen(!open)}
-        aria-expanded={bare ? undefined : open}
-        className={cn("group flex min-h-9 w-full min-w-0 items-center gap-2 rounded-cv-sm px-2 py-1 text-left text-cv-ui transition-colors [[data-mode=phone]_&]:min-h-11", bare ? "cursor-default" : "hover:bg-cv-hover")}
-      >
-        {pending && <LoaderCircle size={14} className="shrink-0 animate-spin text-cv-clay [animation-duration:1.2s]" />}
-        {issue?.error && <span className="size-1.5 shrink-0 rounded-full bg-cv-danger" />}
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          {text ? (
-            <span className="min-w-0 truncate text-cv-text-2">{text}</span>
-          ) : (
-            <>
-              <span className="shrink-0 font-cv-strong text-cv-text">{verb}</span>
-              {mcp && <span className="shrink-0 text-cv-meta text-cv-muted">{mcp}</span>}
-              {arg && (
-                <span className={cn("min-w-0 truncate", isPath || use.name === "Bash" || use.name === "Glob" || use.name === "Grep" ? "rounded-cv-xs bg-cv-chip px-1.5 py-px font-cv-mono text-cv-code text-cv-text-2" : "text-cv-text-2")}>
-                  {isPath ? rel(arg) : arg}
-                </span>
-              )}
-            </>
-          )}
-          {rows && !issue && <DiffStat rows={rows} />}
-        </span>
-        {!bare && <Chevron open={open} />}
-      </button>
+    <div className="my-3 rounded-cv-md border border-cv-line-soft bg-cv-surface px-3.5 pt-2.5 pb-2">
+      <div className="mb-1 font-cv-sans text-cv-meta text-cv-muted">
+        Tasks · {done} of {todos.length}
       </div>
-      {pics.length > 0 && <Pictures pics={pics} size="lg" className="mt-1 mb-2" />}
-      {issue && !open && <div className={cn("ml-0.5 flex gap-1.5 pt-0.5 text-cv-meta", issue.error ? "text-cv-danger" : "text-cv-muted")}><span className="select-none">└</span><span className="min-w-0 [overflow-wrap:anywhere]">{issue.text}</span></div>}
-      <Fold open={open}>
-        <Body use={use} res={res} />
-      </Fold>
+      <TodoList todos={shown} />
+      {shown.length < todos.length && (
+        <button type="button" onClick={() => setAll(true)} className="mt-0.5 h-8 font-cv-sans text-cv-meta text-cv-muted transition-colors hover:text-cv-text">
+          {todos.length - shown.length} more
+        </button>
+      )}
     </div>
   );
-}
+});
 
-/** A question Claude asked (AskUserQuestion) with the answer, as a quiet card. */
-function Answered({ use, res }: { use: Use; res?: Res }) {
-  const qs = (inputOf(use).questions as { question: string; header?: string; options?: { label: string; description?: string }[] }[] | undefined) ?? [];
-  const answer = res?.text.replace(/^User has answered[^:]*:\s*/i, "").replace(/\. You can now continue.*$/s, "").trim();
+// ───────────── plan and question ─────────────
+
+const PLAN_LINES = 14;
+
+export const PlanCard = memo(function PlanCard({ use, res }: { use: Use; res?: Res }) {
+  const plan = str(inputOf(use).plan);
+  const denied = deniedReason(res);
+  const status = !res ? null : denied !== null ? (denied ? `Not approved · ${denied}` : "Not approved") : res.is_error ? null : "Approved";
+  const long = plan.split("\n").length > PLAN_LINES;
+  const [all, setAll] = useState(false);
   return (
-    <div className="my-4 rounded-cv-card border border-cv-line-soft bg-cv-surface px-4 py-3.5 font-cv-sans">
-      <div className="mb-1.5 text-cv-meta text-cv-muted">Question</div>
-      {qs.map((q, i) => (
-        <div key={i} className="text-cv-ui text-cv-text-2">{q.question}</div>
-      ))}
-      {answer ? <div className="mt-2 font-cv-strong text-cv-ui text-cv-text [overflow-wrap:anywhere]">{answer}</div> : <div className="mt-2 text-cv-meta text-cv-muted">Waiting for your answer…</div>}
+    <div className="my-4 overflow-hidden rounded-cv-md border border-cv-line bg-cv-surface">
+      <div className="flex min-w-0 items-center gap-1.5 px-4 pt-2.5 font-cv-sans text-cv-meta text-cv-muted">
+        <span className="shrink-0">Plan</span>
+        {status && <span className={cn("min-w-0 truncate", denied === null ? "text-cv-success" : "text-cv-text-2")}>· {status}</span>}
+      </div>
+      <div className={cn("px-4 pt-1.5 pb-3.5", long && !all && "cv-clamp")}>
+        <Markdown text={plan} />
+      </div>
+      {long && <FoldButton onClick={() => setAll(!all)}>{all ? "Show less" : "Show full plan"}</FoldButton>}
     </div>
   );
-}
+});
 
-// ───────────── groups of reads and searches ─────────────
-
-const EXPLORE = new Set(["Read", "Grep", "Glob", "LS", "WebSearch", "WebFetch", "ToolSearch", "BashOutput"]);
-export const isExplore = (name: string) => EXPLORE.has(name);
-
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many.replace("#", String(n)));
-
-/** "Read 3 files, searched code" */
-export function groupSummary(uses: Use[]): string {
-  const c = (names: string[]) => uses.filter((u) => names.includes(u.name)).length;
-  const parts: string[] = [];
-  const read = c(["Read"]);
-  const search = c(["Grep", "Glob"]);
-  const ls = c(["LS"]);
-  const web = c(["WebSearch"]);
-  const fetch = c(["WebFetch"]);
-  const tools = c(["ToolSearch"]);
-  const out = c(["BashOutput"]);
-  if (read) parts.push(plural(read, "read a file", "read # files"));
-  if (search) parts.push(search === 1 ? "searched code" : `searched code ${search} times`);
-  if (ls) parts.push(plural(ls, "listed a folder", "listed # folders"));
-  if (web) parts.push(plural(web, "searched the web", "searched the web # times"));
-  if (fetch) parts.push(plural(fetch, "fetched a page", "fetched # pages"));
-  if (tools) parts.push("loaded tools");
-  if (out) parts.push("checked output");
-  const s = parts.join(", ");
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-export function ToolGroup({ uses, results, running }: { uses: Use[]; results: Map<string, Res>; running: string | null }) {
+/** A question Claude asked (AskUserQuestion), once answered: one line, open for the details. */
+export const Answered = memo(function Answered({ use, res }: { use: Use; res?: Res }) {
+  const qs = (inputOf(use).questions as { question: string; header?: string }[] | undefined) ?? [];
+  const given = metaOf(res)?.answers;
+  const answer = given && Object.keys(given).length ? Object.values(given).join(", ") : res?.text.replace(/^User has answered[^:]*:\s*/i, "").replace(/\. You can now continue.*$/s, "").trim();
   const [open, setOpen] = useState(false);
-  const pending = uses.some((u) => u.id === running && !results.has(u.id));
-  const failed = uses.filter((u) => results.get(u.id)?.is_error).length;
-  const pics = uses.flatMap((u) => picsOf(u, results.get(u.id)));
+  const q = qs[0];
   return (
-    <div className="my-1.5 font-cv-sans">
-      <div className="-mx-2">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex min-h-9 w-full items-center gap-2 rounded-cv-sm px-2 py-1 text-left text-cv-ui text-cv-text-2 transition-colors hover:bg-cv-hover [[data-mode=phone]_&]:min-h-11"
-      >
-        {pending && <LoaderCircle size={14} className="shrink-0 animate-spin text-cv-clay [animation-duration:1.2s]" />}
-        <span className="min-w-0 truncate">{groupSummary(uses)}</span>
-        {failed > 0 && <span className="shrink-0 text-cv-meta text-cv-danger">{failed} failed</span>}
-        <Chevron open={open} />
+    <div className="my-2 font-cv-sans">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-cv-row w-full min-w-0 items-center gap-2 text-left text-cv-step">
+        <MessageCircleQuestion size={15} strokeWidth={1.8} className="shrink-0 text-cv-muted" />
+        <span className="min-w-0 truncate text-cv-text-2">{q?.header || q?.question || "Question"}</span>
+        {answer ? <span className="min-w-0 shrink-0 truncate font-cv-strong text-cv-text">· {answer.split("\n")[0]}</span> : <span className="shrink-0 text-cv-clay">· Waiting for you</span>}
       </button>
-      </div>
-      {!open && pics.length > 0 && <Pictures pics={pics} size="sm" className="mt-1 mb-1" />}
-      <Fold open={open}>
-        <div className="ml-1 border-l border-cv-line pl-3.5">
-          {uses.map((u) => (
-            <ToolCall key={u.id} use={u} res={results.get(u.id)} running={u.id === running} nested />
+      {open && (
+        <div className="mb-2 ml-6 space-y-1 text-cv-step">
+          {qs.map((x, i) => (
+            <div key={i} className="text-cv-text-2">{x.question}</div>
           ))}
+          {answer && <div className="font-cv-strong text-cv-text [overflow-wrap:anywhere] whitespace-pre-wrap">{answer}</div>}
         </div>
-      </Fold>
+      )}
     </div>
   );
-}
+});
