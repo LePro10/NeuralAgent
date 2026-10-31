@@ -36,8 +36,8 @@
   /* Ink, brightest first */
   --color-bright: #eef1ee;    /* titles, primary text, solid primary button */
   --color-ink: #c6c9c6;       /* body text */
-  --color-dim: #7d847f;       /* secondary text, inactive icons */
-  --color-faint: #4a504c;     /* hints, chevrons, disabled */
+  --color-dim: #8c928e;       /* secondary text, inactive icons (AA 5.6:1 on bg/card) */
+  --color-faint: #7d817e;     /* hints, placeholders, chevrons (AA 4.5:1 on bg/card) */
 
   /* ── Glow palette — light, not paint ───────────────────────────────── */
   --color-ice: #b9d3ff;
@@ -157,6 +157,17 @@
   --spacing-icon-lg: 20px;      /* primary actions, tab bar */
   --spacing-icon-tile: 28px;    /* coloured icon tile in a settings row */
 
+  /* Phone chrome ("Two Drops", D-mobile): the Dock (bottom) and the Island (top). Utilities:
+     h-dock, h-dock-min, h-island, h-island-min, size-bead, h-keybar, inset-x-drop. */
+  --spacing-dock: 58px;         /* the Dock as a tab bar: 24px icon + 12px label */
+  --spacing-dock-min: 44px;     /* minimised while a list scrolls down (icons only) */
+  --spacing-island: 44px;       /* the Island capsule on agent screens */
+  --spacing-island-min: 36px;   /* shrunk while reading */
+  --spacing-bead: 40px;         /* round glass drops (scroll-to-latest) */
+  --spacing-composer: 48px;     /* resting composer row */
+  --spacing-keybar: 44px;       /* terminal key bar */
+  --spacing-drop: 12px;         /* drops sit this far from the screen edge */
+
   /* Lighter weights: "medium" is a touch above regular, never bold. */
   --font-weight-medium: 460;
   --font-weight-semibold: 540;
@@ -243,12 +254,17 @@
   --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 
-  /* Space a floating tab bar takes (incl. gap to the edge). 0 on desktop. */
-  --tabbar-space: calc(74px + max(10px, var(--safe-bottom)));
+  /* Space the phone Dock takes from the bottom edge, incl. safe area: AppShell writes the live
+     value (0 while hidden or while the keyboard is up). --tabbar-space is the old name. */
+  --dock-h: 0px;
+  --tabbar-space: var(--dock-h);
+  /* px an overlaying on-screen keyboard (iOS) covers; written by lib/keyboard.ts. */
+  --kb-inset: 0px;
 
   /* Z layers — never invent another. */
   --z-header: 30;
   --z-sidebar: 40;
+  --z-island: 45;
   --z-tabbar: 50;
   --z-sheet: 80;
   --z-context: 85;
@@ -298,9 +314,6 @@
     radial-gradient(62% 56% at 2% 2%, color-mix(in oklab, var(--aurora-1) var(--ground-b), transparent), 32%, transparent),
     radial-gradient(72% 50% at 8% 102%, color-mix(in oklab, var(--aurora-3) var(--ground-c), transparent), 36%, transparent),
     radial-gradient(60% 46% at 100% 98%, color-mix(in oklab, var(--color-accent-deep) var(--ground-d), transparent), 38%, transparent);
-}
-@media (min-width: 900px) {
-  :root { --tabbar-space: 0px; }
 }
 @media (min-resolution: 2dppx) {
   :root { --hair: 0.5px; }
@@ -383,6 +396,12 @@
   --glass-bg: rgb(24 27 26 / 0.46); --glass-blur: 36px; --glass-sat: 190%;
   --glass-rim: rgb(255 255 255 / 0.12); --glass-hi: rgb(255 255 255 / 0.14);
 }
+/* lite = Android WebView (set by platform code on <html>): blur is expensive there, so less of
+   it over a more opaque fill. At most two glass layers on a phone screen (Island + Dock / composer). */
+[data-glass="lite"] {
+  --glass-bg: rgb(22 24 23 / 0.88); --glass-blur: 12px; --glass-sat: 120%;
+  --glass-rim: rgb(255 255 255 / 0.08); --glass-hi: rgb(255 255 255 / 0.05);
+}
 [data-glass="clear"] {
   --glass-bg: rgb(30 33 32 / 0.2); --glass-blur: 10px; --glass-sat: 180%;
   --glass-rim: rgb(255 255 255 / 0.16); --glass-hi: rgb(255 255 255 / 0.22);
@@ -393,8 +412,8 @@
    inside (pages, sheets, menus — they portal into the shell) reads iOS sizes:
    body ≥ 16px, 44pt hit areas, 22–26px icons. Desktop keeps the dense scale. */
 [data-mode="phone"] {
-  --text-micro: 11px;     --text-micro--line-height: 1.25;
-  --text-tiny: 11px;      --text-tiny--line-height: 1.2;
+  --text-micro: 12px;     --text-micro--line-height: 1.25; /* no label under 12px on a phone (a11y) */
+  --text-tiny: 12px;      --text-tiny--line-height: 1.2;
   --text-meta: 12.5px;    --text-meta--line-height: 1.35;
   --text-detail: 13px;    --text-detail--line-height: 1.4;
   --text-small: 14px;     --text-small--line-height: 1.4;
@@ -415,7 +434,12 @@
   --text-subhead: 15px;     --text-subhead--line-height: 1.33;
   --text-footnote: 13px;    --text-footnote--line-height: 1.38;
   --text-caption: 12px;     --text-caption--line-height: 1.33;
-  --text-caption-2: 11px;   --text-caption-2--line-height: 1.2;
+  --text-caption-2: 12px;   --text-caption-2--line-height: 1.2;
+  /* "Two Drops" type: large titles light (300, NeuralHub display), emphasis 460, never bold. */
+  --text-large-title--font-weight: 300; --text-large-title--letter-spacing: -0.026em;
+  --text-title-1--font-weight: 460; --text-title-2--font-weight: 460;
+  --text-title-3--font-weight: 460; --text-headline--font-weight: 460;
+  --font-weight-semibold: 460;
 
   --spacing-tap: 44px;
   --spacing-control-sm: 36px;

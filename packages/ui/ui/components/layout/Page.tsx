@@ -117,7 +117,7 @@ export function Page({ title, eyebrow, actions, backLabel, onBack, header, child
         </div>
       </div>
 
-      <div ref={(n) => { ref.current = n; if (scrollRef) scrollRef.current = n; }} className="scroller page-scroll relative h-full"
+      <div ref={(n) => { ref.current = n; if (scrollRef) scrollRef.current = n; }} className="scroller page-scroll page-body relative h-full"
         style={{ paddingTop: 'calc(var(--safe-top) + var(--spacing-navbar))', paddingBottom: 'calc(var(--tabbar-space) + 24px)' }}>
         {light && (typeof light === 'string'
           ? <Ambient name={light as AmbientName} scrollY={scrollY} motion={ambientMotion} />

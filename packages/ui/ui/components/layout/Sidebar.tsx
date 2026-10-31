@@ -39,6 +39,8 @@ export interface SidebarItem<T extends string = string> {
   badge?: boolean | string;
   /** What the agents behind this item are doing: ring (working) or dot (waiting/done/error). See core/Activity. */
   activity?: Activity;
+  /** A number badge (phone Dock; e.g. agents that need you). */
+  count?: number;
   /** Items with the same group sit together under its label. */
   group?: string;
   /** Hairline above this item without a label (if you do not use `group`). */

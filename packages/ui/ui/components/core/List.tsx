@@ -66,7 +66,14 @@ export interface RowProps {
   chevron?: boolean;
 }
 
-export function Row({ Icon, leading, title, detail, value, trailing, onClick, href, danger, selected, tint, tile, wrap, chevron, activity }: RowProps) {
+/** A text value longer than this goes under the title (second line) instead of squeezing it. */
+const LONG_VALUE = 16;
+
+export function Row({ Icon, leading, title, detail: detailProp, value: valueProp, trailing, onClick, href, danger, selected, tint, tile, wrap, chevron, activity }: RowProps) {
+  // "Notifications   Sound and notific…" → "Notifications" with "Sound and notification" below.
+  const moved = !detailProp && typeof valueProp === 'string' && valueProp.length > LONG_VALUE;
+  const detail = moved ? valueProp : detailProp;
+  const value = moved ? undefined : valueProp;
   const interactive = !!(onClick || href);
   const Tag = href ? 'a' : onClick ? 'button' : 'div';
   const lead = Icon || leading;
@@ -99,7 +106,7 @@ export function Row({ Icon, leading, title, detail, value, trailing, onClick, hr
         <span className={cn('block text-body leading-snug', !wrap && 'truncate', danger ? 'text-danger' : 'text-bright')}>{title}</span>
         {detail && <span className={cn('mt-0.5 block text-footnote text-dim', !wrap && 'truncate')}>{detail}</span>}
       </span>
-      {value !== undefined && <span className="max-w-[45%] shrink-0 truncate text-body text-dim">{value}</span>}
+      {value !== undefined && <span className="line-clamp-2 max-w-[45%] shrink-0 text-right text-body leading-snug text-dim">{value}</span>}
       {trailing}
       {(chevron ?? (interactive && !trailing)) && <ChevronRight strokeWidth={2.2} className="-mr-1 size-icon-sm text-faint" />}
     </Tag>

@@ -15,21 +15,21 @@
   --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.34;
   --color-bg: #080909; --color-chrome: #0b0c0c; --color-raised: #0e100f; --color-card: #121413;
   --color-sheet: #111312; --color-popover: #161817; --color-card-2: #181a19; --color-card-3: #202321;
-  --color-bright: #eef1ee; --color-ink: #c6c9c6; --color-dim: #7d847f; --color-faint: #4a504c;
+  --color-bright: #eef1ee; --color-ink: #c6c9c6; --color-dim: #8c928e; --color-faint: #7d817e;
   --glass-bg: rgb(28 30 29 / 0.58);
 }
 [data-scheme="graphite"] {
   --aurora-1: #7d8aa6; --aurora-3: #8a7fa0; --aurora-strength: 0.24;
   --color-bg: #0e0e0f; --color-chrome: #121213; --color-raised: #151516; --color-card: #19191b;
   --color-sheet: #18181a; --color-popover: #1e1e20; --color-card-2: #202022; --color-card-3: #29292c;
-  --color-bright: #f0f0f2; --color-ink: #cacacd; --color-dim: #85858b; --color-faint: #505055;
+  --color-bright: #f0f0f2; --color-ink: #cacacd; --color-dim: #95959b; --color-faint: #858589;
   --glass-bg: rgb(34 34 36 / 0.6);
 }
 [data-scheme="midnight"] {
   --aurora-1: #4b4bff; --aurora-3: #2f8fe0; --aurora-strength: 0.4;
   --color-bg: #06080d; --color-chrome: #090b12; --color-raised: #0c0f17; --color-card: #10131d;
   --color-sheet: #0f121b; --color-popover: #141826; --color-card-2: #161a28; --color-card-3: #1d2233;
-  --color-bright: #ecf0fa; --color-ink: #c3c9d8; --color-dim: #7a8399; --color-faint: #465068;
+  --color-bright: #ecf0fa; --color-ink: #c3c9d8; --color-dim: #8991a5; --color-faint: #7a8192;
   --glass-bg: rgb(22 27 42 / 0.6);
 }
 [data-scheme="black"] {
@@ -42,14 +42,14 @@
   --aurora-1: #ff7a45; --aurora-3: #d0458c; --aurora-strength: 0.32;
   --color-bg: #0b0908; --color-chrome: #0f0c0b; --color-raised: #13100e; --color-card: #171412;
   --color-sheet: #161311; --color-popover: #1c1816; --color-card-2: #1e1a18; --color-card-3: #27221f;
-  --color-bright: #f3eee9; --color-ink: #cfc7c0; --color-dim: #8a7f77; --color-faint: #544b45;
+  --color-bright: #f3eee9; --color-ink: #cfc7c0; --color-dim: #999089; --color-faint: #86807c;
   --glass-bg: rgb(36 31 28 / 0.58);
 }
 [data-scheme="forest"] {
   --aurora-1: #18b27c; --aurora-3: #2a93a8; --aurora-strength: 0.32;
   --color-bg: #060a08; --color-chrome: #08100c; --color-raised: #0b130f; --color-card: #0f1813;
   --color-sheet: #0e1612; --color-popover: #131e18; --color-card-2: #15201a; --color-card-3: #1b2a22;
-  --color-bright: #ebf3ee; --color-ink: #c2cdc6; --color-dim: #76877d; --color-faint: #435249;
+  --color-bright: #ebf3ee; --color-ink: #c2cdc6; --color-dim: #88978f; --color-faint: #7b8680;
   --glass-bg: rgb(22 34 28 / 0.58);
 }
 
@@ -62,7 +62,7 @@
   --fg-rgb: 0 0 0;
   --color-bg: #f2f3f5; --color-chrome: #ebedf0; --color-raised: #e7e9ec; --color-card: #ffffff;
   --color-sheet: #f7f8fa; --color-popover: #ffffff; --color-card-2: #f5f6f8; --color-card-3: #eceef1;
-  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #666c74; --color-faint: #9a9fa7;
+  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #595e65; --color-faint: #696c72;
   --color-fill-1: rgb(20 24 32 / 0.035); --color-fill-2: rgb(20 24 32 / 0.055);
   --color-fill-3: rgb(20 24 32 / 0.08);  --color-fill-4: rgb(20 24 32 / 0.12);
   --color-line: rgb(20 24 32 / 0.11); --color-line-2: rgb(20 24 32 / 0.18);
@@ -114,42 +114,42 @@
   --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.16;
   --color-bg: #f2f3f5; --color-chrome: #ebedf0; --color-raised: #e7e9ec; --color-card: #ffffff;
   --color-sheet: #f7f8fa; --color-popover: #ffffff; --color-card-2: #f5f6f8; --color-card-3: #eceef1;
-  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #666c74; --color-faint: #9a9fa7;
+  --color-bright: #0c0e10; --color-ink: #2a2e33; --color-dim: #595e65; --color-faint: #696c72;
   --glass-bg: rgb(250 251 251 / 0.74);
 }
 [data-appearance="light"][data-scheme="graphite"], [data-appearance="light"] [data-scheme="graphite"] {
   --aurora-1: #7d8aa6; --aurora-3: #8a7fa0; --aurora-strength: 0.12;
   --color-bg: #f2f2f4; --color-chrome: #ebebee; --color-raised: #e6e6e9; --color-card: #ffffff;
   --color-sheet: #f7f7f9; --color-popover: #ffffff; --color-card-2: #f4f4f6; --color-card-3: #ececef;
-  --color-bright: #0e0e10; --color-ink: #2c2c30; --color-dim: #68686f; --color-faint: #9c9ca3;
+  --color-bright: #0e0e10; --color-ink: #2c2c30; --color-dim: #5c5c62; --color-faint: #6b6b70;
   --glass-bg: rgb(250 250 252 / 0.74);
 }
 [data-appearance="light"][data-scheme="midnight"], [data-appearance="light"] [data-scheme="midnight"] {
   --aurora-1: #4b4bff; --aurora-3: #2f8fe0; --aurora-strength: 0.2;
   --color-bg: #eff2f8; --color-chrome: #e7ebf3; --color-raised: #e2e7f0; --color-card: #ffffff;
   --color-sheet: #f5f7fb; --color-popover: #ffffff; --color-card-2: #f2f5fa; --color-card-3: #e8ecf4;
-  --color-bright: #0b0f1a; --color-ink: #283044; --color-dim: #636b80; --color-faint: #97a0b4;
+  --color-bright: #0b0f1a; --color-ink: #283044; --color-dim: #555c6e; --color-faint: #656b79;
   --glass-bg: rgb(248 250 255 / 0.74);
 }
 [data-appearance="light"][data-scheme="black"], [data-appearance="light"] [data-scheme="black"] {
   --aurora-1: #3b5bff; --aurora-3: #1f9e92; --aurora-strength: 0.08;
   --color-bg: #ffffff; --color-chrome: #f5f5f5; --color-raised: #efefef; --color-card: #ffffff;
   --color-sheet: #ffffff; --color-popover: #ffffff; --color-card-2: #f7f7f7; --color-card-3: #efefef;
-  --color-bright: #000000; --color-ink: #1c1c1c; --color-dim: #5f5f5f; --color-faint: #9a9a9a;
+  --color-bright: #000000; --color-ink: #1c1c1c; --color-dim: #5e5e5e; --color-faint: #6d6d6d;
   --glass-bg: rgb(255 255 255 / 0.8);
 }
 [data-appearance="light"][data-scheme="dusk"], [data-appearance="light"] [data-scheme="dusk"] {
   --aurora-1: #ff7a45; --aurora-3: #d0458c; --aurora-strength: 0.18;
   --color-bg: #f6f2ee; --color-chrome: #efe9e3; --color-raised: #ebe4dd; --color-card: #ffffff;
   --color-sheet: #faf7f4; --color-popover: #ffffff; --color-card-2: #f8f4f0; --color-card-3: #efe8e2;
-  --color-bright: #16100c; --color-ink: #3a2f28; --color-dim: #76685d; --color-faint: #a99c91;
+  --color-bright: #16100c; --color-ink: #3a2f28; --color-dim: #64584f; --color-faint: #706860;
   --glass-bg: rgb(253 250 247 / 0.74);
 }
 [data-appearance="light"][data-scheme="forest"], [data-appearance="light"] [data-scheme="forest"] {
   --aurora-1: #18b27c; --aurora-3: #2a93a8; --aurora-strength: 0.18;
   --color-bg: #eef3f0; --color-chrome: #e6ede9; --color-raised: #e1e9e4; --color-card: #ffffff;
   --color-sheet: #f5f8f6; --color-popover: #ffffff; --color-card-2: #f2f6f4; --color-card-3: #e7eee9;
-  --color-bright: #08120d; --color-ink: #26332c; --color-dim: #5f7066; --color-faint: #93a39a;
+  --color-bright: #08120d; --color-ink: #26332c; --color-dim: #516057; --color-faint: #626d67;
   --glass-bg: rgb(248 252 250 / 0.74);
 }
 /* Accents on light: the deep tone carries text and focus (AA on white). */
@@ -174,3 +174,11 @@
 [data-scheme="black"] { --ground-a: 22%; --ground-b: 13%; --ground-c: 8%; --ground-d: 8%; --ground-top: 4%; }
 [data-appearance="light"] { --ground-a: 21%; --ground-b: 15%; --ground-c: 12%; --ground-d: 10%; --ground-top: 6%; }
 [data-appearance="light"][data-scheme="black"], [data-appearance="light"] [data-scheme="black"] { --ground-a: 14%; --ground-b: 9%; --ground-c: 7%; --ground-d: 6%; --ground-top: 3%; }
+/* Android WebView glass (data-glass="lite", see tokens.css): nearly opaque on light grounds. */
+[data-appearance="light"][data-glass="lite"], [data-appearance="light"] [data-glass="lite"] {
+  --glass-bg: rgb(250 250 252 / 0.92); --glass-blur: 12px; --glass-sat: 120%; --glass-rim: rgb(20 24 32 / 0.09);
+}
+/* The Claude view's tone (clay) on light: #d97757 is 2.96:1 on the paper ground; this deeper clay
+   is 5:1 (AA) for the activity verb and the send drop alike. :root raises the specificity over
+   claude.css's light block (imported later). */
+:root[data-appearance="light"] { --cv-clay: #b04f2c; --cv-clay-strong: #9a4223; }

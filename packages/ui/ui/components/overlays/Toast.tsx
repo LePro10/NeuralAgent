@@ -10,12 +10,17 @@
  * - The same text without undo shows once; repeating it only extends its time.
  * - At most three. When full, the oldest toast *without* Undo goes first —
  *   never silently drop an Undo while a "Copied" stays.
+ * - Phones (the shell's layout mode): one toast only, the newest, at the top under the
+ *   Island / nav bar, so nothing sits on the composer or the Dock. `desktopOnly` toasts
+ *   (e.g. an agent "finished" notice; phones have the inbox for that) are not shown there.
  */
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, type LucideIcon } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
+import { phoneToasts } from '../../lib/chrome';
 import { cn } from '../../lib/cn';
 import { SPRING } from '../../lib/motion';
+import { useLayoutMode } from '../../lib/surface';
 
 export type ToastTone = 'neutral' | 'success' | 'danger' | 'loading';
 
@@ -29,9 +34,11 @@ export interface ToastItem {
   Icon?: LucideIcon;
   /** Which <Toaster> shows it (several surfaces on one page, e.g. previews). */
   channel?: string;
+  /** Not shown on phones. */
+  desktopOnly?: boolean;
 }
 
-export interface ToastOptions { undo?: () => void; actionLabel?: string; tone?: ToastTone; Icon?: LucideIcon; duration?: number; channel?: string }
+export interface ToastOptions { undo?: () => void; actionLabel?: string; tone?: ToastTone; Icon?: LucideIcon; duration?: number; channel?: string; desktopOnly?: boolean }
 
 /** How long a toast (and its Undo) stays. */
 export const TOAST_MS = 3800;
@@ -81,7 +88,7 @@ export function toast(text: string, opts: ToastOptions = {}): ToastHandle {
   const id = same ? same.id : ++seq;
   if (!same) {
     const before = new Set(items.map((t) => t.id));
-    items = stackToasts(items, { id, text, channel, undo: opts.undo, actionLabel: opts.actionLabel, tone: opts.tone, Icon: opts.Icon });
+    items = stackToasts(items, { id, text, channel, undo: opts.undo, actionLabel: opts.actionLabel, tone: opts.tone, Icon: opts.Icon, desktopOnly: opts.desktopOnly });
     for (const old of before) if (!items.some((t) => t.id === old)) { window.clearTimeout(timers.get(old)); timers.delete(old); }
     emit();
   }
@@ -107,19 +114,21 @@ const TONE_ICON: Partial<Record<ToastTone, LucideIcon>> = { success: CheckCircle
  */
 export function Toaster({ channel = 'main', position = 'bottom' }: { channel?: string; position?: 'bottom' | 'top' }) {
   const all = useSyncExternalStore((s) => { subs.add(s); return () => subs.delete(s); }, () => items, () => items);
-  const list = all.filter((t) => (t.channel ?? 'main') === channel);
-  const top = position === 'top';
+  const phone = useLayoutMode() === 'phone';
+  const mine = all.filter((t) => (t.channel ?? 'main') === channel);
+  const list = phone ? phoneToasts(mine) : mine;
+  const top = phone || position === 'top';
   return (
     <div role="status" aria-live="polite"
       className="pointer-events-none fixed inset-x-0 z-[var(--z-toast)] flex flex-col items-center gap-2 px-4"
-      style={top ? { top: 'calc(var(--safe-top) + 12px)' } : { bottom: 'max(calc(var(--tabbar-space) + 12px), calc(var(--safe-bottom) + 12px))' }}>
+      style={phone ? { top: 'calc(var(--safe-top) + var(--spacing-island) + 16px)' } : top ? { top: 'calc(var(--safe-top) + 12px)' } : { bottom: 'max(calc(var(--tabbar-space) + 12px), calc(var(--safe-bottom) + 12px))' }}>
       <AnimatePresence initial={false}>
         {list.map((t) => {
           const I = t.Icon ?? TONE_ICON[t.tone ?? 'neutral'];
           return (
             <motion.div
               key={t.id}
-              layout
+              layout={!phone}
               initial={{ opacity: 0, y: top ? -14 : 14, scale: 0.86, filter: 'blur(6px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
               exit={{ opacity: 0, scale: 0.94, filter: 'blur(4px)', transition: { duration: 0.16 } }}

@@ -1,0 +1,41 @@
+/*
+ * Phone chrome ("Two Drops"): the Dock at the bottom, the Island on agent screens, and the
+ * calm ground. Everything here applies under [data-mode="phone"] (AppShell) or to the
+ * phone-only chrome itself; desktop is untouched.
+ */
+
+/* Bottom room for a page: clear of the Dock (or of the home indicator when it is hidden). */
+@utility pb-dock { padding-bottom: calc(max(var(--dock-h, 0px), var(--safe-bottom)) + 16px); }
+/* Floating things above the Dock (a FAB, a pill): their `bottom`. */
+@utility bottom-dock { bottom: calc(max(var(--dock-h, 0px), var(--safe-bottom)) + 8px); }
+
+/* Calm ground on phones: one soft light at the top right instead of four, no drifting field. */
+[data-mode="phone"] {
+  --ground-lights: radial-gradient(84% 44% at 94% 0%, color-mix(in oklab, var(--color-accent-deep) calc(var(--ground-a) * 0.55), transparent), 30%, transparent);
+}
+/* Page light stays still on phones (no breathing / drifting while reading). */
+[data-mode="phone"] :is(.ambient-breathe, .ambient-drift) { animation: none; }
+
+/* The agent screen frame (PhoneAgentScreen): the Island floats over the body, so the
+   transcript's content starts below it (padding on the scroller scrolls with the content). */
+[data-island-frame] .cv-transcript { padding-top: var(--island-space, 0px); scroll-padding-top: var(--island-space, 0px); }
+
+/* Edge fades (calm tops): text scrolling up fades out before it reaches the Island or the status
+   bar, instead of showing half-cut lines around the capsule. A mask on the scroller itself: no
+   colour to match (works on any ground, light and dark) and no blur (cheap on Android WebView).
+   Agent screen: clear under the upper part of the Island, full strength just below it. */
+[data-island-frame] .cv-transcript {
+  --edge-fade: linear-gradient(180deg, transparent 0, transparent calc(var(--island-space, 0px) - 18px), #000 calc(var(--island-space, 0px) + 6px));
+  -webkit-mask-image: var(--edge-fade);
+  mask-image: var(--edge-fade);
+}
+/* Tab and list pages (Page): content fades out under the status bar; the frosted nav bar takes
+   over once the large title has scrolled away. */
+[data-mode="phone"] .page-body {
+  --edge-fade: linear-gradient(180deg, transparent 0, transparent calc(var(--safe-top, 0px) * 0.4), #000 calc(var(--safe-top, 0px) + 14px));
+  -webkit-mask-image: var(--edge-fade);
+  mask-image: var(--edge-fade);
+}
+
+/* Dock labels: never truncated, never under 12px. */
+.dock-label { font-size: max(12px, var(--text-caption-2)); line-height: 1.1; letter-spacing: -0.01em; white-space: nowrap; }

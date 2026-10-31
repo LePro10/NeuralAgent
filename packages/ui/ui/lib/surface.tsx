@@ -10,6 +10,7 @@
  */
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 import { DESKTOP, useDesktop } from './hooks';
+import { useKeyboard } from './keyboard';
 
 export type LayoutMode = 'phone' | 'desktop';
 
@@ -69,6 +70,8 @@ export function useSurfaceHeight(target: HTMLElement): number {
  */
 export function useKeyboardInset(target: HTMLElement): { h: number; bottom: number } | null {
   const [kb, setKb] = useState<{ h: number; bottom: number } | null>(null);
+  // Only a real keyboard (shared store): a pinch zoom also shrinks the visual viewport.
+  const { open, inset } = useKeyboard();
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -87,8 +90,8 @@ export function useKeyboardInset(target: HTMLElement): { h: number; bottom: numb
     vv.addEventListener('resize', check);
     vv.addEventListener('scroll', check);
     return () => { vv.removeEventListener('resize', check); vv.removeEventListener('scroll', check); };
-  }, [target]);
-  return kb;
+  }, [target, open, inset]);
+  return open ? kb : null;
 }
 
 /**

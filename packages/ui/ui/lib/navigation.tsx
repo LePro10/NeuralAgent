@@ -15,7 +15,11 @@ import { animate, AnimatePresence, motion, useMotionValue, useTransform, type Va
 import { createContext, useContext, useRef, type ReactNode } from 'react';
 import { haptic } from './haptics';
 import { prefersReducedMotion, SPRING } from './motion';
+import { detectPlatform } from './chrome';
 import { useLayoutMode } from './surface';
+
+/** Edge swipe-back is an iOS gesture; Android has its own system back (and its edge swipe would fight it). */
+const IOS = typeof navigator !== 'undefined' && detectPlatform(navigator.userAgent, navigator.maxTouchPoints ?? 0) === 'ios';
 
 export interface NavBack {
   /** The previous level's title, shown next to the chevron. */
@@ -73,7 +77,7 @@ export function NavPage({ id, depth, back, children }: { id: string; depth: numb
           style={{ zIndex: d === 'pop' ? 0 : 1 }}
         >
           <NavBackProvider value={back ?? null}>
-            {mode === 'phone' && back ? <SwipeBack onBack={back.onBack}>{children}</SwipeBack> : children}
+            {mode === 'phone' && back && IOS ? <SwipeBack onBack={back.onBack}>{children}</SwipeBack> : children}
           </NavBackProvider>
         </motion.div>
       </AnimatePresence>

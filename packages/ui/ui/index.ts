@@ -12,6 +12,7 @@ export * from './lib/cn';
 export * from './lib/motion';
 export * from './lib/haptics';
 export * from './lib/hooks';
+export * from './lib/chrome';
 export * from './lib/layers';
 export * from './lib/focus-trap';
 export * from './lib/surface';

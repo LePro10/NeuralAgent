@@ -176,6 +176,9 @@
   --text-cv-meta: 12.5px;
   --text-cv-meta--line-height: 1.4;
   --text-cv-code: 13px;
+  /* Tool step lines ("Ran 6 commands, read 3 files"). */
+  --text-cv-step: 14px;
+  --text-cv-step--line-height: 1.4;
   --text-cv-input: 16px;
   --text-cv-input--line-height: 1.5;
   --text-cv-code--line-height: 1.55;
@@ -188,21 +191,37 @@
   --text-cv-h3: 17px;
   --text-cv-h3--line-height: 1.4;
 
+  /* Height of one step line (h-cv-row / min-h-cv-row). */
+  --spacing-cv-row: 30px;
+
   --animate-cv-spark: cv-spark 2.4s cubic-bezier(0.165, 0.84, 0.44, 1) infinite;
   --animate-cv-rise: cv-rise 0.32s cubic-bezier(0.165, 0.84, 0.44, 1) both;
   --animate-cv-pop: cv-pop 0.18s cubic-bezier(0.165, 0.84, 0.44, 1) both;
   --animate-cv-dots: cv-dots 1.4s steps(4, end) infinite;
 }
 
+/* Layout values the utilities read through classes below (A3 §2.2). */
+:root {
+  --cv-indent: 22px;
+  --cv-img-max-h: 480px;
+  --cv-gutter: 24px;
+}
+
 [data-mode="phone"] {
   --text-cv-prose: 17px;
+  --text-cv-prose--line-height: 1.55;
   --text-cv-ui: 16px;
+  --text-cv-step: 15px;
   --text-cv-meta: 13px;
-  --text-cv-code: 13.5px;
+  --text-cv-code: 13px;
   --text-cv-display: 30px;
-  --text-cv-h1: 24px;
-  --text-cv-h2: 20.5px;
-  --text-cv-h3: 18px;
+  --text-cv-h1: 20px;
+  --text-cv-h2: 18px;
+  --text-cv-h3: 17px;
+  --spacing-cv-row: 34px;
+  --cv-indent: 16px;
+  --cv-img-max-h: 70svh;
+  --cv-gutter: 16px;
 }
 
 /* ── Claude view: motion ─────────────────────────────────────────────── */
@@ -224,8 +243,47 @@
   from { clip-path: inset(0 100% 0 0); }
   to { clip-path: inset(0 -1ch 0 0); }
 }
+@keyframes cv-thread {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
 @media (prefers-reduced-motion: reduce) {
   .animate-cv-spark, .animate-cv-rise, .animate-cv-pop { animation: none !important; }
+}
+
+/* Light Thread: one clay light runs down the hairline of the steps Claude is working on. */
+.cv-thread-light {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent, var(--cv-clay) 50%, transparent);
+  animation: cv-thread 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-thread-light { animation: none; transform: none; opacity: 0.5; }
+}
+
+/* Pictures in the conversation: the column's width, at most this tall. */
+.cv-img-box { max-height: var(--cv-img-max-h); }
+
+/* Code blocks and tables: a box on desktop, the full screen width on phones. */
+.cv-bleed { border-width: 1px; border-radius: 12px; }
+[data-mode="phone"] .cv-bleed {
+  margin-inline: calc(-1 * var(--cv-gutter));
+  border-radius: 0;
+  border-inline-width: 0;
+}
+[data-mode="phone"] .cv-bleed > table { padding-inline: 0; }
+.cv-cell { max-width: 24rem; }
+[data-mode="phone"] .cv-cell { max-width: 15rem; }
+[data-mode="phone"] .cv-bleed .cv-cell:first-child { padding-left: var(--cv-gutter); }
+[data-mode="phone"] .cv-bleed .cv-cell:last-child { padding-right: var(--cv-gutter); }
+
+/* A long block shown in part: fades out at the bottom (Show more opens it). */
+.cv-clamp {
+  max-height: 22em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent);
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
 }
 
 /* Smooth disclosure: grid rows 0fr → 1fr. */
@@ -251,6 +309,6 @@
 /* Prose details the utilities cannot express. */
 .cv-prose { font-optical-sizing: auto; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 .cv-prose ::selection, .cv ::selection { background: var(--cv-clay-soft); }
-.cv-scroll { scrollbar-width: thin; scrollbar-color: var(--cv-line) transparent; }
+.cv-scroll, .cv-thin { scrollbar-width: thin; scrollbar-color: var(--cv-line) transparent; }
 .cv-noscrollbar { scrollbar-width: none; }
 .cv-noscrollbar::-webkit-scrollbar { display: none; }

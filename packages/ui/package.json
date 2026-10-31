@@ -10,7 +10,8 @@
     "./*": "./ui/*"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --test --experimental-strip-types ui/lib/*.test.ts"
   },
   "peerDependencies": {
     "react": "^19",
