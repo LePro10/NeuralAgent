@@ -14,7 +14,7 @@ import {
   useKeyboardOpen,
   useLayoutMode,
   usePortalTarget,
-  useStackNav,
+  useNavBack,
   type MenuEntry,
 } from "@neuralagent/ui";
 import { ChevronsUpDown, Ellipsis, Folder, Square, SquareTerminal, Trash2, Users } from "lucide-react";
@@ -22,7 +22,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { clock, useNow } from "../../lib/agentui";
 import { useClient, useDaemon } from "../../lib/store";
 import { elapsed } from "../../lib/swarmFeed";
-import { useOpenSession } from "../NeuralPage";
+import { useOpenAgent } from "../../lib/openAgent";
 import { MemberButton, RoleMark, useMembers, type MemberView } from "./members";
 import { SwarmFeed } from "./SwarmFeed";
 
@@ -39,7 +39,7 @@ export function SwarmDetail({ id }: { id: string }) {
   const all = useDaemon((c) => c.state?.swarm_messages);
   const messages = useMemo(() => (all ?? []).filter((m) => m.swarm_id === id), [all, id]);
   const members = useMembers(swarm);
-  const openSession = useOpenSession();
+  const openSession = useOpenAgent();
   const [confirm, setConfirm] = useState<"stop" | "remove" | null>(null);
 
   if (!swarm) return phone ? <PhoneBar title="" /> : null;
@@ -232,7 +232,8 @@ function SwarmComposer({ swarm, members }: { swarm: Swarm; members: MemberView[]
 function PhoneFrame({ ended, children }: { ended: boolean; children: ReactNode }) {
   const kbOpen = useKeyboardOpen();
   const kb = useKeyboardInset(usePortalTarget());
-  const bottom = kb ? `${kb.bottom + 8}px` : kbOpen ? "calc(var(--safe-bottom) + 8px)" : ended ? "var(--tabbar-space)" : "calc(var(--tabbar-space) + 4px)";
+  // The dock is hidden on this screen (phone router): only the safe area stays clear.
+  const bottom = kb ? `${kb.bottom + 8}px` : kbOpen ? "calc(var(--safe-bottom) + 8px)" : ended ? "max(var(--tabbar-space), var(--safe-bottom))" : "calc(max(var(--tabbar-space), var(--safe-bottom)) + 4px)";
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ paddingTop: "var(--safe-top)", paddingBottom: bottom }}>
       {children}
@@ -242,10 +243,10 @@ function PhoneFrame({ ended, children }: { ended: boolean; children: ReactNode }
 
 /** Phones: back to the list, the goal as the inline title, the actions. */
 function PhoneBar({ title, actions }: { title: string; actions?: ReactNode }) {
-  const { pop } = useStackNav();
+  const back = useNavBack();
   return (
     <header className="flex h-navbar shrink-0 items-center gap-1 px-2">
-      <BackButton label="Swarm" onBack={pop} compact />
+      {back ? <BackButton label={back.label} onBack={back.onBack} compact /> : <span className="min-w-tap" />}
       <span className="min-w-0 flex-1 truncate text-center text-headline text-bright">{title}</span>
       <span className="flex min-w-tap justify-end">{actions}</span>
     </header>

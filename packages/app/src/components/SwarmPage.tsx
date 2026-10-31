@@ -1,10 +1,11 @@
 // Swarms: teams of agents on one goal that hand work to each other, and their conversation.
 // Desktop: the page header of every top-level page, then the list beside the open swarm.
-// Phones: the list as an iOS page; a swarm pushes in as the next level of the Stack.
+// Phones: the list as a page; a swarm is the next page of the phone router (`#/swarm/<id>`).
 import type { Swarm } from "@neuralagent/protocol";
-import { Button, Empty, IconButton, Page, Stack, useLayoutMode, useStack } from "@neuralagent/ui";
+import { Button, Empty, IconButton, Page, useLayoutMode } from "@neuralagent/ui";
 import { Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { phoneRouter } from "../lib/phoneRoute";
 import { useDaemon } from "../lib/store";
 import { Glow } from "./Glow";
 import { NewSwarmSheet } from "./swarm/NewSwarm";
@@ -19,10 +20,9 @@ export function SwarmPage() {
   const sorted = useMemo(() => [...swarms].sort((a, b) => Number(a.ended) - Number(b.ended) || b.started_at - a.started_at), [swarms]);
   const [creating, setCreating] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
-  const stack = useStack();
-
+  // Phones: a swarm is a page of the phone router (back walks it); desktop shows it beside the list.
   const open = (id: string) => {
-    if (phone) stack.push(id, <SwarmDetail id={id} />);
+    if (phone) phoneRouter().push({ k: "swarm", id });
     else setPicked(id);
   };
   const created = (id: string) => {
@@ -40,26 +40,17 @@ export function SwarmPage() {
   if (phone) {
     return (
       <div className="relative h-full">
-        <Stack
-          stack={stack}
-          root={
-            <div className="relative h-full">
-              <Glow tint="swarm" />
-              <Page
-                title="Swarm"
-                eyebrow="Agent teams"
-                actions={
-                  <IconButton label="New swarm" variant="ghost" onClick={newSwarm}>
-                    <Plus />
-                  </IconButton>
-                }
-              >
-                {sorted.length === 0 ? <Empty Icon={Users} title="No swarms yet" detail={EMPTY_DETAIL} action={emptyAction} /> : <SwarmGroups swarms={sorted} onOpen={open} />}
-              </Page>
-            </div>
+        <Page
+          title="Swarms"
+          eyebrow="Agent teams"
+          actions={
+            <IconButton label="New swarm" variant="glass" onClick={newSwarm}>
+              <Plus />
+            </IconButton>
           }
-          className="h-full"
-        />
+        >
+          {sorted.length === 0 ? <Empty Icon={Users} title="No swarms yet" detail={EMPTY_DETAIL} action={emptyAction} /> : <SwarmGroups swarms={sorted} onOpen={open} />}
+        </Page>
         {sheet}
       </div>
     );

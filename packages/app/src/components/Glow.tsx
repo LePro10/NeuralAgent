@@ -1,3 +1,4 @@
+import { useLayoutMode } from "@neuralagent/ui";
 import type { CSSProperties } from "react";
 
 /** Colour pairs for a page's light: [left, right, centre] as colour tokens. */
@@ -14,9 +15,12 @@ const TINTS = {
  * Soft coloured light at the top of a page (behind the content), over the app's ground. Works on
  * light and dark grounds: the colours are mixed into transparency, never painted as a dark or white
  * slab. The page's own colours lean toward the accent, so every page still reads in the theme.
+ * Phones show none: their pages stay calm (one soft light on the ground, from the shell).
  */
 export function Glow({ tint = "neural", className }: { tint?: keyof typeof TINTS; className?: string }) {
+  const phone = useLayoutMode() === "phone";
   const [a, b, c] = TINTS[tint];
+  if (phone) return null;
   const style: CSSProperties = {
     background: [
       `radial-gradient(70% 60% at 10% 0%, color-mix(in oklab, var(${a}) 30%, transparent), transparent 72%)`,

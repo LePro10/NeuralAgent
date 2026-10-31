@@ -1,15 +1,15 @@
 import type { Workspace } from "@neuralagent/protocol";
-import { AppShell, Button, CommandPalette, ConfirmSheet, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, topActivity, ACTIVITY_LABEL, type CommandGroup, type NavBack, type NavItem } from "@neuralagent/ui";
-import { ArrowDownToLine, Copy, Ellipsis, Folder, FolderGit2, FolderPlus, Folders, Gauge, History, LayoutDashboard, Palette, Pencil, Pin, PinOff, Plug, Settings, Smartphone, Sparkles, Trash2, Users } from "lucide-react";
+import { AppShell, Button, CommandPalette, ConfirmSheet, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, useLayoutMode, ACTIVITY_LABEL, type CommandGroup, type NavItem } from "@neuralagent/ui";
+import { ArrowDownToLine, Copy, Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Palette, Pencil, Pin, PinOff, Plug, Settings, Smartphone, Sparkles, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
 import { LaunchScreen } from "./components/LaunchScreen";
-import { MorePage, type MoreItem } from "./components/MorePage";
-import { WorkspacesPage } from "./components/WorkspacesPage";
 import { UpdateBadge } from "./components/UpdateBadge";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { AgentCatalog } from "./components/AgentCatalog";
 import { AgentsDashboard } from "./components/AgentsDashboard";
+import { CallScreen } from "./components/CallScreen";
+import { PhoneApp } from "./components/phone/PhoneApp";
 import { BrandMark } from "./components/BrandMark";
 import { ChangesSheet } from "./components/ChangesSheet";
 import { HistoryPage } from "./components/HistoryPage";
@@ -20,9 +20,10 @@ import { NeuralPage } from "./components/NeuralPage";
 import { SwarmPage } from "./components/SwarmPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { ZoomControl } from "./components/ZoomControl";
-import { frontTabFor } from "./lib/layout";
 import { endCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
+import { openAgentOnDesktop } from "./lib/openAgent";
+import { phoneRouter, usePhoneNav } from "./lib/phoneRoute";
 import { ALERT_TEXT, chime, useAlerts, wantsNotify, wantsSound } from "./lib/alerts";
 import { writeClipboard } from "./lib/clipboard";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
@@ -39,11 +40,9 @@ const SWARM = "__swarm";
 const HISTORY = "__history";
 const USAGE = "__usage";
 const SETTINGS = SETTINGS_PAGE;
-// Phone tabs that are pages of their own: the workspace list and everything else ("More").
+// Former phone tabs (before the phone router), possibly still remembered as the shown page.
 const WORKSPACES = "__workspaces";
 const MORE = "__more";
-/** Pages that live under the More tab on phones. Remote access and MCP servers are Settings sections. */
-const UNDER_MORE = [HISTORY, USAGE, SETTINGS];
 
 /** Settings sections the command palette reaches directly (⌘K). */
 const SETTINGS_SHORTCUTS = [
@@ -112,10 +111,15 @@ export function App() {
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
   useUpdateWatch(); // version label, Update button and dialog (lib/updates.ts)
   useWindowDrag();
+  // Phones get their own shell and router (components/phone/PhoneApp.tsx); the effects below serve both.
+  const phone = useLayoutMode() === "phone";
+  const phoneRef = useRef(phone);
+  phoneRef.current = phone;
 
   const workspaces = useMemo(() => [...(state?.workspaces ?? [])].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order), [state?.workspaces]);
   // Neural is the home screen until something else is picked.
-  const neural = workspace === NEURAL || workspace === null;
+  // The old phone tabs (Workspaces, More) are not desktop pages: Neural stands in.
+  const neural = workspace === NEURAL || workspace === null || workspace === WORKSPACES || workspace === MORE;
   const dashboard = workspace === AGENTS;
   const swarmPage = workspace === SWARM;
   // Old routes of pages that moved into Settings (remembered from an earlier run, links) open their section.
@@ -128,16 +132,15 @@ export function App() {
   const settingsOpen = workspace === SETTINGS || !!moved;
   const history = workspace === HISTORY;
   const usage = workspace === USAGE;
-  const wsList = workspace === WORKSPACES;
-  const more = workspace === MORE;
-  const current = neural || dashboard || swarmPage || settingsOpen || history || usage || wsList || more ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const current = neural || dashboard || swarmPage || settingsOpen || history || usage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural, …": hand what was heard to Neural and show the conversation.
   useEffect(
     () =>
       platform.voice?.onCommand((text) => {
         if (!text.trim()) return;
-        setWorkspace(NEURAL);
+        if (phoneRef.current) phoneRouter().go({ tab: "neural", stack: [] });
+        else setWorkspace(NEURAL);
         client.req({ m: "orch_send", p: { text } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
       }),
     [platform.voice, client, setWorkspace],
@@ -164,27 +167,29 @@ export function App() {
       platform.call?.onDial((start) => {
         if (!start) return endCall();
         dialled.current = true;
-        setWorkspace(null);
+        // The call screen is global (it stays over any page): no need to move.
         void startCall(client);
       }),
-    [platform, client, setWorkspace],
+    [platform, client],
   );
 
-  // A tapped notification (web push, Android) opens its agent once the state knows it.
+  // A tapped notification (web push, Android) opens its agent. Phones: at once, over the Agents
+  // inbox (the screen shows the remembered name until the state arrives). Desktop: once the state
+  // knows the session (its workspace, with its tab in front).
   const [opening, setOpening] = useState<string | null>(null);
-  useEffect(() => platform.onOpenSession?.(setOpening), [platform]);
+  const open = (sid: string) => (phoneRef.current ? phoneRouter().openAgentFresh(sid) : setOpening(sid));
+  useEffect(() => platform.onOpenSession?.(open), [platform]);
   useEffect(() => {
-    const s = opening ? state?.sessions[opening] : undefined;
-    if (!s) return;
+    if (!opening || !state?.sessions[opening]) return;
     setOpening(null);
-    const layout = frontTabFor(state?.layouts[s.workspace_id], s.id);
-    if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
-    setWorkspace(s.workspace_id);
+    openAgentOnDesktop(client, setWorkspace, opening);
   }, [opening, state, client, setWorkspace]);
 
   // An agent finished, needs input or failed: sound and/or notification as this device chose
   // (lib/alerts.ts). Silent while you look at its workspace; in front but elsewhere, a small note
   // with "Open"; in the background a system notification (phones and browsers: the relay's push).
+  // Phones: silent on that agent's screen and on the Agents inbox (it shows there); "finished"
+  // is never a note (the inbox has it); another agent that needs you is one quiet note.
   const shownWs = useRef<string | undefined>(undefined);
   shownWs.current = current?.id;
   useEffect(() => {
@@ -193,11 +198,22 @@ export function App() {
       const mode = useAlerts.getState().mode;
       const s = client.state?.sessions[ev.session_id];
       const looking = platform.focused ? platform.focused() : document.visibilityState === "visible";
-      if (mode === "off" || (looking && s && s.workspace_id === shownWs.current)) return;
+      if (mode === "off") return;
+      if (phoneRef.current && looking) {
+        const nav = usePhoneNav.getState();
+        const top = nav.stack.at(-1);
+        if ((top?.k === "agent" && top.sid === ev.session_id) || (nav.tab === "agents" && !top)) return;
+      } else if (looking && s && s.workspace_id === shownWs.current) return;
       const title = s?.title ?? "Agent";
       if (wantsSound(mode)) chime(ev.kind);
-      if (looking) toast(`${title}: ${ALERT_TEXT[ev.kind]}`, { actionLabel: "Open", undo: () => setOpening(ev.session_id), tone: ev.kind === "error" ? "danger" : undefined });
-      else if (wantsNotify(mode) && !platform.push) platform.notify?.(title, ALERT_TEXT[ev.kind]);
+      if (looking) {
+        toast(`${title}: ${ALERT_TEXT[ev.kind]}`, {
+          actionLabel: "Open",
+          undo: () => (phoneRef.current ? phoneRouter().openAgent(ev.session_id) : setOpening(ev.session_id)),
+          tone: ev.kind === "error" ? "danger" : undefined,
+          desktopOnly: ev.kind === "done",
+        });
+      } else if (wantsNotify(mode) && !platform.push) platform.notify?.(title, ALERT_TEXT[ev.kind]);
     });
     return () => void off();
   }, [client, platform]);
@@ -295,32 +311,7 @@ export function App() {
     { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
   ];
 
-  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : usage ? USAGE : settingsOpen ? SETTINGS : wsList ? WORKSPACES : more ? MORE : (current?.id ?? "");
-  // Phones: five tabs — Neural · Agents · Workspaces · Swarm · More. A workspace is pushed from the
-  // Workspaces list, History/Usage/Settings from More; back returns to the list.
-  const byId = new Map(items.map((i) => [i.id, i]));
-  const tabOf = (id: string) => (UNDER_MORE.includes(id) || id === MORE ? MORE : [NEURAL, AGENTS, SWARM].includes(id) ? id : WORKSPACES);
-  const tab = tabOf(selected);
-  const wsActivity = topActivity(items.filter((i) => i.group === "Workspaces").map((i) => i.activity));
-  const phoneItems: NavItem[] = [
-    byId.get(NEURAL)!,
-    byId.get(AGENTS)!,
-    { id: WORKSPACES, label: "Workspaces", Icon: Folders, activity: wsActivity },
-    byId.get(SWARM)!,
-    { id: MORE, label: "More", Icon: Ellipsis, activity: remoteWaiting },
-  ];
-  const moreItems: MoreItem[] = [
-    { id: HISTORY, label: "History", Icon: History },
-    { id: USAGE, label: "Usage", Icon: Gauge },
-    { id: SETTINGS, label: "Settings", Icon: Settings, group: " ", activity: remoteWaiting, value: remoteWaiting ? "Waiting" : undefined },
-  ];
-  // Each tab remembers where you were in it (iOS): tapping it again from elsewhere returns there,
-  // tapping the active tab pops to its root.
-  const lastIn = useRef<Record<string, string>>({});
-  if (selected) lastIn.current[tab] = selected;
-  const goTab = (id: string) => {
-    setWorkspace(id === tab ? id : (lastIn.current[id] ?? id));
-  };
+  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : usage ? USAGE : settingsOpen ? SETTINGS : (current?.id ?? "");
   const go = (id: string) => (id === ADD ? void addWorkspace() : setWorkspace(id));
   const openSettings = (section: string) => {
     requestSettingsSection(section);
@@ -349,12 +340,6 @@ export function App() {
       ],
     },
   ];
-  // Back target and depth of the shown page (phones; desktop ignores both).
-  const back: NavBack | null = UNDER_MORE.includes(selected)
-    ? { label: "More", onBack: () => setWorkspace(MORE) }
-    : current
-      ? { label: "Workspaces", onBack: () => setWorkspace(WORKSPACES) }
-      : null;
 
   const body = !state ? (
     <div className="h-full" />
@@ -370,10 +355,6 @@ export function App() {
     <HistoryPage />
   ) : usage ? (
     <UsagePage />
-  ) : wsList ? (
-    <WorkspacesPage workspaces={workspaces} onOpen={setWorkspace} onAdd={addWorkspace} />
-  ) : more ? (
-    <MorePage items={moreItems} onGo={setWorkspace} onAccount={() => setWorkspace(SETTINGS)} />
   ) : current ? (
     <WorkspaceView key={current.id} workspaceId={current.id} />
   ) : (
@@ -391,14 +372,36 @@ export function App() {
     </Page>
   );
 
+  // Sheets, dialogs and screens both layouts share (inside the shell: it is their surface).
+  const shared = (
+    <>
+      <LaunchScreen ready={!!state} offline={status === "offline"} />
+      {state && <AgentCatalog />}
+      {state && <ChangesSheet />}
+      {state && <FolderBrowserSheet />}
+      <UpdateDialog />
+      <ConfirmSheet
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        onConfirm={async () => {
+          if (removing) await client.req({ m: "workspace_remove", p: { id: removing.id } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+        }}
+        title={`Remove ${removing?.name ?? "workspace"}?`}
+        message="It leaves NeuralAgent and its agents stop; the folder and its files stay on the computer."
+        confirmLabel="Remove"
+        destructive
+        Icon={Trash2}
+      />
+      {/* A call stays on screen wherever you go meanwhile. */}
+      <CallScreen />
+      <Toaster />
+    </>
+  );
+
+  if (phone) return <PhoneApp disconnected={!!state && disconnected}>{shared}</PhoneApp>;
+
   return (
     <AppShell
-      nav={{
-        items: phoneItems,
-        value: tab,
-        onChange: goTab,
-        tabs: 5,
-      }}
       sidebar={
         <Sidebar
           items={items}
@@ -421,29 +424,12 @@ export function App() {
         />
       }
     >
-      <NavPage id={selected || "welcome"} depth={back ? 1 : 0} back={back}>
+      <NavPage id={selected || "welcome"} depth={0}>
         {body}
       </NavPage>
       <ConnectionPill show={!!state && disconnected} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} groups={paletteGroups} placeholder="Jump to a workspace or page…" />
-      <LaunchScreen ready={!!state} offline={status === "offline"} />
-      {state && <AgentCatalog />}
-      {state && <ChangesSheet />}
-      {state && <FolderBrowserSheet />}
-      <UpdateDialog />
-      <ConfirmSheet
-        open={!!removing}
-        onClose={() => setRemoving(null)}
-        onConfirm={async () => {
-          if (removing) await client.req({ m: "workspace_remove", p: { id: removing.id } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
-        }}
-        title={`Remove ${removing?.name ?? "workspace"}?`}
-        message="It leaves NeuralAgent and its agents stop; the folder and its files stay on the computer."
-        confirmLabel="Remove"
-        destructive
-        Icon={Trash2}
-      />
-      <Toaster />
+      {shared}
       <ZoomControl />
     </AppShell>
   );

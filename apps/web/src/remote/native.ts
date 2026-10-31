@@ -2,7 +2,9 @@
 // Tab (Google refuses sign-in inside a WebView), status for the widget and the quick tile.
 import { App } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
-import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
+import { registerPlugin, SystemBars, SystemBarsStyle, type PluginListenerHandle } from "@capacitor/core";
+import { canGoBackInPage } from "@neuralagent/app";
+import { openLayerCount } from "@neuralagent/ui";
 
 interface NeuralAgentPlugin {
   pushState(): Promise<{ available: boolean; permission: "granted" | "denied" | "prompt" }>;
@@ -95,3 +97,37 @@ function syncLaunchTheme() {
   new MutationObserver(send).observe(document.documentElement, { attributes: true, attributeFilter: ["data-appearance"] });
 }
 syncLaunchTheme();
+
+// The app's own feel: no page overscroll or text selection outside fields (base.css), and the
+// OS on <html> for the few things that differ (iOS edge swipe-back stays off on Android).
+document.documentElement.classList.add("native-app");
+document.documentElement.dataset.os = "android";
+
+// Android back: closes the open sheet or goes back a page (both are browser history entries,
+// lib/phoneRoute.ts); at the Agents root it leaves the app in the background (the agents and
+// their notifications keep going), as a home screen app does.
+void App.addListener("backButton", () => {
+  // The router stamps navIdx on history.state; without it (host picker, sign-in, offline) no page
+  // history exists, so only open layers (sheets, dialogs) count.
+  const routed = typeof (history.state as { navIdx?: unknown } | null)?.navIdx === "number";
+  if (routed ? canGoBackInPage() : openLayerCount() > 0) history.back();
+  else void App.minimizeApp();
+});
+
+/**
+ * Status and navigation bar icons that read on the app's ground: dark icons on the light theme,
+ * light ones on the dark (edge-to-edge draws the page under both bars).
+ */
+function syncSystemBars() {
+  let sent = "";
+  const send = () => {
+    const light = document.documentElement.dataset.appearance === "light";
+    const style = light ? SystemBarsStyle.Light : SystemBarsStyle.Dark;
+    if (style === sent) return;
+    sent = style;
+    void SystemBars.setStyle({ style }).catch(() => {});
+  };
+  send();
+  new MutationObserver(send).observe(document.documentElement, { attributes: true, attributeFilter: ["data-appearance"] });
+}
+syncSystemBars();

@@ -3,10 +3,11 @@ import type { AgentStatus, Session } from "@neuralagent/protocol";
 import { Button, ConfirmSheet, Empty, IconButton, List, Menu, Page, SwipeRow, cn, toast, useLayoutMode, type MenuEntry, type SwipeAction } from "@neuralagent/ui";
 import { Bot, ChevronRight, Download, Ellipsis, ExternalLink, RotateCw, Square, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { frontTabFor } from "../lib/layout";
+import { useOpenAgent } from "../lib/openAgent";
+import { humanError } from "../lib/agentReason";
 import { agentSays, shortAgo, useNow } from "../lib/agentui";
 import { STATUS, activityOf } from "../lib/status";
-import { useCatalogSheet, useClient, useDaemon, useUi } from "../lib/store";
+import { useCatalogSheet, useClient, useDaemon } from "../lib/store";
 import { EngineTile } from "./EngineTile";
 import { Glow } from "./Glow";
 
@@ -27,7 +28,7 @@ const WORD: Record<AgentStatus, string> = {
 export function AgentsDashboard() {
   const client = useClient();
   const state = useDaemon((c) => c.state);
-  const setWorkspace = useUi((u) => u.setWorkspace);
+  const openAgent = useOpenAgent();
   const openCatalog = useCatalogSheet((c) => c.setOpen);
   const phone = useLayoutMode() === "phone";
   const now = useNow(5000);
@@ -48,12 +49,8 @@ export function AgentsDashboard() {
     return { groups, counts: { waiting: n(["waiting"]), working: n(["working", "starting"]), done: n(["done"]), error: n(["error"]) } };
   }, [state?.sessions, state?.workspaces, state?.profiles]);
 
-  /** Switch to the session's workspace and bring its tab to the front. */
-  const open = (s: Session) => {
-    const layout = frontTabFor(state?.layouts[s.workspace_id], s.id);
-    if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
-    setWorkspace(s.workspace_id);
-  };
+  /** Desktop: the session's workspace with its tab in front; phones: the agent's own screen. */
+  const open = (s: Session) => openAgent(s.id);
   const act = (r: Parameters<typeof client.req>[0]) => client.req(r).then(() => {}, (e) => void toast((e as Error).message, { tone: "danger" }));
   const stop = (s: Session) => act({ m: "session_stop", p: { id: s.id } });
   const restart = (s: Session) => act({ m: "session_restart", p: { id: s.id } });
@@ -150,7 +147,8 @@ function Summary({ counts }: { counts: { waiting: number; working: number; done:
 function AgentRow({ s, engine, now, onOpen, menu }: { s: Session; engine: string; now: number; onOpen: () => void; menu?: MenuEntry[] }) {
   const st = STATUS[s.status];
   const notices = useDaemon((c) => c.state?.orchestrator?.messages);
-  const said = agentSays(s, notices);
+  const raw = agentSays(s, notices);
+  const said = s.status === "error" ? humanError(raw || s.last_line).text : raw;
   const usage = s.usage
     ? [s.usage.cost_usd != null ? money(s.usage.cost_usd) : null, `${compact(totalTokens(s.usage.tokens))} tokens`].filter(Boolean).join(" · ")
     : "";

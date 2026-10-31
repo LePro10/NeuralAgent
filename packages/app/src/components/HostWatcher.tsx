@@ -2,6 +2,7 @@ import { toast } from "@neuralagent/ui";
 import { useEffect } from "react";
 import { checkHostUpdate, installHostUpdate, watchHostUpdate } from "../lib/host";
 import { useClient, useDaemon } from "../lib/store";
+import { updateNotice } from "../lib/updateNotice";
 
 const DAY = "na.hostVersion";
 const EVERY = 6 * 60 * 60 * 1000;
@@ -46,7 +47,7 @@ export function HostUpdateWatcher() {
       const v = info?.available;
       if (!info || !v || offered.has(v)) return;
       offered.add(v);
-      toast(`NeuralAgent ${v} is available on ${hostName}`, {
+      updateNotice(`NeuralAgent ${v} is available on ${hostName}`, {
         actionLabel: info.app_running ? "Install" : undefined,
         undo: info.app_running ? () => void installHostUpdate(client) : undefined,
         duration: 20000,

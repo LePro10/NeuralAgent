@@ -1,7 +1,7 @@
-import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, launch as launchScreen, LaunchNote, useClient, useDaemon, useLaunch, type Platform } from "@neuralagent/app";
+import { App as AgentApp, bindCallAudio, DaemonProvider, HostUpdateWatcher, launch as launchScreen, LaunchNote, updateNotice, useClient, useDaemon, useLaunch, type Platform } from "@neuralagent/app";
 import { DaemonClient } from "@neuralagent/protocol";
 import { parsePairLink, type RelayDevice } from "@neuralagent/remote";
-import { Avatar, Button, Callout, ConfirmSheet, List, Page, Pill, Row, Spinner, toast, Toaster } from "@neuralagent/ui";
+import { Avatar, Button, Callout, ConfirmSheet, List, Page, Pill, Row, Spinner, detectPlatform, toast, Toaster } from "@neuralagent/ui";
 import { Code, LayoutGrid, KeyRound, LogIn, LogOut, Monitor, PlugZap, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Brand } from "../brand";
@@ -11,6 +11,8 @@ import { webUpdate } from "./webUpdate";
 
 startWorker();
 const launch = takeLaunchRequest();
+// The OS on <html> (the Android app sets its own): iOS-only gestures such as the edge swipe-back.
+document.documentElement.dataset.os ??= detectPlatform(navigator.userAgent, navigator.maxTouchPoints ?? 0);
 
 /**
  * Centered column for everything before a computer is open, on the same ground as the launch
@@ -29,6 +31,8 @@ function Screen({ children, ready = true }: { children: React.ReactNode; ready?:
         <Brand />
         {children}
       </main>
+      {/* Sign-in, pairing and "offline" report their errors as toasts too. */}
+      <Toaster />
     </div>
   );
 }
@@ -79,7 +83,7 @@ function useApkUpdate() {
       .then(([have, l]) => {
         const url = l?.downloads.android;
         if (!url || !newer(l.version, have)) return;
-        toast(`NeuralAgent ${l.version} for Android is available.`, {
+        updateNotice(`NeuralAgent ${l.version} for Android is available.`, {
           actionLabel: "Download",
           undo: () => void native!.openOutside(url),
           duration: 20000,
@@ -472,7 +476,6 @@ function Offline({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void }
       <Button variant="glass" Icon={RefreshCw} onClick={onSwitch}>
         Other computer
       </Button>
-      <Toaster />
     </Screen>
   );
 }

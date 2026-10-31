@@ -1,6 +1,7 @@
 // Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History):
 // plain-text previews, short relative times, day groups.
 import { useEffect, useState } from "react";
+import { isNoiseLine } from "./agentReason.ts";
 
 /** Markdown and terminal noise → one readable line ("**README.md** now…" → "README.md now…"). */
 export function plainText(s: string | null | undefined): string {
@@ -29,16 +30,18 @@ const MENU_LINE = /^\s*[❯›>]?\s*\d+[.)]\s/;
  * its last screen line (not a menu entry) or its prompt.
  */
 export function agentSays(s: { id: string; status: string; last_message?: string; last_line?: string; prompt?: string }, notices: { text: string; session_id?: string; role: string }[] = []): string {
-  if (s.status === "waiting") {
+  if (s.status === "waiting" || s.status === "error") {
+    const want = s.status === "waiting" ? "needs input" : "stopped with an error";
     for (let i = notices.length - 1; i >= 0; i--) {
       const m = notices[i]!;
       if (m.session_id !== s.id || m.role !== "notice") continue;
       const [, , what, said] = NOTICE.exec(m.text) ?? [];
-      if (what === "needs input" && said) return plainText(said);
+      if (what === want && said) return plainText(said);
       break;
     }
   }
-  const line = s.last_line && !MENU_LINE.test(s.last_line) ? s.last_line : undefined;
+  // Hook calls and shell plumbing ("…/neuralagentd hook StopFailure") are not something it said.
+  const line = s.last_line && !MENU_LINE.test(s.last_line) && !isNoiseLine(s.last_line) ? s.last_line : undefined;
   return plainText(s.last_message ?? line ?? s.prompt ?? "");
 }
 

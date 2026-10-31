@@ -1,22 +1,25 @@
-// Settings. Phones: a grouped list with quiet icon tiles; each row pushes its page (swipe back).
+// Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a
+// route of the phone router (`#/settings/<section>`), so back and Android's back walk them.
 // Desktop: two columns, the same list on the left and the chosen page on the right. Pages can push
 // a detail of their own (a workspace) through `useSettingsNav`. Remote access and MCP servers live
 // here too (they were top-level pages before); `requestSettingsSection` opens one from anywhere.
 import {
   BackButton,
+  Empty,
+  IconTile,
   List,
   NavBackProvider,
   Page,
   Row,
-  Stack,
   useLayoutMode,
-  useStack,
   type Activity,
 } from "@neuralagent/ui";
 import type { LucideIcon } from "lucide-react";
 import { useAlerts } from "../lib/alerts";
-import { ArrowDownToLine, Bell, Bot, Folder, Gamepad2, Info, Mic, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowDownToLine, Bell, Bot, Folder, Gamepad2, Gauge, History, Info, Mic, Monitor, Palette, Phone, Plug, SlidersHorizontal, Smartphone, Sparkles } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { phoneRouter, usePhoneNav } from "../lib/phoneRoute";
+import { UpdateBadge } from "./UpdateBadge";
 import { useCatalogSheet, useDaemon, usePlatform } from "../lib/store";
 import { takeSettingsSection, useSettingsRoute } from "../lib/settingsRoute";
 import { useTheme } from "../lib/theme";
@@ -163,56 +166,87 @@ function useSectionRequests(all: SectionDef[], open: (s: SectionDef) => void) {
 
 /** Settings of this device and of the computer the agents run on (also from a remote). */
 export function SettingsPage() {
-  return useLayoutMode() === "phone" ? <PhoneSettings /> : <DesktopSettings />;
+  return useLayoutMode() === "phone" ? <PhoneSettingsRoot /> : <DesktopSettings />;
 }
 
 /** Like every top-level page: the app's ground, a soft light at the top, eyebrow and large title. */
 const EYEBROW = "Preferences";
 
-function PhoneSettings() {
+/** Detail pages a section pushed (`useSettingsNav().push`), by "<section>/<key>"; kept for this run. */
+const details = new Map<string, { title: string; node: ReactNode }>();
+
+/** The phone's Settings tab: this computer on top, then every section, then History and Usage. */
+export function PhoneSettingsRoot() {
   const groups = useSections();
-  const all = groups.flatMap((g) => g.items);
-  const stack = useStack();
-  // Titles of pushed pages by key, so a detail's back button names the page under it.
-  const titles = useRef(new Map<string, string>());
+  const retap = usePhoneNav((s) => (s.tab === "settings" ? s.retap : 0));
+  const open = (s: SectionDef) => (s.action ? s.action() : phoneRouter().push({ k: "section", id: s.id }));
+  const activity: SectionGroup = {
+    label: "Activity",
+    items: [
+      { id: "history", title: "History", Icon: History },
+      { id: "usage", title: "Usage", Icon: Gauge },
+    ],
+  };
+  return (
+    <Page title="Settings" eyebrow={EYEBROW} scrollTopKey={retap}>
+      <div className="flex flex-col gap-6 pb-8">
+        <ComputerCard />
+        <SectionRows groups={[...groups, activity]} onOpen={(s) => (s.id === "history" || s.id === "usage" ? phoneRouter().push({ k: s.id }) : open(s))} />
+      </div>
+    </Page>
+  );
+}
+
+/** The computer the agents run on: its name, whether it is reachable, and (remote) switching. */
+function ComputerCard() {
+  const platform = usePlatform();
+  const host = useDaemon((c) => c.host?.name);
+  const status = useDaemon((c) => c.status);
+  const remote = platform.kind !== "desktop";
+  const state = status === "open" ? "Connected" : status === "connecting" ? "Connecting…" : "Not reachable";
+  return (
+    <div className="flex flex-col gap-2">
+      <List>
+        <Row
+          leading={<IconTile Icon={Monitor} color="gray" activity={status === "open" ? undefined : "waiting"} />}
+          title={<span className="text-headline">{remote ? (host ?? "Your computer") : "This computer"}</span>}
+          detail={remote ? `${state} · Account, devices, switch computer` : state}
+          chevron
+          onClick={() => phoneRouter().push({ k: "section", id: "remote" })}
+        />
+      </List>
+      <UpdateBadge phone />
+    </div>
+  );
+}
+
+/** One section (or a detail a section pushed) as its own page. */
+export function PhoneSettingsSection({ id, detail }: { id: string; detail?: string }) {
+  const groups = useSections();
+  const s = groups.flatMap((g) => g.items).find((x) => x.id === id);
   const nav: SettingsNav = {
     push: (key, title, node) => {
-      const under = stack.levels.at(-1);
-      titles.current.set(key, title);
-      stack.push(
-        key,
-        <Page title={title} backLabel={(under && titles.current.get(under.key)) ?? "Settings"} onBack={stack.pop} reveal={false}>
-          <div className="pb-8">{node}</div>
-        </Page>,
-      );
+      details.set(`${id}/${key}`, { title, node });
+      phoneRouter().push({ k: "section", id, detail: key });
     },
   };
-  const open = (s: SectionDef) => {
-    if (s.action) return s.action();
-    if (s.own) {
-      return stack.push(s.id, <NavBackProvider value={{ label: "Settings", onBack: stack.pop }}>{s.render!()}</NavBackProvider>);
-    }
-    nav.push(s.id, s.title, s.render!());
-  };
-  useSectionRequests(all, (s) => {
-    stack.popTo(0);
-    open(s);
-  });
+  if (!s?.render) {
+    return (
+      <Page title="Settings">
+        <Empty Icon={SlidersHorizontal} title="Nothing here" detail="This setting is not available on this device." />
+      </Page>
+    );
+  }
+  // A section that is a whole page of its own (a remote's account) brings its own Page.
+  if (s.own && !detail) return <SettingsNavCtx.Provider value={nav}>{s.render()}</SettingsNavCtx.Provider>;
+  const d = detail ? details.get(`${id}/${detail}`) : undefined;
+  // A detail from an earlier run (reload): its content is gone, the section stands in.
+  const shown = d ?? { title: s.title, node: s.render() };
   return (
     <SettingsNavCtx.Provider value={nav}>
-      <Stack
-        stack={stack}
-        root={
-          <div className="relative h-full">
-            <Glow tint="agents" />
-            <Page title="Settings" eyebrow={EYEBROW}>
-              <div className="pb-8">
-                <SectionRows groups={groups} onOpen={open} />
-              </div>
-            </Page>
-          </div>
-        }
-      />
+      <Page title={shown.title} reveal={false}>
+        <div className="pb-8">{shown.node}</div>
+      </Page>
     </SettingsNavCtx.Provider>
   );
 }

@@ -18,6 +18,7 @@ import {
   toast,
   useKeyboardInset,
   useKeyboardOpen,
+  useLayoutMode,
   usePortalTarget,
   type Activity,
   type ComposerHandle,
@@ -26,11 +27,11 @@ import {
 import { Activity as ActivityIcon, Bell, Check, ChevronRight, Ellipsis, Eraser, KeyRound, Phone, Play, Settings2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { startCall } from "../lib/call";
-import { frontTabFor } from "../lib/layout";
+import { useOpenAgent } from "../lib/openAgent";
+import { humanError } from "../lib/agentReason";
 import { NOTICE, byDay, clock, plainText, shortAgo, useNow } from "../lib/agentui";
 import { activityOf } from "../lib/status";
 import { useClient, useDaemon, useUi } from "../lib/store";
-import { CallScreen } from "./CallScreen";
 import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { Glow } from "./Glow";
 
@@ -59,6 +60,9 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<ComposerHandle>(null);
   const [clearing, setClearing] = useState(false);
+  // Phones: Neural is a tab of its own, the conversation and the call only (the agents live in
+  // the Agents tab). No orb, no page light; the call screen is mounted once by the app.
+  const phone = useLayoutMode() === "phone";
   const messages = orch?.messages ?? [];
   const last = messages.at(-1);
   // Keyboard: Android resizes the page (the tab bar hides); iOS overlays it (lift by its height).
@@ -81,13 +85,31 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col" style={{ paddingLeft: "var(--sidebar-space)", paddingTop: "var(--safe-top)", paddingBottom: bottom }}>
-      <Glow />
-      <Header ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} />
+      {!phone && <Glow />}
+      {phone ? (
+        <PhoneHeader ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} />
+      ) : (
+        <Header ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} />
+      )}
 
       <div ref={scroller} className="scroller relative min-h-0 flex-1 overflow-y-auto px-4" style={EDGE_Y}>
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pt-2 pb-6">
           {!orch.ready && <ModelCallout onSettings={onSettings} />}
-          {empty ? (
+          {empty && phone ? (
+            <div className="flex flex-col gap-3 pt-6">
+              <p className="text-subhead text-dim">Ask about your agents, or tell Neural what to start. It talks to every agent on this computer.</p>
+              <SuggestionGrid
+                items={SUGGESTIONS}
+                layout="rail"
+                onPick={(s) => {
+                  if (s.prompt?.endsWith(" ")) {
+                    composer.current?.setText(s.prompt);
+                    composer.current?.focus();
+                  } else if (s.prompt) send(s.prompt);
+                }}
+              />
+            </div>
+          ) : empty ? (
             <div className="flex flex-col items-center gap-6 pt-8">
               <EmptyChatHero greeting="What should your agents do" visual="orb" />
               <SuggestionGrid
@@ -108,7 +130,7 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
         </div>
       </div>
 
-      {!kbOpen && !kb && <LiveAgents />}
+      {!phone && !kbOpen && !kb && <LiveAgents />}
 
       <div className="relative shrink-0 px-4 pt-2">
         <div className="mx-auto w-full max-w-2xl">
@@ -130,7 +152,6 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
         </div>
       </div>
 
-      <CallScreen />
       <ConfirmSheet
         open={clearing}
         onClose={() => setClearing(false)}
@@ -189,15 +210,52 @@ function Header({ ready, busy, empty, onSettings, onClear }: { ready: boolean; b
   );
 }
 
-function ModelCallout({ onSettings }: { onSettings?: () => void }) {
+/** Phones: the tab's large light title, what Neural is doing, Call and the options. */
+function PhoneHeader({ ready, busy, empty, onSettings, onClear }: { ready: boolean; busy: boolean; empty: boolean; onSettings?: () => void; onClear: () => void }) {
+  const client = useClient();
+  const sessions = useDaemon((c) => c.state?.sessions);
+  const live = Object.values(sessions ?? {}).filter((s) => s?.alive && !s.profile_id.startsWith("install:") && s.profile_id !== "shell").length;
+  const status = !ready ? "Needs a model" : busy ? "Working…" : live > 0 ? `Watching ${live} ${live === 1 ? "agent" : "agents"}` : "Your agents’ orchestrator";
+  const items = [
+    ...(onSettings ? [{ label: "Neural settings", Icon: Settings2, onSelect: onSettings }] : []),
+    ...(!empty ? [{ label: "Clear conversation", Icon: Eraser, destructive: true, divider: !!onSettings, onSelect: onClear }] : []),
+  ];
   return (
-    <div className="surface flex items-start gap-3 rounded-list p-4">
-      <IconTile Icon={KeyRound} color="orange" />
+    <header className="flex shrink-0 items-end gap-2 px-4 pt-3 pb-2">
+      <div className="min-w-0 flex-1">
+        <div className="eyebrow mb-1 truncate">{busy ? <Shimmer>{status}</Shimmer> : status}</div>
+        <h1 className="text-large-title font-light text-bright">Neural</h1>
+      </div>
+      {ready && (
+        <IconButton label="Call Neural" variant="glass" onClick={() => void startCall(client)}>
+          <Phone />
+        </IconButton>
+      )}
+      {items.length > 0 && (
+        <Menu
+          title="Neural"
+          items={items}
+          trigger={(show) => (
+            <IconButton label="Neural options" variant="ghost" onClick={show}>
+              <Ellipsis />
+            </IconButton>
+          )}
+        />
+      )}
+    </header>
+  );
+}
+
+function ModelCallout({ onSettings }: { onSettings?: () => void }) {
+  const phone = useLayoutMode() === "phone";
+  return (
+    <div className={cn("flex items-start gap-3", phone ? "border-b-hair border-line pb-4" : "surface rounded-list p-4")}>
+      {!phone && <IconTile Icon={KeyRound} color="orange" />}
       <div className="min-w-0 flex-1">
         <div className="text-headline text-bright">Neural needs a model</div>
         <p className="mt-0.5 text-subhead text-dim">Add your NeuralHub, Anthropic or OpenAI key, or use a local Ollama model.</p>
         {onSettings && (
-          <Button size="sm" variant="accent" onClick={onSettings} className="mt-3 rounded-full">
+          <Button size="sm" variant={phone ? "glass" : "accent"} onClick={onSettings} className="mt-3 rounded-full">
             Set up Neural
           </Button>
         )}
@@ -259,7 +317,8 @@ function NoticeRow({ m, now }: { m: OrchMessage; now: number }) {
   const [lws, ltitle] = label.includes(" — ") ? label.split(" — ", 2) : ["", label];
   const title = session?.title ?? ltitle ?? label;
   const where = ws ?? lws;
-  const text = plainText(said);
+  // A failure in plain words (a hook line or an API error body is not a reason); the agent has the rest.
+  const text = what === "stopped with an error" ? humanError(plainText(said)).text : plainText(said);
   const can = !!session;
   return (
     <button
@@ -321,19 +380,8 @@ function Line({ m, live }: { m: OrchMessage; live: boolean }) {
   }
 }
 
-/** Opens an agent's pane: its workspace, with its tab in front. */
-export function useOpenSession() {
-  const client = useClient();
-  const setWorkspace = useUi((u) => u.setWorkspace);
-  return (sid: string) => {
-    const st = client.state;
-    const s = st?.sessions[sid];
-    if (!s || !st) return;
-    const layout = frontTabFor(st.layouts[s.workspace_id], s.id);
-    if (layout) client.req({ m: "layout_set", p: { workspace_id: s.workspace_id, layout } }).catch(() => {});
-    setWorkspace(s.workspace_id);
-  };
-}
+/** Opens an agent (phones: its screen; desktop: its pane). Kept under the old name for callers. */
+export const useOpenSession = useOpenAgent;
 
 type Chip = { key: string; title: string; sub: string; engine?: string; activity?: Activity; onOpen: () => void };
 

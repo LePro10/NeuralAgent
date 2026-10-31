@@ -1,178 +1,451 @@
-// Phones: one agent at a time, full screen. A calm header (back · workspace and branch · "…" · "+")
-// sits under the status bar; below it a strip of big agent chips switches between the agents of
-// every tab (long-press a chip to close or restart it), and ends in the Chat/Terminal switch while
-// a Claude agent is shown. Claude panes share the Claude view's own
-// background, so the chat reaches the header with no frame around it.
-import type { PaneContent } from "@neuralagent/protocol";
-import { ActionSheet, ContextMenu, IconButton, cn, useNavBack, type MenuEntry } from "@neuralagent/ui";
-import { ChevronLeft, Download, Ellipsis, GitBranch, GitCompare, Globe, Plus } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { activityOf } from "../../lib/status";
-import { useCatalogSheet, useChanges, useDaemon, useUi } from "../../lib/store";
+// Phones: one agent at a time, full screen, under the Island ("Two Drops", PLAN C1).
+//
+// The Island (packages/ui layout/Island) is the only chrome: back (with a dot when another agent
+// needs you), the agent's live mark, its title and "project · status". Tap it for the panel
+// (project + branch, the project's agents with the ones that need you first, Chat/Terminal per
+// agent, stop / restart / rename / changes / copy id / close); swipe it sideways for the
+// previous / next agent. It shrinks while you scroll down and hides while the keyboard is open.
+// The body is the Claude chat (ClaudeView) or the terminal with its key bar.
+//
+// `PhoneAgentScreen` (C1): one session, for the phone router (I5). Never writes `layout_set`.
+// (Phones never show the workspace layout; the desktop keeps its panes.)
+import type { AgentStatus, Session } from "@neuralagent/protocol";
+import {
+  ConfirmSheet,
+  cn,
+  Input,
+  Island,
+  IslandPanel,
+  Row,
+  neighbour,
+  Spinner,
+  toast,
+  useHideOnScroll,
+  useKeyboard,
+  type MenuEntry,
+} from "@neuralagent/ui";
+import { Copy, Download, GitBranch, GitCompare, Globe, Pencil, Plus, RotateCw, Square, TextSelect, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { activityOf, STATUS } from "../../lib/status";
+import { useCatalogSheet, useChanges, useClient, useDaemon, useUi } from "../../lib/store";
+import { ClaudeView } from "../claude/ClaudeView";
 import { EngineTile, QuietTile, tileGlyph } from "../EngineTile";
-import type { PaneActions } from "../Pane";
-import type { PaneRef } from "../WorkspaceView";
-import { ClaudeViewSwitch } from "./ClaudeViewSwitch";
+import { KeyBar } from "../KeyBar";
+import { showTerminalText } from "../TerminalText";
+import { TerminalView } from "../TerminalView";
+import { ClaudeViewSwitch, useAgentChat } from "./ClaudeViewSwitch";
+import { IslandOverrideContext, type IslandOverride } from "./islandOverride";
 import { NewAgentSheet } from "./NewAgentSheet";
-import { paneTitle, usePaneMenu, usePaneSession } from "./paneMenu";
 
-export function PhoneWorkspace({ workspaceId, panes, current, actionsIn, children }: {
+/** Statuses that need you: listed first, and they light the back dot. */
+const NEEDS_YOU: AgentStatus[] = ["waiting", "error"];
+const needsYou = (s: Session | undefined) => !!s && s.alive && NEEDS_YOU.includes(s.status);
+
+/** One agent in the panel / swipe order. */
+interface AgentEntry {
+  key: string;
+  sid: string | null;
+  title: string;
+  engine: string;
+  status?: AgentStatus;
+  claude: boolean;
+  browser?: boolean;
+  open: () => void;
+}
+
+// ───────────────────────────── PhoneAgentScreen (C1) ─────────────────────────────
+
+export function PhoneAgentScreen({ sessionId, onBack, onOpenAgent, backLabel = "Agents", onNewAgent, fallback }: {
+  sessionId: string;
+  onBack: () => void;
+  onOpenAgent: (sid: string) => void;
+  /** Where back goes (screen readers): "Agents", a project's name. */
+  backLabel?: string;
+  /** "New agent" in the panel; without it the panel opens the new-agent sheet itself. */
+  onNewAgent?: (workspaceId: string) => void;
+  /** What this device remembers of the agent (a notification opens it before the state is in):
+   *  shown with "Connecting…" until the session is known, instead of "gone". */
+  fallback?: { title: string; project?: string };
+}) {
+  const session = useDaemon((c) => c.state?.sessions[sessionId]);
+  const ready = useDaemon((c) => !!c.state && c.status === "open");
+  // A just-started agent can be a moment ahead of the state: wait briefly before "gone".
+  const [patient, setPatient] = useState(true);
+  useEffect(() => {
+    if (session || !ready) return;
+    const t = setTimeout(() => setPatient(false), 2500);
+    return () => clearTimeout(t);
+  }, [session, ready]);
+  const waiting = !session && (!ready || patient);
+  const sessions = useDaemon((c) => c.state?.sessions);
+  const profiles = useDaemon((c) => c.state?.profiles);
+  const workspaceId = session?.workspace_id ?? "";
+  const engineOf = (s: Session) => profiles?.find((p) => p.id === s.profile_id)?.engine ?? "shell";
+  const isClaude = !!session && engineOf(session) === "claude";
+  const chat = useAgentChat(sessionId, true) && isClaude;
+  const [adding, setAdding] = useState(false);
+
+  // The project's agents, oldest first: a stable order to swipe through.
+  const agents: AgentEntry[] = useMemo(
+    () =>
+      Object.values(sessions ?? {})
+        .filter((s) => s.workspace_id === workspaceId)
+        .sort((a, b) => a.started_at - b.started_at)
+        .map((s) => ({ key: s.id, sid: s.id, title: s.title, engine: engineOf(s), status: s.status, claude: engineOf(s) === "claude", open: () => onOpenAgent(s.id) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, profiles, workspaceId, onOpenAgent],
+  );
+  const otherNeedsYou = Object.values(sessions ?? {}).some((s) => s.id !== sessionId && needsYou(s));
+  const actions = useSessionActions(session, workspaceId, { chat, onClosed: onBack });
+
+  return (
+    <AgentFrame
+      chat={chat}
+      title={session?.title ?? fallback?.title ?? "Agent"}
+      engine={session ? engineOf(session) : "shell"}
+      status={session?.status}
+      workspaceId={workspaceId}
+      project={fallback?.project}
+      backLabel={backLabel}
+      onBack={onBack}
+      backDot={otherNeedsYou}
+      agents={agents}
+      currentKey={sessionId}
+      actions={actions.items}
+      renaming={actions.renaming}
+      onNewAgent={() => (onNewAgent ? onNewAgent(workspaceId) : setAdding(true))}
+      after={
+        <>
+          {actions.confirm}
+          {!onNewAgent && workspaceId && <NewAgentSheet open={adding} onClose={() => setAdding(false)} workspaceId={workspaceId} />}
+        </>
+      }
+    >
+      {!session ? (
+        waiting ? <Connecting /> : <Gone onBack={onBack} />
+      ) : chat ? (
+        <ClaudeView session={session} webgl onFocus={noop} />
+      ) : (
+        <TerminalBody session={session} />
+      )}
+    </AgentFrame>
+  );
+}
+
+const noop = () => {};
+
+function TerminalBody({ session }: { session: Session }) {
+  const client = useClient();
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="relative min-h-0 flex-1 px-1">
+        <TerminalView sid={session.id} focused startedAt={session.started_at} webgl touch onFocus={noop} />
+        {!session.alive && <Stopped session={session} onRestart={() => void restart(client, session.id)} />}
+      </div>
+      {session.alive && <KeyBar sid={session.id} />}
+    </div>
+  );
+}
+
+function Stopped({ session, onRestart }: { session: Session; onRestart: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-4">
+      <button type="button" onClick={onRestart} className="material pressable pointer-events-auto flex h-11 items-center gap-2 rounded-full pr-4 pl-4 text-subhead text-ink shadow-float">
+        <span>{session.exit_code ? `Exited with code ${session.exit_code}` : "The agent has stopped"}</span>
+        <span className="flex items-center gap-1 text-accent">
+          <RotateCw size={15} strokeWidth={2} /> Restart
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function Connecting() {
+  return (
+    <div className="flex h-full items-center justify-center gap-2 text-footnote text-dim" role="status">
+      <Spinner size={14} />
+      Connecting…
+    </div>
+  );
+}
+
+function Gone({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="grid h-full place-items-center p-8 text-center">
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-headline text-bright">This agent is gone</p>
+        <p className="text-subhead text-dim">It was closed on the computer.</p>
+        <button type="button" onClick={onBack} className="pressable mt-2 h-11 rounded-full bg-fill-2 px-5 text-subhead text-ink">
+          Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const restart = (client: ReturnType<typeof useClient>, id: string) =>
+  client.req({ m: "session_restart", p: { id } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+
+/** What you can do with one session from its Island panel. Rename is inline (`renaming`). */
+function useSessionActions(session: Session | undefined, workspaceId: string, { chat, onClosed, close, preview }: {
+  chat: boolean;
+  /** Open the preview in the app (a layout pane); default: the browser. */
+  preview?: (url: string) => void;
+  /** After "Close" closed the session (the agent screen goes back). */
+  onClosed?: () => void;
+  /** Close in another way (the workspace layout closes the pane, which closes the session). */
+  close?: () => void;
+}) {
+  const client = useClient();
+  const showChanges = useChanges((c) => c.show);
+  const [asking, setAsking] = useState(false);
+  const [rename, setRename] = useState(false);
+  const fail = (e: unknown) => toast((e as Error).message, { tone: "danger" });
+  const doClose = async () => {
+    if (!session) return;
+    if (close) return close();
+    await client.req({ m: "session_close", p: { id: session.id } }).catch(fail);
+    onClosed?.();
+  };
+  const items: MenuEntry[] = [];
+  if (session) {
+    if (session.alive) items.push({ label: "Stop", detail: "Ends the agent, keeps its screen", Icon: Square, onSelect: () => void client.req({ m: "session_stop", p: { id: session.id } }).catch(fail) });
+    items.push({ label: "Restart", Icon: RotateCw, onSelect: () => void restart(client, session.id) });
+    items.push({ label: "Rename", Icon: Pencil, onSelect: () => setRename(true) });
+    if (session.worktree) items.push({ label: "Review worktree changes", detail: session.worktree.branch, Icon: GitBranch, onSelect: () => showChanges(workspaceId, session.id) });
+    if (session.preview_url) items.push({ label: "Open the preview", detail: session.preview_url.replace(/^https?:\/\//, ""), Icon: Globe, onSelect: () => (preview ? preview(session.preview_url!) : void window.open(session.preview_url!, "_blank")) });
+    if (!chat) items.push({ label: "Select and copy text", Icon: TextSelect, onSelect: () => showTerminalText(session.id) });
+    const id = session.engine_session ?? session.id;
+    items.push({
+      label: "Copy session id",
+      detail: id,
+      Icon: Copy,
+      onSelect: () => void navigator.clipboard?.writeText(id).then(() => toast("Session id copied"), fail),
+    });
+    items.push({ label: session.alive ? "Stop and close" : "Close", Icon: X, destructive: true, divider: true, onSelect: () => (session.alive ? setAsking(true) : void doClose()) });
+  }
+  const renaming = session && rename ? { value: session.title, done: (title?: string) => {
+    setRename(false);
+    const t = title?.trim();
+    if (t && t !== session.title) void client.req({ m: "session_rename", p: { id: session.id, title: t } }).catch(fail);
+  } } : null;
+  const confirm = (
+    <ConfirmSheet
+      open={asking}
+      onClose={() => setAsking(false)}
+      onConfirm={doClose}
+      title={`Stop ${session?.title ?? "this agent"}?`}
+      message="The agent stops and closes."
+      confirmLabel="Stop and close"
+      destructive
+    />
+  );
+  return { items, renaming, confirm };
+}
+
+// ───────────────────────────── Frame + Island + panel ─────────────────────────────
+
+function AgentFrame({ chat, title, engine, browser, status, workspaceId, project, backLabel, onBack, backDot, agents, currentKey, actions, renaming, onNewAgent, after, children }: {
+  /** The body is the Claude chat: it scrolls under the Island (`.cv-scroll` padding); anything else starts below it. */
+  chat: boolean;
+  title: string;
+  engine: string;
+  browser?: boolean;
+  status?: AgentStatus;
   workspaceId: string;
-  panes: PaneRef[];
-  current: PaneRef | undefined;
-  actionsIn: (tab: PaneRef["tab"], paneId: string) => PaneActions;
+  /** Project name before the state knows the workspace. */
+  project?: string;
+  backLabel?: string;
+  onBack?: () => void;
+  backDot: boolean;
+  agents: AgentEntry[];
+  currentKey?: string;
+  actions: MenuEntry[];
+  renaming: { value: string; done: (title?: string) => void } | null;
+  onNewAgent: () => void;
+  after: ReactNode;
   children: ReactNode;
 }) {
-  const back = useNavBack();
+  const frame = useRef<HTMLDivElement>(null);
+  const kb = useKeyboard();
+  const minimised = useHideOnScroll(frame, { disabled: kb.open });
+  const [open, setOpen] = useState(false);
+  // A layer in the body (the subagent view) can take over the Island: its title, breadcrumb, back.
+  const [layer, setLayer] = useState<IslandOverride | null>(null);
+  const ws = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId));
+  const act = status ? activityOf([status].filter((s) => s !== "done")) : undefined;
+  const keys = agents.map((a) => a.key);
+  const swipe = (dir: -1 | 1) => {
+    const next = currentKey ? neighbour(keys, currentKey, dir) : null;
+    if (next) agents.find((a) => a.key === next)?.open();
+  };
+  const subtitle = [ws?.name ?? project, status ? STATUS[status].label : browser ? "Preview" : undefined].filter(Boolean).join(" · ");
+  const style = {
+    paddingTop: "var(--safe-top)",
+    // Above an overlaid keyboard (iOS), and clear of the Dock wherever the router still shows it.
+    paddingBottom: "max(var(--kb-inset, 0px), var(--dock-h, 0px))",
+    // Room the Island takes over the body; the keyboard hides it and gives the room back.
+    "--island-space": kb.open ? "0px" : "calc(var(--spacing-island) + 12px)",
+  } as CSSProperties;
+  return (
+    <div ref={frame} data-island-frame className={cn("relative flex h-full min-h-0 flex-col transition-colors duration-300", chat ? "bg-cv-bg" : "bg-bg")} style={style}>
+      {/* The Island stays put while a layer is pushed; only its words and its back change. */}
+      <Island
+        tone={chat ? "cv" : "app"}
+        title={layer?.title ?? title}
+        subtitle={layer ? layer.subtitle : subtitle || undefined}
+        mark={
+          browser ? (
+            <QuietTile size="chip" round>
+              <Globe size={tileGlyph("chip")} strokeWidth={1.6} />
+            </QuietTile>
+          ) : (
+            <EngineTile engine={engine} size="chip" round activity={act} edge={chat ? "ring-cv-surface" : "ring-popover"} />
+          )
+        }
+        onBack={layer ? layer.onBack : onBack}
+        backLabel={layer ? layer.backLabel : backLabel}
+        backDot={backDot}
+        open={open}
+        onOpen={() => setOpen(true)}
+        onSwipe={agents.length > 1 && !layer ? swipe : undefined}
+        minimised={minimised}
+        hidden={kb.open}
+      />
+      <div className="relative min-h-0 flex-1" style={chat ? undefined : { paddingTop: "var(--island-space)" }}>
+        <IslandOverrideContext.Provider value={setLayer}>{children}</IslandOverrideContext.Provider>
+      </div>
+      <IslandPanel open={open} onClose={() => setOpen(false)} label={`${title}: agents and actions`}>
+        <AgentPanel
+          workspaceId={workspaceId}
+          agents={agents}
+          currentKey={currentKey}
+          actions={actions}
+          renaming={renaming}
+          onClose={() => setOpen(false)}
+          onNewAgent={onNewAgent}
+        />
+      </IslandPanel>
+      {after}
+    </div>
+  );
+}
+
+function AgentPanel({ workspaceId, agents, currentKey, actions, renaming, onClose, onNewAgent }: {
+  workspaceId: string;
+  agents: AgentEntry[];
+  currentKey?: string;
+  actions: MenuEntry[];
+  renaming: { value: string; done: (title?: string) => void } | null;
+  onClose: () => void;
+  onNewAgent: () => void;
+}) {
   const ws = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId));
   const showChanges = useChanges((c) => c.show);
   const openCatalog = useCatalogSheet((c) => c.setOpen);
   const { worktrees, setWorktrees } = useUi();
-  const [adding, setAdding] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const actions = current ? actionsIn(current.tab, current.id) : null;
-  const pane = usePaneMenu({ workspaceId, content: current?.content, actions, phone: true });
-  const { session, isClaude, claudeView } = usePaneSession(current?.content, true);
   const git = ws?.git;
-
-  const items: MenuEntry[] = [
-    ...pane.items.filter((i) => !i.destructive),
-    ...(git
-      ? [
-          {
-            label: "Changes",
-            detail: `${git.branch} · ${git.changed === 1 ? "1 file" : `${git.changed} files`}`,
-            Icon: GitCompare,
-            divider: pane.items.length > 1,
-            onSelect: () => showChanges(workspaceId),
-          },
-          { label: "Own worktree per agent", Icon: GitBranch, kind: "check" as const, checked: worktrees, onSelect: () => setWorktrees(!worktrees) },
-        ]
-      : []),
-    { label: "Install agents…", Icon: Download, divider: !git, onSelect: () => openCatalog(true) },
-    ...pane.items.filter((i) => i.destructive),
-  ];
-
-  const cv = claudeView;
-  // The strip also carries the Chat/Terminal switch while a Claude agent is shown.
-  const showSwitch = isClaude;
-  const showStrip = panes.length > 1 || (panes.length === 1 && current?.content.kind === "empty") || showSwitch;
-
+  // The ones that need you first; otherwise the swipe order.
+  const listed = [...agents].sort((a, b) => Number(NEEDS_YOU.includes(b.status!)) - Number(NEEDS_YOU.includes(a.status!)));
+  const pick = (f: () => void) => () => {
+    onClose();
+    f();
+  };
   return (
-    <div
-      className={cn("flex h-full min-h-0 flex-col transition-colors duration-300", cv ? "bg-cv-bg" : "bg-bg")}
-      style={{ paddingTop: "var(--safe-top)", paddingBottom: "var(--tabbar-space)" }}
-    >
-      <header className="relative z-10 flex h-14 shrink-0 items-center gap-2 px-3">
-        <div className="flex w-24 shrink-0">
-          {back && (
-            <IconButton variant="glass" label={`Back to ${back.label}`} onClick={back.onBack}>
-              <ChevronLeft />
-            </IconButton>
-          )}
-        </div>
-        <button
-          type="button"
-          disabled={!git}
-          onClick={() => git && showChanges(workspaceId)}
-          aria-label={git ? `${ws?.name}: ${git.branch}, ${git.changed} changed. Show changes` : ws?.name}
-          className="pressable flex min-w-0 flex-1 flex-col items-center rounded-field px-1 py-1 disabled:opacity-100"
-        >
-          <span className={cn("max-w-full truncate text-headline", cv ? "text-cv-text" : "text-bright")}>{ws?.name ?? "Workspace"}</span>
-          {git ? (
-            <span className={cn("flex max-w-full items-center gap-1 text-footnote", cv ? "text-cv-muted" : "text-dim")}>
-              <GitBranch className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-              <span className="truncate">{git.branch}</span>
-              {git.changed > 0 && <span className="shrink-0 text-warning tabular-nums">· {git.changed} changed</span>}
-            </span>
-          ) : (
-            session && <span className={cn("max-w-full truncate text-footnote", cv ? "text-cv-muted" : "text-dim")}>{session.title}</span>
-          )}
-        </button>
-        <div className="flex w-24 shrink-0 justify-end gap-2">
-          <IconButton variant="glass" label="Actions" onClick={() => setMenu(true)}>
-            <Ellipsis />
-          </IconButton>
-          <IconButton variant="solid" label="New agent" onClick={() => setAdding(true)}>
-            <Plus />
-          </IconButton>
-        </div>
-        {/* Content passing under the header fades out instead of meeting a hard edge. */}
-        <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 top-full h-3 bg-linear-to-b to-transparent", cv ? "from-cv-bg" : "from-bg")} />
-      </header>
-      {showStrip && (
-        <div className="flex shrink-0 items-center pr-3 pb-2.5">
-          <AgentStrip workspaceId={workspaceId} panes={panes} current={current} actionsIn={actionsIn} claude={cv} />
-          {showSwitch && <ClaudeViewSwitch className="pl-1" />}
-        </div>
+    <div className="flex flex-col gap-1 pt-2">
+      <Row
+        Icon={git ? GitCompare : undefined}
+        title={ws?.name ?? "Project"}
+        detail={git ? `${git.branch}${git.changed ? ` · ${git.changed === 1 ? "1 file" : `${git.changed} files`} changed` : ""}` : undefined}
+        onClick={git ? pick(() => showChanges(workspaceId)) : undefined}
+      />
+      <Section label="Agents">
+        {listed.map((a) => (
+          <AgentRow key={a.key} entry={a} current={a.key === currentKey} onPick={pick(a.open)} />
+        ))}
+        <Row Icon={Plus} title="New agent" onClick={pick(onNewAgent)} chevron={false} />
+      </Section>
+      {(actions.length > 0 || renaming) && (
+        <Section label="This agent">
+          {renaming ? <RenameRow value={renaming.value} done={renaming.done} /> : null}
+          {actions
+            .filter((i) => !renaming || i.label !== "Rename")
+            .map((i) => (
+              <Row
+                key={i.label}
+                Icon={i.Icon}
+                title={i.label}
+                detail={i.detail}
+                danger={i.destructive}
+                chevron={false}
+                onClick={i.label === "Rename" ? i.onSelect : pick(i.onSelect!)}
+              />
+            ))}
+        </Section>
       )}
-      <div className={cn("relative min-h-0 flex-1", !cv && "px-2 pb-2")}>
-        <div className="relative h-full w-full">{children}</div>
-      </div>
-      <ActionSheet open={menu} onClose={() => setMenu(false)} title={current && current.content.kind !== "empty" ? paneTitle(current.content, session) : ws?.name} items={items} />
-      <NewAgentSheet open={adding} onClose={() => setAdding(false)} workspaceId={workspaceId} />
-      {pane.confirm}
+      <Section label="Project">
+        {git && <Row Icon={GitBranch} title="Own worktree per agent" value={worktrees ? "On" : "Off"} chevron={false} onClick={() => setWorktrees(!worktrees)} />}
+        <Row Icon={Download} title="Install agents…" onClick={pick(() => openCatalog(true))} />
+      </Section>
     </div>
   );
 }
 
-/** Big, readable chips for every agent; the shown one is lit and scrolled into view. */
-function AgentStrip({ workspaceId, panes, current, actionsIn, claude }: {
-  workspaceId: string;
-  panes: PaneRef[];
-  current: PaneRef | undefined;
-  actionsIn: (tab: PaneRef["tab"], paneId: string) => PaneActions;
-  claude: boolean;
-}) {
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    box.current?.querySelector<HTMLElement>("[aria-selected=true]")?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
-  }, [current?.id]);
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div ref={box} role="tablist" aria-label="Agents" className="scroll-x flex min-w-0 flex-1 gap-2 pt-0.5 pl-3 pr-2" data-no-swipe>
-      {panes.map((p) => (
-        <AgentChip key={p.id} workspaceId={workspaceId} pane={p} active={p.id === current?.id} actions={actionsIn(p.tab, p.id)} claude={claude} />
-      ))}
+    <section className="pt-2">
+      <h3 className="px-4 pb-1 text-footnote text-dim">{label}</h3>
+      <div className="list-rows">{children}</div>
+    </section>
+  );
+}
+
+function AgentRow({ entry, current, onPick }: { entry: AgentEntry; current: boolean; onPick: () => void }) {
+  const act = entry.status ? activityOf([entry.status].filter((s) => !(current && s === "done"))) : undefined;
+  return (
+    <div className={cn("flex items-center pr-3", current && "bg-fill-2")} aria-current={current || undefined}>
+      <button type="button" onClick={onPick} className="press-row flex min-h-row-2 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left">
+        {entry.browser ? (
+          <QuietTile size="md" round>
+            <Globe size={tileGlyph("md")} strokeWidth={1.6} />
+          </QuietTile>
+        ) : (
+          <EngineTile engine={entry.engine} size="md" round activity={act} edge="ring-popover" />
+        )}
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-body text-bright">{entry.title}</span>
+          <span className={cn("truncate text-footnote", entry.status && NEEDS_YOU.includes(entry.status) ? "text-warning" : "text-dim")}>
+            {entry.status ? STATUS[entry.status].label : entry.browser ? "Preview" : "New agent"}
+          </span>
+        </span>
+      </button>
+      {entry.claude && entry.sid && <ClaudeViewSwitch sid={entry.sid} />}
     </div>
   );
 }
 
-function AgentChip({ workspaceId, pane, active, actions, claude }: { workspaceId: string; pane: PaneRef; active: boolean; actions: PaneActions; claude: boolean }) {
-  const { session, profile } = usePaneSession(pane.content, true);
-  const menu = usePaneMenu({ workspaceId, content: pane.content, actions, phone: true });
-  const title = paneTitle(pane.content as PaneContent, session);
-  // The agent you are looking at never shows "finished, not seen".
-  const act = session ? activityOf([session.status].filter((s) => !(active && s === "done"))) : undefined;
-  const engine = profile?.engine ?? "shell";
+function RenameRow({ value, done }: { value: string; done: (title?: string) => void }) {
+  const [text, setText] = useState(value);
   return (
-    <>
-      <ContextMenu items={menu.items} onTap={actions.focus} radius={999} className="shrink-0">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={active}
-          className={cn(
-            "pressable flex h-11 max-w-56 items-center gap-2 rounded-full pr-4 pl-1.5 transition-colors",
-            active
-              ? claude
-                ? "bg-cv-surface text-cv-text shadow-cv-pill"
-                : "bg-fill-4 text-bright shadow-edge"
-              : claude
-                ? "text-cv-muted"
-                : "bg-fill-1 text-dim",
-          )}
-        >
-          {pane.content.kind === "browser" ? (
-            <QuietTile size="chip" round selected={active}>
-              <Globe size={tileGlyph("chip")} strokeWidth={1.6} />
-            </QuietTile>
-          ) : (
-            <EngineTile engine={engine} size="chip" round selected={active} activity={act} edge={claude ? "ring-cv-bg" : "ring-bg"} />
-          )}
-          <span className="truncate text-subhead">{title}</span>
-        </button>
-      </ContextMenu>
-      {menu.confirm}
-    </>
+    <form
+      className="flex items-center gap-2 px-4 py-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        done(text);
+      }}
+    >
+      <Input
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), done())}
+        aria-label="Agent name"
+        enterKeyHint="done"
+        className="min-w-0 flex-1"
+      />
+      <button type="submit" className="pressable h-10 rounded-full bg-accent px-4 text-subhead text-bg">
+        Save
+      </button>
+    </form>
   );
 }

@@ -2,6 +2,7 @@ import type { PaneContent } from "@neuralagent/protocol";
 import { Button, Menu, Pill, cn, useLayoutMode } from "@neuralagent/ui";
 import { Columns2, Ellipsis, GitBranch, Globe, Maximize2, Minimize2, RotateCw, Rows2, X } from "lucide-react";
 import { useState, type DragEvent, type ReactNode } from "react";
+import { isNoiseLine } from "../lib/agentReason";
 import { STATUS } from "../lib/status";
 import { useChanges, useClient } from "../lib/store";
 import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
@@ -130,7 +131,7 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
               Worktree
             </button>
           )}
-          <span className="min-w-0 flex-1 truncate text-meta text-faint">{session?.last_line && session.status !== "waiting" ? session.last_line : ""}</span>
+          <span className="min-w-0 flex-1 truncate text-meta text-faint">{session?.last_line && session.status !== "waiting" && !isNoiseLine(session.last_line) ? session.last_line : ""}</span>
           <div className={cn("flex shrink-0 items-center transition-opacity", focused ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100")}>
             {session?.preview_url && (
               <HeaderButton label={`Preview ${session.preview_url}`} onClick={() => actions.preview(session.preview_url!)}>

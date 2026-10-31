@@ -9,3 +9,5 @@ export type { CallAudioApi, CallRoute } from "./lib/callaudio";
 export { storedZoom } from "./lib/zoom";
 export { launch, useLaunch, GRACE_MS } from "./lib/launch";
 export { LaunchNote } from "./components/LaunchScreen";
+export { updateNotice } from "./lib/updateNotice";
+export { canGoBackInPage } from "./lib/phoneRoute";

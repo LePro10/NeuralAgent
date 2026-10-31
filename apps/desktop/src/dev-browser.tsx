@@ -8,7 +8,12 @@ import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { createRoot } from "react-dom/client";
 
-const q = new URLSearchParams(location.hash.slice(1));
+// The phone router rewrites the hash (`#/agents`, …): keep this tab's dev params for reloads, or a
+// reload in phone size loses the daemon token ("No agents yet", then "not answering").
+const DEV_PARAMS = "na.devParams";
+const fromHash = new URLSearchParams(location.hash.slice(1));
+if (fromHash.has("port")) sessionStorage.setItem(DEV_PARAMS, location.hash.slice(1));
+const q = fromHash.has("port") ? fromHash : new URLSearchParams(sessionStorage.getItem(DEV_PARAMS) ?? "");
 const platform: Platform = {
   kind: "desktop",
   clientName: "Browser (dev)",

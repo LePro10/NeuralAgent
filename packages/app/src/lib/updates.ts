@@ -13,6 +13,7 @@
 import { toast, type ToastHandle } from "@neuralagent/ui";
 import { useEffect, useSyncExternalStore } from "react";
 import { notesBetween, notesFromMarkdown } from "./changelog";
+import { updateNotice } from "./updateNotice";
 import type { ChangelogEntry, Platform, ServiceSwitch } from "./platform";
 import { usePlatform } from "./store";
 
@@ -122,7 +123,7 @@ function announce(offer: Offer, first: boolean) {
   remember(key);
   if (state.kind === "app" && first) return set({ dialog: "offer" });
   notice?.dismiss();
-  notice = toast(state.kind === "web" ? "A new version of NeuralAgent is ready." : `NeuralAgent ${offer.version} is available.`, {
+  notice = updateNotice(state.kind === "web" ? "A new version of NeuralAgent is ready." : `NeuralAgent ${offer.version} is available.`, {
     actionLabel: "What's new",
     undo: () => openUpdateDialog(),
     duration: 12000,

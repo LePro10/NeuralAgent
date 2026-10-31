@@ -7,14 +7,14 @@ import { useState, type ReactNode } from "react";
 import { useChanges, useClient, useDaemon } from "../../lib/store";
 import type { PaneActions } from "../Pane";
 import { showTerminalText } from "../TerminalText";
-import { useClaudeChat } from "./ClaudeViewSwitch";
+import { useAgentChat } from "./ClaudeViewSwitch";
 
 /** The session shown in a pane, its profile, and whether it is shown as the Claude view. */
 export function usePaneSession(content: PaneContent | undefined, phone: boolean) {
   const sid = content?.kind === "terminal" ? content.session : null;
   const session: Session | undefined = useDaemon((c) => (sid ? c.state?.sessions[sid] : undefined));
   const profile = useDaemon((c) => (session ? c.state?.profiles.find((p) => p.id === session.profile_id) : undefined));
-  const chat = useClaudeChat(phone);
+  const chat = useAgentChat(sid, phone);
   const isClaude = profile?.engine === "claude";
   const claudeView = !!isClaude && chat;
   return { sid, session, profile, isClaude, claudeView };

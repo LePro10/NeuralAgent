@@ -1,7 +1,8 @@
 import type { CatalogEntry, Profile, Session } from "@neuralagent/protocol";
-import { Button, Callout, IconButton, List, Row, Sheet, toast } from "@neuralagent/ui";
+import { Button, Callout, IconButton, List, Row, Sheet, toast, useLayoutMode } from "@neuralagent/ui";
 import { ExternalLink, Plus, RotateCw } from "lucide-react";
 import { useState } from "react";
+import { phoneRouter } from "../lib/phoneRoute";
 import { joinArgs } from "../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon, usePlatform, useUi } from "../lib/store";
 import { EngineTile } from "./EngineTile";
@@ -19,6 +20,7 @@ export function AgentCatalog() {
   const [editing, setEditing] = useState<Profile | "new" | null>(null);
   const custom = (profiles ?? []).filter((p) => !p.builtin);
   const { workspace, setWorkspace } = useUi();
+  const phone = useLayoutMode() === "phone";
   const [refreshing, setRefreshing] = useState(false);
   const target = workspaces?.find((w) => w.id === workspace) ?? workspaces?.[0];
 
@@ -36,9 +38,11 @@ export function AgentCatalog() {
   const install = async (a: CatalogEntry) => {
     if (!target) return;
     try {
-      await client.req<Session>({ m: "session_start", p: { workspace_id: target.id, profile_id: `install:${a.id}` } });
-      setWorkspace(target.id);
+      const s = await client.req<Session>({ m: "session_start", p: { workspace_id: target.id, profile_id: `install:${a.id}` } });
       setOpen(false);
+      // The installer runs visibly: phones open its screen, desktop its workspace.
+      if (phone) phoneRouter().openAgent(s.id);
+      else setWorkspace(target.id);
     } catch (e) {
       toast((e as Error).message, { tone: "danger" });
     }

@@ -1,14 +1,25 @@
-import type { HistoryEntry, Workspace } from "@neuralagent/protocol";
-import { Empty, List, Page, SearchField, SkeletonList, Spinner, cn, toast } from "@neuralagent/ui";
+import type { HistoryEntry, Session, Workspace } from "@neuralagent/protocol";
+import { ConfirmSheet, Empty, List, Page, SearchField, SkeletonList, Spinner, cn, toast, useLayoutMode } from "@neuralagent/ui";
 import { History, Play, SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { byDay, plainText, shortAgo, useNow } from "../lib/agentui";
+import { phoneRouter } from "../lib/phoneRoute";
 import { useClient, useDaemon, useUi } from "../lib/store";
 import { EngineTile } from "./EngineTile";
 import { Glow } from "./Glow";
 
-/** Past Claude Code and Codex conversations on this computer, searchable; tap one to resume it. */
-export function HistoryPage() {
+/** The workspace whose folder holds `cwd` (the deepest one). */
+const holder = (workspaces: Workspace[], cwd: string) => {
+  const inside = (w: Workspace) => cwd === w.path || cwd.startsWith(`${w.path.replace(/[\\/]$/, "")}/`) || cwd.startsWith(`${w.path}\\`);
+  return [...workspaces].filter(inside).sort((a, b) => b.path.length - a.path.length)[0];
+};
+
+/**
+ * Past Claude Code and Codex conversations on this computer, searchable; tap one to resume it.
+ * Phones ask first (a tap while scrolling must not start an agent) and then open the new agent;
+ * `project` narrows the list to one workspace's folder (the project page's "Past conversations").
+ */
+export function HistoryPage({ project }: { project?: string } = {}) {
   const client = useClient();
   const home = useDaemon((c) => c.host?.home);
   const workspaces = useDaemon((c) => c.state?.workspaces ?? []);
@@ -16,6 +27,9 @@ export function HistoryPage() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<HistoryEntry[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [asking, setAsking] = useState<HistoryEntry | null>(null);
+  const phone = useLayoutMode() === "phone";
+  const scope = project ? workspaces.find((w) => w.id === project) : undefined;
   const now = useNow();
 
   useEffect(() => {
@@ -38,10 +52,10 @@ export function HistoryPage() {
     setBusy(h.id);
     try {
       // The workspace whose folder holds the conversation's folder, or a new one for it.
-      const inside = (w: Workspace) => h.cwd === w.path || h.cwd.startsWith(`${w.path.replace(/[\\/]$/, "")}/`) || h.cwd.startsWith(`${w.path}\\`);
-      const ws = [...workspaces].filter(inside).sort((a, b) => b.path.length - a.path.length)[0] ?? ((await client.req({ m: "workspace_add", p: { path: h.cwd } })) as Workspace);
-      await client.req({ m: "session_start", p: { workspace_id: ws.id, profile_id: h.engine, resume: h.id, cwd: h.cwd } });
-      setWorkspace(ws.id);
+      const ws = holder(workspaces, h.cwd) ?? ((await client.req({ m: "workspace_add", p: { path: h.cwd } })) as Workspace);
+      const s = (await client.req({ m: "session_start", p: { workspace_id: ws.id, profile_id: h.engine, resume: h.id, cwd: h.cwd } })) as Session;
+      if (phone) phoneRouter().openAgent(s.id);
+      else setWorkspace(ws.id);
     } catch (e) {
       toast((e as Error).message, { tone: "danger" });
     } finally {
@@ -50,16 +64,17 @@ export function HistoryPage() {
   };
 
   const short = (p: string) => (home && p.startsWith(home) ? `~${p.slice(home.length)}` : p);
-  const days = useMemo(() => byDay(hits ?? [], (h) => h.updated_at, now), [hits, now]);
+  const shown = useMemo(() => (scope ? (hits ?? []).filter((h) => holder([scope], h.cwd)) : (hits ?? [])), [hits, scope]);
+  const days = useMemo(() => byDay(shown, (h) => h.updated_at, now), [shown, now]);
 
   return (
     <div className="relative h-full">
-      <Glow tint="history" />
-      <Page title="History" eyebrow="Conversations" header={<SearchField value={query} onChange={setQuery} placeholder="Search prompts, titles, folders" />}>
+      {!phone && <Glow tint="history" />}
+      <Page title={scope ? "Past conversations" : "History"} eyebrow={scope ? scope.name : "Conversations"} header={<SearchField value={query} onChange={setQuery} placeholder="Search prompts, titles, folders" />}>
         <div className="flex flex-col gap-7 pt-2 pb-8">
           {hits === null ? (
             <SkeletonList rows={6} label />
-          ) : hits.length === 0 ? (
+          ) : shown.length === 0 ? (
             <Empty
               Icon={query ? SearchX : History}
               title={query ? "Nothing found" : "No conversations yet"}
@@ -70,7 +85,7 @@ export function HistoryPage() {
               {days.map((d) => (
                 <List key={d.label} label={d.label}>
                   {d.items.map((h) => (
-                    <HistoryRow key={`${h.engine}:${h.id}`} h={h} folder={short(h.cwd)} when={shortAgo(h.updated_at, now)} busy={busy === h.id} onResume={() => void resume(h)} />
+                    <HistoryRow key={`${h.engine}:${h.id}`} h={h} folder={short(h.cwd)} when={shortAgo(h.updated_at, now)} busy={busy === h.id} onResume={() => (phone ? setAsking(h) : void resume(h))} />
                   ))}
                 </List>
               ))}
@@ -79,6 +94,15 @@ export function HistoryPage() {
           )}
         </div>
       </Page>
+      <ConfirmSheet
+        open={!!asking}
+        onClose={() => setAsking(null)}
+        onConfirm={() => (asking ? resume(asking) : undefined)}
+        title={asking?.title ?? ""}
+        message={asking ? [asking.snippet ? plainText(asking.snippet) : "", `${short(asking.cwd)} · ${shortAgo(asking.updated_at, now)} · ${asking.prompts} ${asking.prompts === 1 ? "prompt" : "prompts"}`].filter(Boolean).join("\n\n") : undefined}
+        confirmLabel="Continue this conversation"
+        Icon={Play}
+      />
     </div>
   );
 }

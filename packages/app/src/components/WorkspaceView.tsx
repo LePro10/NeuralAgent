@@ -12,7 +12,6 @@ import type { PaneActions } from "./Pane";
 import { PaneTree, type TreeCtx } from "./PaneTree";
 import { isAppShortcut } from "./TerminalView";
 import { ClaudeViewSwitch } from "./workspace/ClaudeViewSwitch";
-import { PhoneWorkspace } from "./workspace/PhoneWorkspace";
 
 /** WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. */
 const WEBGL_MAX = 12;
@@ -22,7 +21,7 @@ function sessionsOf(n: LayoutNode): string[] {
   return panes(n).flatMap((p) => (p.content.kind === "terminal" ? [p.content.session] : []));
 }
 
-/** One pane of a workspace with the tab it lives in (phones list every agent of every tab). */
+/** One pane of a workspace with the tab it lives in. */
 export interface PaneRef {
   tab: Tab;
   id: string;
@@ -38,8 +37,10 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [closing, setClosing] = useState<{ tab: Tab; live: number } | null>(null);
 
   const save = useCallback(
-    (l: WorkspaceLayout) => client.req({ m: "layout_set", p: { workspace_id: workspaceId, layout: l } }).catch(() => {}),
-    [client, workspaceId],
+    // The pane layout is the computer's own: a phone (which shows one agent per screen through the
+    // phone router, components/phone) never changes it.
+    (l: WorkspaceLayout) => (phone ? Promise.resolve() : client.req({ m: "layout_set", p: { workspace_id: workspaceId, layout: l } }).then(() => {}, () => {})),
+    [client, workspaceId, phone],
   );
   const editTab = useCallback(
     (f: (t: Tab) => Tab) => {
@@ -150,27 +151,6 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   };
 
   const tree = <PaneTree key={tab.id} node={tab.root} ctx={ctx} />;
-
-  if (phone) {
-    // Every agent of every tab, in tab order then reading order: phones show one at a time.
-    const all: PaneRef[] = layout.tabs.flatMap((t) =>
-      order(t).flatMap((id) => {
-        const content = panes(t.root).find((p) => p.id === id)?.content;
-        return content && content.kind !== "empty" ? [{ tab: t, id, content }] : [];
-      }),
-    );
-    const focused = panes(tab.root).find((p) => p.id === ctx.zoomed);
-    return (
-      <PhoneWorkspace
-        workspaceId={workspaceId}
-        panes={all}
-        current={focused ? { tab, id: focused.id, content: focused.content } : undefined}
-        actionsIn={actionsIn}
-      >
-        {tree}
-      </PhoneWorkspace>
-    );
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ paddingTop: "var(--safe-top)", paddingLeft: "var(--sidebar-space)", paddingBottom: "var(--tabbar-space)" }}>
