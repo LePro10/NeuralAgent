@@ -281,3 +281,68 @@ async fn heartbeat_and_slow_peers_are_closed() {
     .await;
     assert!(ended.is_ok(), "the slow peer's socket is closed");
 }
+
+/// Usage ping, problem report (signed in), website hit, then what the admin sees.
+#[tokio::test]
+async fn insights_reach_the_admin() {
+    let t = T::start().await;
+    let boss = t.sign_in("boss@example.com", "client", None).await;
+    let user = t.sign_in("ann@example.com", "host", Some("hi")).await;
+    let post = |path: &str, body: Value, bearer: Option<&str>| {
+        let mut req = t.http.post(format!("{}{path}", t.base)).json(&body);
+        if let Some(b) = bearer {
+            req = req.bearer_auth(b);
+        }
+        req.send()
+    };
+    let ping = json!({ "install": "abcdefghijklmnopqrstuv", "app": "desktop", "version": "0.4.1", "os": "macos",
+        "os_version": "15.1", "arch": "aarch64", "locale": "de-CH", "counts": { "agents_started": 4, "agent.claude": 2, "Bad Key": 9 } });
+    assert_eq!(post("/api/telemetry", ping.clone(), None).await.unwrap().status(), 200);
+    let bad = json!({ "install": "short", "app": "desktop", "version": "0.4.1", "os": "macos" });
+    assert_eq!(post("/api/telemetry", bad, None).await.unwrap().status(), 400);
+    let rep: Value = post(
+        "/api/reports",
+        json!({ "app": "desktop", "version": "0.4.1", "os": "macos", "summary": "Agents hang", "details": "since today",
+            "diagnostics": { "log": ["line"] } }),
+        Some(&user.access),
+    )
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    let id = rep["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        post("/api/hit", json!({ "path": "/download/", "referrer": "https://news.ycombinator.com/x" }), None).await.unwrap().status(),
+        200
+    );
+    assert!(t.relay.mail.sent.lock().iter().any(|(to, s)| to == "boss@example.com" && s.contains(&id)));
+
+    let get = |path: &str, bearer: &str| t.http.get(format!("{}{path}", t.base)).bearer_auth(bearer.to_string()).send();
+    assert_eq!(get("/api/admin/reports", &user.access).await.unwrap().status(), 403, "only admins");
+    let s: Value = get("/api/admin/stats?days=7", &boss.access).await.unwrap().json().await.unwrap();
+    assert_eq!(s["installs"]["active"]["d1"], 1);
+    assert_eq!(s["totals"]["use:agents_started"], 4);
+    assert_eq!(s["totals"]["page:/download/"], 1);
+    assert_eq!(s["totals"]["ref:news.ycombinator.com"], 1);
+    assert!(s["totals"].get("use:Bad Key").is_none());
+    assert_eq!(s["open_reports"], 1);
+    let r: Value = get(&format!("/api/admin/reports/{id}"), &boss.access).await.unwrap().json().await.unwrap();
+    assert_eq!(r["report"]["email"], "ann@example.com", "a signed-in report names its account");
+    assert_eq!(r["report"]["diagnostics"]["log"][0], "line");
+    assert_eq!(r["account"]["user"]["email"], "ann@example.com");
+    let up = post(&format!("/api/admin/reports/{id}"), json!({ "status": "solved", "note": "fixed" }), Some(&boss.access)).await.unwrap();
+    assert_eq!(up.status(), 200);
+    let a: Value = get("/api/admin/audit", &boss.access).await.unwrap().json().await.unwrap();
+    assert!(a["audit"].as_array().unwrap().iter().any(|e| e["action"] == "report solved"));
+    // Version and OS of a device arrive with its next token refresh.
+    let v: Value = post("/api/auth/refresh", json!({ "refresh": user.refresh, "version": "0.4.1", "os": "macos 15.1" }), None)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(v["access"].is_string());
+    let d = t.relay.db.device(&user.device).unwrap().unwrap();
+    assert_eq!((d.version.as_deref(), d.os.as_deref(), d.country.as_deref()), (Some("0.4.1"), Some("macos 15.1"), Some("--")));
+}

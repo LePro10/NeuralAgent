@@ -39,6 +39,8 @@ export type * from "./CvTextResult";
 export type * from "./CvTodo";
 export type * from "./CvToolMeta";
 export type * from "./CvWorktree";
+export type * from "./Diagnostics";
+export type * from "./DiagnosticsSent";
 export type * from "./DiscordCard";
 export type * from "./DiscordOptions";
 export type * from "./DiscordPresence";

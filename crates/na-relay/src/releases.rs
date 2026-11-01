@@ -233,6 +233,11 @@ async fn update(
     UrlPath((target, arch, current)): UrlPath<(String, String, String)>,
 ) -> ApiResult<Response> {
     let platform = format!("{target}-{arch}");
+    // Anonymous: which platforms and versions ask for updates (works with usage stats off too).
+    if crate::telemetry::clean(&platform, 40) == platform && valid_version(&current) {
+        let _ = relay.db.bump(&format!("update_check:{platform}"), 1);
+        let _ = relay.db.bump(&format!("update_from:{current}"), 1);
+    }
     let newer = published(dir(&relay)?)
         .into_iter()
         .filter(|m| current.contains('-') || !m.version.contains('-')) // only testers get pre-releases
@@ -250,7 +255,11 @@ async fn update(
     }))))
 }
 
-async fn download(State(relay): State<Arc<Relay>>, UrlPath((version, name)): UrlPath<(String, String)>) -> ApiResult<Response> {
+async fn download(
+    State(relay): State<Arc<Relay>>,
+    v: crate::telemetry::Visitor,
+    UrlPath((version, name)): UrlPath<(String, String)>,
+) -> ApiResult<Response> {
     let root = dir(&relay)?;
     if version == "latest" {
         let m = newest_stable(root)?;
@@ -266,6 +275,7 @@ async fn download(State(relay): State<Arc<Relay>>, UrlPath((version, name)): Url
     }
     let path = vdir.join(&name);
     let file = tokio::fs::File::open(&path).await.map_err(|_| ApiError::not_found())?;
+    count_download(&relay, &vdir, &version, &name, &v.country);
     let len = file.metadata().await.context("stat")?.len();
     let body = Body::from_stream(tokio_util::io::ReaderStream::new(file));
     Ok((
@@ -278,6 +288,23 @@ async fn download(State(relay): State<Arc<Relay>>, UrlPath((version, name)): Url
         body,
     )
         .into_response())
+}
+
+/// Download counters per platform key (`mac`, `windows`, …), version and country; updater
+/// bundles count as `update_dl:<platform>`. Nothing about the person is kept.
+fn count_download(relay: &Relay, vdir: &Path, version: &str, name: &str, country: &str) {
+    let Some(m) = std::fs::read(vdir.join("manifest.json")).ok().and_then(|b| serde_json::from_slice::<Manifest>(&b).ok()) else {
+        return;
+    };
+    let db = &relay.db;
+    if let Some((key, _)) = m.downloads.iter().find(|(_, f)| *f == name) {
+        let _ = db.bump(&format!("dl:{key}"), 1);
+        let _ = db.bump(&format!("dl_v:{version}"), 1);
+        let _ = db.bump(&format!("dl_cc:{country}"), 1);
+    } else if let Some((platform, _)) = m.updates.iter().find(|(_, u)| u.file == name) {
+        let _ = db.bump(&format!("update_dl:{platform}"), 1);
+        let _ = db.bump(&format!("update_to:{version}"), 1);
+    }
 }
 
 #[cfg(test)]

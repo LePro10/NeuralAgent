@@ -154,6 +154,11 @@ pub async fn run_client(
 
 /// The same loop for clients that arrive over another channel (remote devices via the relay).
 pub async fn run_channel(core: Arc<Core>, client: ClientInfo, out: mpsc::Sender<ServerMsg>, rx: &mut mpsc::Receiver<ClientMsg>) {
+    match client.kind {
+        ClientKind::Android => core.telemetry.count("remote_sessions.android", 1),
+        ClientKind::Web => core.telemetry.count("remote_sessions.web", 1),
+        _ => {}
+    }
     let mut conn = Conn {
         core,
         client,

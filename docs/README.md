@@ -36,3 +36,4 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/system-integration.md`](notes/system-integration.md) | macOS permissions (why prompts came back, Full Disk Access), the service host that keeps the service running, autostart at login/boot on macOS, Windows, Linux (D58-D60). |
 | [`notes/files.md`](notes/files.md) | Files explorer: desktop pane and phone pages, the daemon's `file_*` requests, roots and the home switch, path checks, audit, viewer and hand-offs (D67, D68). |
 | [`notes/performance.md`](notes/performance.md) | Memory: speech models on demand, one Parakeet per daemon, `MallocSpaceEfficient`, `ProcessType`, the lean HUD bundle, measurements and open points (D74, D75). |
+| [`notes/insights.md`](notes/insights.md) | Admin dashboard, anonymous usage ping, problem reports, cookieless site counts, downloads per platform/country, admin push, retention (D81). |

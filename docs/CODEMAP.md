@@ -1,10 +1,10 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-01 by `node scripts/codemap.mjs` (694 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-01 by `node scripts/codemap.mjs` (711 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
-Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-protocol` via `cargo test`).
+Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-protocol` via `cargo test`).
 
 ## apps/android/
 - **capacitor.config.ts** (20) — The app is the web remote served by the relay (`/app`), wrapped with native push, sign-in
@@ -17,7 +17,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **CallTile.java** (29) — `class CallTile, onStartListening(), onClick()`
 - **MainActivity.java** (167) — `class MainActivity, onCreate(), onPageStarted(), onPageCommitVisible(), onNewIntent(), onDestroy(), onResume()`
 - **NativePlugin.java** (335) — `class NativePlugin, load(), callResume(), callActive(), readClipboardImage(), shareFile(), copyText(), callRoute(), pushState(), pushToken(), dropToken(), setStatus(), pinWidget(), setNames()` +1
-- **PushService.java** (50) — `class PushService, onMessageReceived(), onNewToken()`
+- **PushService.java** (83) — `class PushService, onMessageReceived(), onNewToken()`
 - **Status.java** (92) — `class Status`
 
 ## apps/desktop/
@@ -36,7 +36,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **daemon.rs** (228) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), restart_newest()`
 - **duck.rs** (984) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
 - **hud.rs** (76) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
-- **lib.rs** (220) — `run_service(), run()`
+- **lib.rs** (223) — `run_service(), run()`
 - **main.rs** (11) — Prevents an extra console window on Windows in release builds.
 - **mic.rs** (198) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, probe(), impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
@@ -44,7 +44,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **service.rs** (547) — `neuralagent --service [--mode app|login|boot]`: the host that keeps `neuralagentd` running · `const LOCK, const STOP, const RESTART, const HANDOVER, enum Mode, parse_mode(), installed_app(), running(), active_mode(), app_program(), start_from_app(), main()`
 - **system.rs** (89) — Tauri commands for Settings → System (permissions, autostart) and the check after start that · `struct SystemStatus, system_status(), system_request(), system_open(), system_repair(), system_autostart(), self_check()`
 - **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
-- **update.rs** (175) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
+- **update.rs** (203) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
 - **voice.rs** (543) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/desktop/src-tauri/src/duck/
@@ -59,7 +59,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **install.sh** (31) — Installs or updates NeuralAgent on macOS:
 
 ## apps/web/public/app/
-- **sw.js** (67) — Web remote service worker: shows "an agent needs you" pushes and opens that agent on tap.
+- **sw.js** (77) — Web remote service worker: shows "an agent needs you" pushes and opens that agent on tap.
 
 ## apps/web/src/
 - **brand.tsx** (45) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
@@ -70,13 +70,20 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **simple.tsx** (12) — 404 entry (404.html). Page: src/site/pages/notfound/. Simple pages stay one small entry.
 
 ## apps/web/src/admin/
+- **Activity.tsx** (37) — `Activity()`
 - **App.tsx** (96) — `Screen(), App()`
-- **Dashboard.tsx** (53) — `Dashboard()`
+- **Dashboard.tsx** (103) — `type Tab, type Period, Dashboard()`
+- **Diagnostics.tsx** (97) — `Diagnostics()`
+- **Downloads.tsx** (44) — `Downloads()`
+- **Overview.tsx** (54) — `Overview()`
+- **Reports.tsx** (176) — `Reports()`
 - **Requests.tsx** (64) — Runs a user action, reloads the list and reports errors as a toast. · `useAction(), Requests(), statusPill`
 - **SignIn.tsx** (64) — `SignIn()`
-- **Stats.tsx** (60) — `Stats()`
-- **Users.tsx** (100) — `Users()`
-- **api.ts** (272) — Typed client for the relay's JSON API (same origin). The access token lives in memory only; · `interface User, interface Device, interface DayStats, interface Stats, interface Session, interface Config, class ApiError, hasStoredSession, b64u(), unb64u(), onSignedOut, config(), startSignIn(), finishSignIn()` +3
+- **Usage.tsx** (74) — `Usage()`
+- **Users.tsx** (166) — `Devices(), Users()`
+- **api.ts** (333) — Typed client for the relay's JSON API (same origin). The access token lives in memory only; · `interface User, interface Device, type DayStats, interface Count, interface Installs, interface Stats, type ReportStatus, interface Report, interface ReportDetail, interface AuditEntry, interface Session, interface Config, class ApiError, hasStoredSession` +9
+- **charts.tsx** (87) — Pure CSS bars: height is relative to the largest day; colours come from tokens. · `Bars(), DayBars(), BarList(), prefixed(), Section(), NoData`
+- **countries.ts** (39) — Country helpers: flag emoji from a 2-letter code and a display name. · `flag(), countryName(), countryTag, countryLabel`
 - **format.ts** (23) — `bytes(), ago(), date`
 - **hooks.ts** (38) — `interface Polled, usePolled()`
 - **main.tsx** (13)
@@ -100,7 +107,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **neural.ts** (749) — Neural, the orchestrator: the conversation (streamed word by word), what it noticed, its notes, · `class Neural`
 - **rng.ts** (49) — A small seeded random generator (mulberry32). Everything the fake daemon invents comes from here, · `interface Rng, hash(), makeRng()`
 - **scenes.ts** (356) — Building a world: the disk and the projects, a believable past (an agent that finished in · `advanceUntil(), buildScene(), startDirector()`
-- **seed.ts** (209) — The starting point of the world: the disk, workspaces, profiles, the CLI catalog, settings, · `catalog, profiles, settings, limits, seedDisk(), workspaces(), neuralHistory(), freshState()`
+- **seed.ts** (211) — The starting point of the world: the disk, workspaces, profiles, the CLI catalog, settings, · `catalog, profiles, settings, limits, seedDisk(), workspaces(), neuralHistory(), freshState()`
 - **server.ts** (212) — One connection of the protocol, as the daemon sees it: handshake, subscription (snapshot + events), · `class ApiErr, interface CvAttach, class Conn`
 - **shell.ts** (621) — A small zsh-like shell on the fake disk: line editing, history, tab completion, pipes and enough · `class Shell`
 - **sim.ts** (299) — The simulated computer: one object that holds the protocol state, the virtual clock, the disk and · `HOST, DAEMON_VERSION, FEATURES, type Listener, class Sim`
@@ -125,7 +132,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 
 ## apps/web/src/demo/daemon/handlers/
 - **files.ts** (241) — Folders, files and git as the app asks for them: the folder picker, the file browser, the changes · `fsRoots(), fsList(), fsMkdir(), fileList(), fileRead(), fileSave(), fileUpload(), fileSearch(), gitChanges(), gitDiff(), worktreeMerge(), worktreeDiscard(), workspaceAdd()`
-- **index.ts** (372) — The request table of the fake daemon: every `Request` kind gets an answer. Reads are answered in · `handle()`
+- **index.ts** (385) — The request table of the fake daemon: every `Request` kind gets an answer. Reads are answered in · `handle()`
 - **misc.ts** (410) — Everything that is not a terminal, a file or a conversation: settings, profiles, tool servers, · `settingsSet(), profileSave(), profileDelete(), catalogRefresh(), mcpSave(), mcpDelete(), mcpImport(), usageReport(), discordPreview(), remoteSignIn(), remoteSignOut(), remoteEnable(), remotePair(), remoteRevoke()` +16
 
 ## apps/web/src/remote/
@@ -133,7 +140,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **main.tsx** (6)
 - **native.ts** (149) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText, shareFile()`
 - **push.ts** (173) — Web Push for the web remote: the service worker, the subscription the relay pushes to, and · `startWorker(), pushState(), enablePush(), disablePush(), syncPush(), takeLaunchRequest(), onOpenRequest(), doneOpening(), rememberNames(), setPushSilent()`
-- **session.ts** (56) — The web remote's account and relay link, shared by every screen. One per tab. · `ios, native, deviceName, account, link, useLink(), lastHost, REDIRECT`
+- **session.ts** (61) — The web remote's account and relay link, shared by every screen. One per tab. · `ios, native, deviceName, account, link, useLink(), lastHost, REDIRECT`
 - **webUpdate.ts** (23) — The web remote (and the Android shell, which loads it from the relay) runs the build that was · `webUpdate`
 
 ## apps/web/src/site/
@@ -166,7 +173,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 
 ## apps/web/src/site/pages/legal/
 - **Legal.tsx** (107) — /imprint, /privacy, /terms: a calm document. Index pane in the head, contents on the left from 1024 px, mono … · `Legal()`
-- **content.tsx** (96) — The legal texts. The wording is the legal text of the site: change it only when the owner asks. · `UPDATED, interface Section, interface Doc, DOCS, ORDER, slugOf`
+- **content.tsx** (128) — The legal texts. The wording is the legal text of the site: change it only when the owner asks. · `UPDATED, interface Section, interface Doc, DOCS, ORDER, slugOf`
 
 ## apps/web/src/site/pages/notfound/
 - **NotFound.tsx** (143) — 404: a quiet terminal pane in "command not found" style. The path you asked for is echoed, the closest known … · `NotFound()`
@@ -209,10 +216,11 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **Reveal.tsx** (81) — `type RevealKind, Reveal(), SlotLines()`
 - **Section.tsx** (59) — Faint column guides (hairlines at 25 / 50 / 75 %). Put inside a `.na-frame`. Desktop only. · `Guides(), Section()`
 - **SendToComputer.tsx** (57) — The canonical download address (with the slash: the bare form costs the receiving computer a redirect). · `SendToComputer()`
+- **hit.ts** (51) — Cookieless visit counting (docs/notes/insights.md): one anonymous beacon per page view to the · `downloadKind(), countVisits()`
 - **hooks.ts** (235) — Small hooks for the marketing pages. No dependencies: IntersectionObserver, matchMedia and ONE shared · `prefersReducedMotion(), useMedia(), useReducedMotion, useIsPhone, useFinePointer, useInView(), usePageVisible(), startScrollLoop(), useScrollProgress(), useActiveSection(), useCopy(), useMoreToRight()`
 - **icons.ts** (9) — The lucide icons the marketing pages use, in one place (one import line for every agent; tree-shaken by name).
 - **index.ts** (21) — Barrel for the marketing foundation. Import from "../ui" (sections) or "./site/ui" (pages). · `ActivityMark, ACTIVITY_LABEL, AgentGlyph, Button, LinkButton, CopyCommand, Fold, Footer, GitHubIcon, Icon, ICON_SIZE, Kbd, Nav, PaneField` +13
-- **page.ts** (52) — Call once, before React renders, from every marketing page entry: · `initPage(), scrollToHash()`
+- **page.ts** (54) — Call once, before React renders, from every marketing page entry: · `initPage(), scrollToHash()`
 - **release.ts** (84) — OS detection and the latest release (shared by Nav, Hero, Footer, download page). One fetch per page load. · `interface Latest, type Os, detectOs(), OS_LABEL, isMobileOs, type ReleaseStatus, interface ReleaseState, interface Cta, useRelease(), shortDate()`
 
 ## crates/na-crypto/src/
@@ -225,10 +233,10 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 ## crates/na-daemon/src/
 - **audit.rs** (158) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
 - **awake.rs** (109) — Keeps the computer from sleeping while agents work (setting `keep_awake`). The display may · `struct Awake`
-- **call.rs** (728) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
+- **call.rs** (729) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
 - **claude_view.rs** (2310) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), parse_line_in(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
-- **core.rs** (1429) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
+- **core.rs** (1446) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
 - **cv_action.rs** (618) — Claude view: actions the phone asks for (`Request::CvAction`), done by typing the CLI's own · `menu_now()`
 - **cv_commands.rs** (369) — Claude view: the slash commands of Claude Code (table for CLI 2.1.316) plus the user's, · `builtin(), front_matter(), read_small(), collect_commands(), collect_skills(), collect_plugins()`
 - **cv_image.rs** (290) — Images in a Claude transcript (a `Read` of a picture, pasted images, screenshots from MCP · `const MAX_SEND, images_in(), index_of(), image_ref(), image_url(), dims(), serve(), fit()`
@@ -245,27 +253,28 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **host.rs** (284) — The host as seen from remote devices (D42): voice models and update checks live in the · `struct Host`
 - **layout.rs** (265) — Split-tree helpers. Clients edit layouts freely (drag, resize, close); the daemon only needs · `const MAX_PANES, new_id(), new_tab(), grid_tab(), default_layout(), count_panes(), place_session(), clear_session(), sessions_in()`
 - **llm.rs** (366) — Chat with tool calls against the user's own model provider (BYOK): NeuralHub and other · `enum Msg, struct Call, struct Tool, struct Turn, struct Llm, impl Default for Llm, default_url(), needs_key(), struct Ask`
-- **main.rs** (248) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
+- **main.rs** (254) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
 - **mcp.rs** (289) — MCP servers managed in one place and handed to every agent at launch. · `type Secrets, secrets_path(), load_secrets(), save_secrets(), valid_id(), struct Extra, for_engine(), import()`
-- **orch.rs** (758) — Neural, the orchestrator: a conversation with the user's own model that starts, prompts, · `struct Orch, type Speech, enum Trigger, me(), last_part(), system_prompt(), trim()`
+- **orch.rs** (768) — Neural, the orchestrator: a conversation with the user's own model that starts, prompts, · `struct Orch, type Speech, enum Trigger, me(), last_part(), system_prompt(), trim()`
 - **paths.rs** (79) — Where the daemon keeps its files. · `const APP_ID, struct Paths, struct DaemonInfo, write_private()`
 - **permissions.rs** (426) — macOS privacy (TCC) from the service's side (D58). · `const NEEDS_FDA, struct Guards, guarded_root(), struct Gate, check(), full_disk_access()`
-- **policy.rs** (116) — What a client may do without asking. · `check()`
+- **policy.rs** (120) — What a client may do without asking. · `check()`
 - **preview.rs** (92) — Finds the address a dev server prints ("Local: http://localhost:5173/") in terminal output, · `find_url()`
 - **profiles.rs** (168) — Built-in launch profiles and how a profile becomes a command line. · `const INSTALL_PREFIX, builtin(), install_profile(), struct Launch, launch(), const CLAUDE_EVENTS, claude_settings()`
 - **pty.rs** (393) — One process in a pseudo terminal, mirrored by a headless VT emulator. · `struct Chunk, struct Spawn, enum PtyNote, struct Pty`
-- **remote.rs** (859) — Remote access: sign-in with the relay, the connection to it, and phones/browsers of the same · `const DEFAULT_RELAY, struct Remote, start(), handle(), struct Callback, callback(), impl Drop for Sess`
-- **secrets.rs** (100) — LLM keys: Credential Manager on Windows release builds, `<data>/keys.json` (0600) elsewhere; one-time move out of the macOS keychain (D80). · `get(), set(), migrate()`
-- **server.rs** (480) — Local WebSocket server (127.0.0.1 only, token + Origin check). · `random_token(), ct_eq(), struct App, router(), run_client(), run_channel(), struct Conn, not_understood_res(), not_understood()`
+- **remote.rs** (877) — Remote access: sign-in with the relay, the connection to it, and phones/browsers of the same · `const DEFAULT_RELAY, struct Remote, start(), relay_url(), access_token(), http(), handle(), struct Callback, callback(), impl Drop for Sess`
+- **secrets.rs** (108) — Keys the user typed in (LLM providers). Windows release builds keep them in the Credential
+- **server.rs** (485) — Local WebSocket server (127.0.0.1 only, token + Origin check). · `random_token(), ct_eq(), struct App, router(), run_client(), run_channel(), struct Conn, not_understood_res(), not_understood()`
 - **service.rs** (189) — The service's side of the host that keeps it running (D59). · `const RESTART, const HANDOVER, static SHUTDOWN, init(), host_mode(), booted_at(), before_login(), system(), restart(), watch_handover()`
 - **speech.rs** (64) — Process-wide speech memory rules (D74, D75). · `const MALLOC_ENV, forget_malloc_env(), parakeet()`
-- **swarm.rs** (619) — Swarms: a team of agents on one goal that hand work to each other. · `const SERVER_ID, const YOU, struct Outbox, default_team(), brief(), server(), bridge_env(), trim(), receive(), bridge_main()`
+- **swarm.rs** (620) — Swarms: a team of agents on one goal that hand work to each other. · `const SERVER_ID, const YOU, struct Outbox, default_team(), brief(), server(), bridge_env(), trim(), receive(), bridge_main()`
+- **telemetry.rs** (389) — Anonymous usage stats and problem reports (Settings → Privacy, docs/notes/insights.md). · `struct Telemetry, enabled(), os_version(), os_label(), ping_body(), start(), redact(), diagnostics(), send_report()`
 - **usage.rs** (642) — Token use and cost from the CLIs' own transcripts, so it covers every conversation on this · `struct Price, price(), struct Usage, claude_limits(), since_day(), today()`
 
 ## crates/na-daemon/src/neural/
 - **guard.rs** (397) — What Neural may do on its own, and what needs the user's OK (docs/notes/neural-v2.md → Safety). · `destructive(), destructive_command(), safe_command(), safe_permission()`
 - **history.rs** (151) — The conversation as the model sees it: only user ↔ Neural. What Neural did in a turn is one · `const COMPACT_AT, const KEEP_VERBATIM, build(), compaction(), compaction_prompt()`
-- **mod.rs** (850) — Neural v2 (D61–D64, docs/notes/neural-v2.md): the state Neural keeps besides the conversation · `mod guard, mod history, mod observe, mod pulse, mod tasks, mod tools, mod world, struct Runtime, const TASK_WAKES, load(), watch()`
+- **mod.rs** (851) — Neural v2 (D61–D64, docs/notes/neural-v2.md): the state Neural keeps besides the conversation · `mod guard, mod history, mod observe, mod pulse, mod tasks, mod tools, mod world, struct Runtime, const TASK_WAKES, load(), watch()`
 - **observe.rs** (211) — Observations: what Neural noticed about agents, kept apart from the conversation. Coalescing, · `const KEEP, const STUCK_MS, push(), label(), workspace_name(), describe_prompt(), agent_text(), clip(), struct Stuck`
 - **pulse.rs** (129) — When Neural speaks on its own: which observations wake it, batching and throttling. · `const BATCH_MS, const GAP_MS, const PER_HOUR, wakes(), struct Pulse`
 - **tasks.rs** (436) — Neural's tasks and teams: linking agents, status changes on agent events, and the team · `const MAX_ROUNDS, next_id(), create(), of_agent(), get_mut(), link(), enum Step, attempt_mut(), on_agent(), measured(), interrupted(), cleanable(), verdict(), new_team()` +6
@@ -274,21 +283,24 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 
 ## crates/na-protocol/src/
 - **claude.rs** (852) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvToolMeta, struct CvHunk, struct CvTask, struct CvTodo, struct CvPr, struct CvWorktree, struct CvQueued, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption` +14
-- **lib.rs** (1905) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +69
+- **lib.rs** (1950) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +71
 - **neural.rs** (257) — Neural's own working state (D61–D64, docs/notes/neural-v2.md): the tasks it follows up, · `struct NeuralState, enum NeuralMode, struct NeuralTask, enum NeuralTaskStatus, struct NeuralTeam, enum TeamPattern, struct NeuralAttempt, enum AttemptState, struct NeuralNote, struct NeuralObs, enum ObsKind, struct NeuralPending`
 
 ## crates/na-relay/src/
-- **admin.rs** (125) — Admin API (`/api/admin`): accounts whose email is in `ADMIN_EMAILS`. · `router(), struct Admin`
-- **auth.rs** (541) — Sign-in (Google OIDC / GitHub OAuth, both with state + PKCE), one-time code exchange, rotating · `config(), struct StartQuery, start(), struct CallbackQuery, callback(), struct NewDevice, struct Tokens, struct Exchange, exchange(), struct RefreshBody, refresh(), logout(), me(), struct DeviceUpdate` +9
-- **config.rs** (120) — Configuration from the environment (the env file on the server; never in the repository). · `struct Provider, struct Smtp, struct Config`
-- **db.rs** (470) — SQLite storage: accounts, provider identities, devices and anonymous stats. · `const MAX_DEVICES, enum Status, struct User, struct Device, struct Identity, enum Refresh, struct Db`
+- **admin.rs** (197) — Admin API (`/api/admin`): accounts whose email is in `ADMIN_EMAILS`. · `router(), struct Admin`
+- **auth.rs** (553) — Sign-in (Google OIDC / GitHub OAuth, both with state + PKCE), one-time code exchange, rotating · `config(), struct StartQuery, start(), struct CallbackQuery, callback(), struct NewDevice, struct Tokens, struct Exchange, exchange(), struct RefreshBody, refresh(), logout(), me(), struct DeviceUpdate` +9
+- **config.rs** (127) — Configuration from the environment (the env file on the server; never in the repository). · `struct Provider, struct Smtp, struct Config`
+- **db.rs** (490) — SQLite storage: accounts, provider identities, devices and anonymous stats. · `const MAX_DEVICES, enum Status, struct User, struct Device, struct Identity, enum Refresh, struct Db`
+- **geo.rs** (118) — Country of a request, for the admin statistics. Only the two-letter country code is ever · `struct Geo, const UNKNOWN, valid()`
 - **hub.rs** (347) — WebSocket hub: routes opaque end-to-end envelopes between online devices of the same account, · `struct Hub, upgrade()`
-- **lib.rs** (246) — NeuralAgent relay: Google/GitHub sign-in with admin approval, devices, QR pairing, admin · `mod admin, mod auth, mod config, mod db, mod hub, mod mail, mod push, mod releases, mod util, mod web, const ACCESS_TTL, const PAIR_TTL, struct Flow, struct Code` +9
-- **mail.rs** (98) — Notification mails over SMTP (Brevo). Without SMTP settings mails are only recorded. · `struct Mailer`
+- **insights.rs** (360) — Storage for what the admin area shows beyond accounts: anonymous installs (usage pings), · `const SCHEMA, struct Ping, struct NewReport, struct ReportRow, struct AuditRow, const REPORT_STATUSES`
+- **lib.rs** (269) — NeuralAgent relay: Google/GitHub sign-in with admin approval, devices, QR pairing, admin · `mod admin, mod auth, mod config, mod db, mod geo, mod hub, mod insights, mod mail, mod push, mod releases, mod telemetry, mod util, mod web, const ACCESS_TTL` +13
+- **mail.rs** (109) — Notification mails over SMTP (Brevo). Without SMTP settings mails are only recorded. · `struct Mailer`
 - **main.rs** (33) — `neuralagent-relay health`: exit 0 if the local relay answers (container health check).
-- **push.rs** (347) — Push to phones and browsers when an agent needs attention: FCM (Android app) and Web Push · `enum Target, struct Push, struct Notice, encrypt()`
-- **releases.rs** (377) — Releases: CI uploads the builds of a version, then publishes its manifest. The relay answers · `struct Manifest, struct Update, router(), downloads(), valid_version(), compare(), prune()`
-- **tests.rs** (284) — Whole account flow against a real server on a local port, with the test sign-in:
+- **push.rs** (365) — Push to phones and browsers when an agent needs attention: FCM (Android app) and Web Push · `enum Target, struct Push, struct Notice, encrypt()`
+- **releases.rs** (404) — Releases: CI uploads the builds of a version, then publishes its manifest. The relay answers · `struct Manifest, struct Update, router(), downloads(), valid_version(), compare(), prune()`
+- **telemetry.rs** (209) — Public endpoints that feed the admin area (docs/notes/insights.md): · `struct Visitor, clean(), struct PingBody, ping(), struct ReportBody, report(), struct HitBody, hit()`
+- **tests.rs** (349) — Whole account flow against a real server on a local port, with the test sign-in:
 - **util.rs** (134) — Small helpers: time, random tokens, hashing, short-lived in-memory maps, HTTP errors. · `now(), day(), b64u(), unb64u(), token(), hash(), s256(), ct_eq(), struct Ttl, impl Default for Ttl, struct ApiError, type ApiResult, impl From for ApiError, impl IntoResponse for ApiError`
 - **web.rs** (104) — Static web pages: landing (`/`), web remote (`/app`), admin (`/admin`), changelog, brand assets. · `router()`
 
@@ -307,13 +319,14 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **wake.rs** (100) — Wake word ("Hey Neural") with a small streaming keyword spotter (zipformer, ~3 MB). · `const HEY_NEURAL, struct WakeConfig, impl Default for WakeConfig, struct Wake, learn()`
 
 ## deploy/relay/
+- **geoip.sh** (20) — Monthly: fetch the free DB-IP "IP to Country Lite" table (CC BY 4.0, https://db-ip.com) into the
 - **update.sh** (25) — Pull deployment (systemd timer): fetch a newer relay image, restart, keep it only if healthy,
 
 ## docs/brand/
 - **build-web-icons.mjs** (133) — Regenerates every web / PWA / Discord icon from one master geometry (OG cards: scripts/dev/site-og.mjs).
 
 ## packages/app/src/
-- **App.tsx** (445) — `App()`
+- **App.tsx** (447) — `App()`
 - **hud.ts** (5) — Entry for the desktop listening pill (apps/desktop/src/hud.tsx): only what the pill needs, so its · `VoiceHud`
 - **index.ts** (14) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote` +2
 
@@ -343,7 +356,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **ProfileEditor.tsx** (110) — `ProfileEditor()`
 - **ReleaseNotes.tsx** (81) — Release notes from CHANGELOG.md (lib/changelog.ts): used by the update dialog and Settings → Updates. · `CHANGELOG_URL, ReleaseNotes()`
 - **RemotePage.tsx** (332) — Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePanel()`
-- **SettingsPage.tsx** (434) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
+- **SettingsPage.tsx** (443) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
 - **SwarmPage.tsx** (103) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
@@ -430,6 +443,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 ## packages/app/src/components/settings/
 - **AgentsPanel.tsx** (161) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
 - **DiscordPanel.tsx** (202) — Settings → Discord (D72): a privacy preset, what each part of the card shows, and a live preview · `DiscordPanel(), ProfileCard()`
+- **PrivacyPanel.tsx** (160) — Settings → Privacy and support (docs/notes/insights.md): the anonymous usage ping (on unless · `privacySummary(), PrivacyPanel(), PrivacyIcon`
 - **SystemPanel.tsx** (491) — Settings → System (D58-D60): the computer's permissions, how the background service starts, and · `toSetUp, systemSummary(), SystemPanel()`
 - **nav.ts** (13) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column), · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
 - **panels.tsx** (589) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Notifications, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), alertsSummary(), NotificationsPanel(), keepAwakeLabel, AboutPanel()`
@@ -505,6 +519,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **typeFirst.ts** (12) — Whether a form may put the cursor in its first field when it opens. Not on phones and touch · `useTypeFirst()`
 - **updateNotice.ts** (16) — "A new version is available" comes from three checks (this app or web build, the Android APK, · `updateNotice()`
 - **updates.ts** (240) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
+- **usageNotice.ts** (42) — The one-time notice that NeuralAgent shares anonymous usage statistics (docs/notes/insights.md). · `useUsageNotice()`
 - **voice.ts** (66) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, interface DuckApp, DUCK_LEVELS, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
 - **voiceMeter.test.ts** (30)
 - **voiceMeter.ts** (37) — Motion for the voice pill's level bars: the daemon-side mic sends a 0..1 loudness ~25 times a · `METER_REST, METER_STALE_MS, approach(), barProfile(), listeningHeight(), writingHeight()`
@@ -526,7 +541,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **index.ts** (5) — `apply`
 
 ## packages/remote/src/
-- **index.ts** (748) — Remote client for phones and browsers: the account at the relay, pairing, the relay · `interface Store, interface KeyStore, memoryStore(), localStore(), memoryKeyStore(), webKeyStore(), type AccountStatus, interface RelayUser, interface RelayDevice, class RemoteError, interface AccountOptions, class RemoteAccount, type LinkStatus, RELAY_PING_EVERY` +5
+- **index.ts** (753) — Remote client for phones and browsers: the account at the relay, pairing, the relay · `interface Store, interface KeyStore, memoryStore(), localStore(), memoryKeyStore(), webKeyStore(), type AccountStatus, interface RelayUser, interface RelayDevice, class RemoteError, interface AccountOptions, class RemoteAccount, type LinkStatus, RELAY_PING_EVERY` +5
 - **link.test.ts** (120) — Stands in for the browser's WebSocket; the test plays the relay.
 
 ## packages/ui/ui/

@@ -255,7 +255,19 @@ Hinweis zu Begriffen, die mehrfach vorkommen: **Workspace** = ein Projektordner 
 ### 3.1 Der Admin-Bereich `/admin/`
 Adresse: `https://agent.neuralhub.dev/admin/`. Anmelden mit Google oder GitHub über ein Konto, dessen E-Mail in `ADMIN_EMAILS` steht. **Keine Passkeys** (D39); die 2-Faktor-Absicherung deines Anbieters schützt. Dein erster Login ist automatisch freigeschaltet und Admin.
 
-Was der Bereich laut Dokumentation kann: offene Anfragen mit Approve/Deny, Nutzer mit Geräten und dem Schalter "Remote an/aus", Statistik. Das Sperren, Entsperren und Löschen von Nutzern wirkt sofort auf offene Verbindungen (D26; im Relay-Test geprüft). Downloads pro Plattform und Version und Verbindungen über die Zeit stehen im Auftrag; wie weit das Dashboard das im Detail zeigt, habe ich nicht geprüft – schau einmal hinein.
+Das Sperren, Entsperren und Löschen von Nutzern wirkt sofort auf offene Verbindungen (D26; im Relay-Test geprüft).
+
+**Reiter (seit D81, Details: [notes/insights.md](notes/insights.md)):** Zeitraum oben 7/30/90 Tage.
+- **Overview:** aktive Installationen (1/7/30 Tage), neue, Downloads, offene Anfragen und Meldungen, Länder.
+- **Requests:** Anfragen mit Approve/Deny. **Users:** Nutzer mit Land, Plattformen und Geräten (Version, System, Land).
+- **Reports:** Problem-Meldungen aus der App (Einstellungen → Privacy and support). Status open → seen → solved, Notiz, Antwort per Mail, Diagnose-Ansicht (Version, System, Agents, Log, und nur wenn der Nutzer es ankreuzt: die letzten Neural-Anfragen). Die Meldung nennt dir der Nutzer mit der Nummer `R-XXXXXX`.
+- **Usage:** anonyme Nutzung (Versionen, Systeme, Sprachen, Funktionen wie "Agents gestartet"). **Downloads & Website:** Downloads pro Plattform/Version/Land, Update-Prüfungen, Seitenaufrufe ohne Cookies. **Activity:** Protokoll der Admin-Aktionen.
+
+**Benachrichtigung:** Neue Anfrage oder Meldung → Mail und Push an alle Admin-Geräte mit Push. Ein Tipp öffnet den passenden Reiter.
+
+**Länder (einmal auf dem Server einrichten):** `deploy/relay/geoip.sh` lädt die freie DB-IP-Tabelle nach `/var/lib/neuralagent/geoip.csv` und startet das Relay neu. Monatlich per Cron, z. B. `0 4 3 * * /opt/neuralagent/deploy/relay/geoip.sh`. Ohne Tabelle (und ohne Cloudflare) steht als Land `--`. IP-Adressen werden nie gespeichert.
+
+**Aufbewahrung:** Installationen 400 Tage nach dem letzten Lebenszeichen, gelöste Meldungen 180 Tage, Protokoll 365 Tage.
 
 ### 3.2 Nutzer freigeben
 1. Jemand wählt in der App "Request access" und meldet sich mit Google oder GitHub an. Status: "pending".

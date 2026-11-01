@@ -236,6 +236,7 @@ impl Core {
             }
             Request::NeuralConfirm { id, allow } => self.neural_confirm(&id, allow).await.map(|_| Value::Null),
             Request::NeuralTeamStart { workspace_id, goal, pattern, profiles, check } => {
+                self.telemetry.count("teams_started", 1);
                 Ok(json!(self.team_start(workspace_id, goal, pattern, profiles, check).await?))
             }
             Request::NeuralTeamPick { task_id, session_id } => self.team_pick(&task_id, &session_id).await.map(|_| Value::Null),

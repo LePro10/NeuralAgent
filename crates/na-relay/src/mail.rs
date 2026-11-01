@@ -94,4 +94,15 @@ impl Mailer {
         );
         self.send(&u.email, "Your NeuralAgent remote access request", body).await;
     }
+
+    pub async fn report_received(&self, admins: &[String], id: &str, summary: &str, contact: Option<&str>) {
+        let body = format!(
+            "A problem report arrived: {id}\n\n{summary}\n\nContact: {}\n\nOpen it: {}/admin/#reports/{id}\n",
+            contact.unwrap_or("(none)"),
+            self.public_url
+        );
+        for a in admins {
+            self.send(a, &format!("Problem report {id}: {}", summary.chars().take(60).collect::<String>()), body.clone()).await;
+        }
+    }
 }

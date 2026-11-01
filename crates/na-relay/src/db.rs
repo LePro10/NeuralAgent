@@ -100,6 +100,10 @@ pub struct Device {
     pub created_at: i64,
     pub last_seen: i64,
     pub bytes: i64,
+    /// App version, operating system and country of the last token refresh (for support).
+    pub version: Option<String>,
+    pub os: Option<String>,
+    pub country: Option<String>,
 }
 
 pub struct Identity<'a> {
@@ -117,10 +121,10 @@ pub enum Refresh {
     Unknown,
 }
 
-pub struct Db(Mutex<Connection>);
+pub struct Db(pub(crate) Mutex<Connection>);
 
 const USER_COLS: &str = "id, email, name, avatar, status, is_admin, remote, message, provider, created_at, decided_at";
-const DEVICE_COLS: &str = "id, user_id, name, platform, kind, pubkey, created_at, last_seen, bytes";
+const DEVICE_COLS: &str = "id, user_id, name, platform, kind, pubkey, created_at, last_seen, bytes, version, os, country";
 
 fn user_row(r: &Row) -> rusqlite::Result<User> {
     Ok(User {
@@ -149,6 +153,9 @@ fn device_row(r: &Row) -> rusqlite::Result<Device> {
         created_at: r.get(6)?,
         last_seen: r.get(7)?,
         bytes: r.get(8)?,
+        version: r.get(9)?,
+        os: r.get(10)?,
+        country: r.get(11)?,
     })
 }
 
@@ -170,6 +177,10 @@ impl Db {
         c.execute_batch(SCHEMA)?;
         // Columns added after the first release (fails harmlessly when present).
         let _ = c.execute("ALTER TABLE devices ADD COLUMN push TEXT", []);
+        for col in ["version", "os", "country"] {
+            let _ = c.execute(&format!("ALTER TABLE devices ADD COLUMN {col} TEXT"), []);
+        }
+        c.execute_batch(crate::insights::SCHEMA)?;
         Ok(Db(Mutex::new(c)))
     }
 
@@ -300,6 +311,15 @@ impl Db {
         self.0.lock().execute(
             "UPDATE devices SET name = COALESCE(?2, name), pubkey = COALESCE(?3, pubkey) WHERE id = ?1",
             params![id, name, pubkey],
+        )?;
+        Ok(())
+    }
+
+    /// What a device last said about itself (on token refresh); `None` keeps the old value.
+    pub fn device_info(&self, id: &str, version: Option<&str>, os: Option<&str>, country: Option<&str>) -> Result<()> {
+        self.0.lock().execute(
+            "UPDATE devices SET version = COALESCE(?2, version), os = COALESCE(?3, os), country = COALESCE(?4, country) WHERE id = ?1",
+            params![id, version, os, country],
         )?;
         Ok(())
     }

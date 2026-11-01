@@ -34,6 +34,7 @@ import { mcpDetail, McpPanel } from "./McpPage";
 import { RemotePanel } from "./RemotePage";
 import { AgentsPanel, profileDetail, ProfilesPanel } from "./settings/AgentsPanel";
 import { DiscordPanel } from "./settings/DiscordPanel";
+import { PrivacyIcon, PrivacyPanel, privacySummary } from "./settings/PrivacyPanel";
 import { SystemPanel } from "./settings/SystemPanel";
 import {
   AboutPanel,
@@ -209,6 +210,14 @@ function useSections(): SectionGroup[] {
     value: keepAwakeLabel(settings?.keep_awake) && `Keep awake: ${keepAwakeLabel(settings?.keep_awake)}`,
     render: () => <AdvancedPanel />,
   };
+  const privacy: SectionDef = {
+    id: "privacy",
+    title: "Privacy and support",
+    Icon: PrivacyIcon,
+    keywords: "privacy usage statistics telemetry analytics report problem bug support help diagnostics logs feedback",
+    value: privacySummary(settings?.usage_stats),
+    render: () => <PrivacyPanel />,
+  };
   const about: SectionDef = { id: "about", title: "About", Icon: Info, keywords: "privacy terms imprint website version", render: () => <AboutPanel /> };
   // Permissions, autostart and the background service of the computer (D58-D60).
   const system: SectionDef = {
@@ -228,14 +237,14 @@ function useSections(): SectionGroup[] {
       { label: hostName ?? "Host computer", items: neural },
       { label: "Agents and tools", items: agents },
       { label: "Computer", items: computer },
-      { items: [updates, about] },
+      { items: [updates, privacy, about] },
     ];
   return [
     { items: [appearance, alerts] },
     { label: "Neural and voice", items: neural },
     { label: "Agents and tools", items: agents },
     { label: "Computer", items: [access, ...computer] },
-    { items: [updates, about] },
+    { items: [updates, privacy, about] },
   ];
 }
 

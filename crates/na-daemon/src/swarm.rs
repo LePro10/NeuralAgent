@@ -164,6 +164,7 @@ impl Core {
     }
 
     pub fn swarm_start(self: &Arc<Self>, workspace_id: Id, goal: String, members: Option<Vec<SwarmRole>>) -> Result<Swarm, ApiError> {
+        self.telemetry.count("swarms_started", 1);
         let goal = goal.trim().to_string();
         if goal.is_empty() {
             return Err(err(ErrorCode::BadRequest, "the swarm needs a goal"));

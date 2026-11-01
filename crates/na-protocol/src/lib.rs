@@ -862,6 +862,11 @@ pub struct Settings {
     #[serde(default)]
     #[ts(as = "Option<DiscordOptions>", optional)]
     pub discord: DiscordOptions,
+    /// Send an anonymous usage ping once a day (Settings → Privacy, docs/notes/insights.md).
+    /// Missing means on; `false` turns it off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub usage_stats: Option<bool>,
 }
 
 /// How Neural sounds in calls.
@@ -878,6 +883,22 @@ impl Default for CallSettings {
     fn default() -> Self {
         Self { voice: 0, speed: 1.05 }
     }
+}
+
+/// A report as the user sees it before sending (`DiagnosticsPreview`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Diagnostics {
+    /// Pretty-printed JSON, exactly what would be sent.
+    pub report: String,
+    pub bytes: u32,
+}
+
+/// A sent problem report: quote the id when talking to support.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DiagnosticsSent {
+    pub id: String,
 }
 
 /// Bring your own key: which provider and models Neural talks to.
@@ -931,6 +952,7 @@ impl Default for Settings {
             call: CallSettings::default(),
             remote_files_home: None,
             discord: DiscordOptions::default(),
+            usage_stats: None,
         }
     }
 }
@@ -1439,6 +1461,29 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         options: Option<DiscordOptions>,
+    },
+    /// What a problem report would contain, as pretty JSON for the user to read → `Diagnostics`.
+    /// `usage: true` shows the anonymous usage ping instead.
+    DiagnosticsPreview {
+        #[serde(default)]
+        include_logs: bool,
+        #[serde(default)]
+        include_prompts: bool,
+        #[serde(default)]
+        usage: bool,
+    },
+    /// Sends a problem report to the NeuralAgent team (the relay) → `DiagnosticsSent`.
+    DiagnosticsSend {
+        summary: String,
+        #[serde(default)]
+        details: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        contact: Option<String>,
+        #[serde(default)]
+        include_logs: bool,
+        #[serde(default)]
+        include_prompts: bool,
     },
     // remote access (desktop only)
     /// Starts a sign-in in the system browser; returns the URL to open. `message` is the

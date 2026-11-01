@@ -1,4 +1,5 @@
 import { startScrollLoop } from "./hooks";
+import { countVisits } from "./hit";
 
 /**
  * Call once, before React renders, from every marketing page entry:
@@ -9,6 +10,7 @@ export function initPage() {
   document.documentElement.classList.add("na-js");
   startScrollLoop();
   smoothAnchors();
+  countVisits();
 }
 
 /**

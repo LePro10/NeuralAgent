@@ -172,6 +172,7 @@ impl Core {
         if text.is_empty() {
             return Err(err(ErrorCode::BadRequest, "nothing to send"));
         }
+        self.telemetry.count(if voice { "neural_voice_turns" } else { "neural_turns" }, 1);
         if !self.read(|s| s.orchestrator.ready) {
             return Err(err(ErrorCode::Unavailable, "Neural has no model yet: add a key in Settings → Neural on the computer"));
         }

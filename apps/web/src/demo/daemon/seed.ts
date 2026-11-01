@@ -49,6 +49,8 @@ export const profiles = (): Profile[] => [
 export const settings = (): Settings => ({
   keep_awake: "while_working",
   resume_on_start: true,
+  // The demo collects nothing (and shows no usage notice).
+  usage_stats: false,
   theme: "ice",
   discord_presence: "general",
   default_profile: "claude",

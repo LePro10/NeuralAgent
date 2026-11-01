@@ -152,7 +152,7 @@ export interface AccountOptions {
   store: Store;
   keys: KeyStore;
   /** How this device shows up in the account's device list. */
-  device: { name: string; platform: "web" | "android" | "ios" };
+  device: { name: string; platform: "web" | "android" | "ios"; version?: string; os?: string };
 }
 
 const randomB64 = (n: number) => b64(crypto.getRandomValues(new Uint8Array(n)));
@@ -288,7 +288,12 @@ export class RemoteAccount {
         const s = this.saved;
         if (!s) throw new RemoteError("Not signed in", 401);
         try {
-          const t: Tokens = await this.http("POST", "/api/auth/refresh", { refresh: s.refresh });
+          const t: Tokens = await this.http("POST", "/api/auth/refresh", {
+            refresh: s.refresh,
+            // Shown to the admin next to this device, for support.
+            version: this.o.device.version,
+            os: this.o.device.os,
+          });
           await this.took(t);
           return t.access;
         } catch (e) {

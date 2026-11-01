@@ -11,6 +11,15 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-01
+
+### New
+- **Report a problem** from Settings → Privacy and support. You see exactly what is sent and choose whether the service log and your recent Neural requests are attached; you get a report id to quote.
+- **Anonymous usage statistics** help decide what to improve: once a day, no prompts, code or names. You can see what is sent and turn it off in Settings → Privacy and support.
+
+### Improved
+- The privacy page explains the new usage statistics, problem reports and the cookieless visit counts of the website.
+
 ## [0.4.1] - 2026-11-01
 
 ### Fixed

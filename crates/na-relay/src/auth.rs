@@ -348,8 +348,8 @@ pub struct Exchange {
     message: Option<String>,
 }
 
-pub async fn exchange(State(r): State<Arc<Relay>>, Ip(ip): Ip, Json(x): Json<Exchange>) -> ApiResult<Json<Tokens>> {
-    r.limit(ip)?;
+pub async fn exchange(State(r): State<Arc<Relay>>, v: crate::telemetry::Visitor, Json(x): Json<Exchange>) -> ApiResult<Json<Tokens>> {
+    r.limit(v.ip)?;
     x.device.check()?;
     let code = r.codes.take(&x.code).ok_or_else(|| ApiError::bad("code expired, sign in again"))?;
     if !ct_eq(s256(&x.verifier).as_bytes(), code.challenge.as_bytes()) || x.redirect_uri != code.redirect_uri {
@@ -366,19 +366,29 @@ pub async fn exchange(State(r): State<Arc<Relay>>, Ip(ip): Ip, Json(x): Json<Exc
         }
         if r.db.take_notify(&user.id)? {
             let _ = r.db.bump("requests", 1);
+            r.db.audit_add(&user.email, "requested access", &user.email, user.message.as_deref().unwrap_or(""));
             let (r2, u) = (r.clone(), user.clone());
-            tokio::spawn(async move { r2.mail.access_requested(&r2.cfg.admins, &u).await });
+            tokio::spawn(async move {
+                r2.mail.access_requested(&r2.cfg.admins, &u).await;
+                r2.push.notify_admins(&r2, "request", &format!("Access request: {}", u.name), &u.email).await;
+            });
         }
     }
-    Ok(Json(new_device(&r, user, &x.device)?))
+    let tokens = new_device(&r, user, &x.device)?;
+    let _ = r.db.device_info(&tokens.device_id, None, None, Some(&v.country));
+    Ok(Json(tokens))
 }
 
 #[derive(Deserialize)]
 pub struct RefreshBody {
     refresh: String,
+    /// App version and operating system ("macos 15.1"), shown to the admin for support.
+    version: Option<String>,
+    os: Option<String>,
 }
 
-pub async fn refresh(State(r): State<Arc<Relay>>, Ip(ip): Ip, Json(b): Json<RefreshBody>) -> ApiResult<Json<Tokens>> {
+pub async fn refresh(State(r): State<Arc<Relay>>, v: crate::telemetry::Visitor, Json(b): Json<RefreshBody>) -> ApiResult<Json<Tokens>> {
+    let ip = v.ip;
     r.limit(ip)?;
     let device = match r.db.refresh(&hash(&b.refresh))? {
         Refresh::Ok(d) => d,
@@ -395,6 +405,8 @@ pub async fn refresh(State(r): State<Arc<Relay>>, Ip(ip): Ip, Json(b): Json<Refr
     }
     let refresh = token();
     r.db.rotate(&device.id, &hash(&refresh))?;
+    let short = |s: &Option<String>| s.as_deref().map(|s| crate::telemetry::clean(s, 40)).filter(|s| !s.is_empty());
+    let _ = r.db.device_info(&device.id, short(&b.version).as_deref(), short(&b.os).as_deref(), Some(&v.country));
     Ok(Json(Tokens { access: access_for(&r, &user, &device), refresh, expires_in: ACCESS_TTL, device_id: device.id, user }))
 }
 

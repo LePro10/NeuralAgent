@@ -101,6 +101,7 @@ pub struct Core {
     pub outbox: crate::swarm::Outbox,
     pub cv: crate::claude_view::ClaudeView,
     pub host_ctl: crate::host::Host,
+    pub telemetry: crate::telemetry::Telemetry,
 }
 
 pub struct Subscription {
@@ -170,6 +171,7 @@ impl Core {
             outbox: Default::default(),
             cv: Default::default(),
             host_ctl: Default::default(),
+            telemetry: Default::default(),
         })
     }
 
@@ -605,6 +607,19 @@ impl Core {
                 self.emit(Event::McpSet { servers: list });
                 Ok(json!(added))
             }
+            Request::DiagnosticsPreview { include_logs, include_prompts, usage } => {
+                let v = if usage {
+                    crate::telemetry::ping_body(self)
+                } else {
+                    crate::telemetry::diagnostics(self, include_logs, include_prompts)
+                };
+                let report = serde_json::to_string_pretty(&v).unwrap_or_default();
+                Ok(json!(na_protocol::Diagnostics { bytes: report.len() as u32, report }))
+            }
+            Request::DiagnosticsSend { summary, details, contact, include_logs, include_prompts } => {
+                let id = crate::telemetry::send_report(self, summary, details, contact, include_logs, include_prompts).await?;
+                Ok(json!(na_protocol::DiagnosticsSent { id }))
+            }
             Request::DiscordPreview { presence, options } => Ok(json!(crate::discord::preview(self, presence, options))),
             Request::UsageReport { days } => {
                 let since = crate::usage::since_day(days.clamp(1, 400));
@@ -915,6 +930,8 @@ impl Core {
             },
         )
         .map_err(|e| err(ErrorCode::Internal, format!("could not start {}: {e:#}", profile.name)))?;
+        self.telemetry.count("agents_started", 1);
+        self.telemetry.count(&format!("agent.{}", profile.engine), 1);
         // It runs in its folder now: macOS answered for it, if it guards it.
         self.folder_gate(None).answered(Path::new(&session.cwd), &Ok(()));
 

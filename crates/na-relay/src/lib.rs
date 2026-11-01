@@ -6,10 +6,13 @@ pub mod admin;
 pub mod auth;
 pub mod config;
 pub mod db;
+pub mod geo;
 pub mod hub;
+pub mod insights;
 pub mod mail;
 pub mod push;
 pub mod releases;
+pub mod telemetry;
 pub mod util;
 pub mod web;
 
@@ -79,6 +82,7 @@ pub struct Relay {
     pub access: Ttl<String, Access>,
     pub pairs: Ttl<String, Pair>,
     pub push: push::Push,
+    pub geo: geo::Geo,
     limiter: Mutex<HashMap<IpAddr, (i64, u32)>>,
 }
 
@@ -92,6 +96,7 @@ impl Relay {
             .expect("push keys");
         Arc::new(Relay {
             push,
+            geo: geo::Geo::load(cfg.geoip.as_deref()),
             mail: mail::Mailer::new(&cfg),
             http: reqwest::Client::builder()
                 .user_agent("NeuralAgent-Relay")
@@ -145,13 +150,28 @@ impl Relay {
     }
 }
 
-/// The client's address; behind the reverse proxy (a private address) its header is used.
-pub fn client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
-    let private = match peer.ip() {
+/// The request came through our reverse proxy (a private address), so its headers count.
+pub fn behind_proxy(peer: SocketAddr) -> bool {
+    match peer.ip() {
         IpAddr::V4(v) => v.is_private() || v.is_loopback(),
         IpAddr::V6(v) => v.is_loopback() || v.to_ipv4_mapped().is_some_and(|m| m.is_private() || m.is_loopback()),
-    };
-    if private {
+    }
+}
+
+impl Relay {
+    /// Two-letter country of a client (`--` when unknown). The IP itself is never stored.
+    pub fn country(&self, peer: SocketAddr, ip: IpAddr, headers: &HeaderMap) -> String {
+        self.geo.country(ip, headers, behind_proxy(peer))
+    }
+
+    pub fn geo_empty(&self) -> bool {
+        self.geo.is_empty()
+    }
+}
+
+/// The client's address; behind the reverse proxy (a private address) its header is used.
+pub fn client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
+    if behind_proxy(peer) {
         let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok());
         if let Some(ip) = h("x-real-ip").and_then(|v| v.trim().parse().ok()) {
             return ip;
@@ -221,6 +241,9 @@ pub fn router(relay: Arc<Relay>) -> Router {
         .route("/devices/signout-all", post(auth::sign_out_all))
         .route("/pair", post(auth::pair_create))
         .route("/pair/redeem", post(auth::pair_redeem))
+        .route("/telemetry", post(telemetry::ping))
+        .route("/reports", post(telemetry::report))
+        .route("/hit", post(telemetry::hit))
         .nest("/admin", admin::router())
         .merge(releases::router());
     Router::new()

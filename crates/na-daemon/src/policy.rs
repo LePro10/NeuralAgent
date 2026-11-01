@@ -99,6 +99,10 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         Request::WorkspaceRemove { .. } => needs("removing a workspace"),
         Request::McpSave { .. } | Request::McpDelete { .. } | Request::McpImport => needs("changing MCP servers"),
         Request::LlmKeySet { .. } => needs("changing model keys"),
+        // Reports and what they contain are for people, not for Neural.
+        Request::DiagnosticsPreview { .. } | Request::DiagnosticsSend { .. } if client.kind == ClientKind::Orchestrator => {
+            Err(err(ErrorCode::Forbidden, "only the user can do this"))
+        }
         // Neural does not talk to itself.
         Request::OrchSend { .. } | Request::OrchClear | Request::LlmTest if client.kind == ClientKind::Orchestrator => {
             Err(err(ErrorCode::BadRequest, "not available to the orchestrator"))

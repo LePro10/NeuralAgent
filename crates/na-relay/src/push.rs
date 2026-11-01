@@ -160,14 +160,32 @@ impl Push {
         if !self.allow(user) {
             bail!("push budget used up");
         }
+        self.deliver(r, user, &data.fields(), true).await
+    }
+
+    /// Tells every admin's phones and browsers about an access request or a problem report
+    /// (`{t: "admin", kind, title, body}`; the apps open the admin area on tap).
+    pub async fn notify_admins(&self, r: &Relay, kind: &str, title: &str, body: &str) {
+        let fields = json!({ "t": "admin", "kind": kind, "title": title, "body": body });
+        for admin in r.db.admins().unwrap_or_default() {
+            if !self.allow(&admin.id) {
+                continue;
+            }
+            if let Err(e) = self.deliver(r, &admin.id, &fields, false).await {
+                tracing::warn!("admin push failed: {e:#}");
+            }
+        }
+    }
+
+    async fn deliver(&self, r: &Relay, user: &str, fields: &Value, skip_on_screen: bool) -> Result<usize> {
         let mut sent = 0;
         for (device, target) in r.db.push_targets(user)? {
-            if r.hub.on_screen(&device) {
+            if skip_on_screen && r.hub.on_screen(&device) {
                 continue;
             }
             let res = match &target {
-                Target::Fcm(token) => self.send_fcm(r, token, data).await,
-                Target::Web { endpoint, p256dh, auth } => self.send_web(r, endpoint, p256dh, auth, data).await,
+                Target::Fcm(token) => self.send_fcm(r, token, fields).await,
+                Target::Web { endpoint, p256dh, auth } => self.send_web(r, endpoint, p256dh, auth, fields).await,
             };
             match res {
                 Ok(true) => sent += 1,
@@ -185,11 +203,11 @@ impl Push {
     }
 
     /// Ok(false): the token no longer exists.
-    async fn send_fcm(&self, r: &Relay, token: &str, n: &Notice) -> Result<bool> {
+    async fn send_fcm(&self, r: &Relay, token: &str, fields: &Value) -> Result<bool> {
         let (sa, _) = self.fcm.as_ref().ok_or_else(|| anyhow!("FCM not configured"))?;
         let access = self.fcm_access(r).await?;
         // Data only: the app builds the notification, so a tap can open the agent.
-        let body = json!({ "message": { "token": token, "data": n.fields(),
+        let body = json!({ "message": { "token": token, "data": fields,
             "android": { "priority": "high", "ttl": "900s" } } });
         let res = r
             .http
@@ -206,8 +224,8 @@ impl Push {
         }
     }
 
-    async fn send_web(&self, r: &Relay, endpoint: &str, p256dh: &str, auth: &str, n: &Notice) -> Result<bool> {
-        let body = encrypt(&serde_json::to_vec(&n.fields())?, &B64.decode(p256dh)?, &B64.decode(auth)?)?;
+    async fn send_web(&self, r: &Relay, endpoint: &str, p256dh: &str, auth: &str, fields: &Value) -> Result<bool> {
+        let body = encrypt(&serde_json::to_vec(fields)?, &B64.decode(p256dh)?, &B64.decode(auth)?)?;
         let u = url::Url::parse(endpoint)?;
         let aud = u.origin().ascii_serialization();
         let res = r

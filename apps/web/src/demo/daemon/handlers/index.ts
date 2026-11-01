@@ -274,6 +274,19 @@ function dispatch(sim: Sim, conn: Conn, req: Request): unknown {
       return M.auditList(sim, req.p);
     case "history_search":
       return M.historySearch(sim, req.p);
+    // ── privacy and support: the demo never sends anything ──
+    case "diagnostics_preview": {
+      const report = JSON.stringify(
+        req.p.usage
+          ? { install: "demo", app: "desktop", version: "demo", os: "macos", counts: { agents_started: 4, neural_turns: 7 } }
+          : { app: { version: "demo" }, system: { os: "macos" }, note: "The live demo does not collect anything." },
+        null,
+        2,
+      );
+      return { report, bytes: report.length };
+    }
+    case "diagnostics_send":
+      throw new ApiErr("bad_request", "The live demo does not send reports. Install NeuralAgent to report a problem.");
   }
   const never: never = req;
   throw new ApiErr("bad_request", `Unknown request ${(never as { m?: string }).m ?? ""}`);

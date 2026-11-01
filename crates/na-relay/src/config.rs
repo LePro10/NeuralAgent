@@ -40,6 +40,8 @@ pub struct Config {
     pub releases: Option<PathBuf>,
     /// Bearer token CI uploads releases with; uploads are off without it.
     pub release_token: Option<String>,
+    /// IP-to-country table (DB-IP "IP to Country Lite" CSV). Only the country is kept, never the IP.
+    pub geoip: Option<PathBuf>,
 }
 
 fn var(k: &str) -> Option<String> {
@@ -80,6 +82,10 @@ impl Config {
                 Some(db.parent()?.join("releases"))
             }),
             release_token: var("RELEASE_UPLOAD_TOKEN"),
+            geoip: var("NA_RELAY_GEOIP").map(PathBuf::from).or_else(|| {
+                let db = PathBuf::from(var("NA_RELAY_DB").unwrap_or_else(|| "/var/lib/neuralagent/relay.db".into()));
+                Some(db.parent()?.join("geoip.csv"))
+            }),
         })
     }
 
@@ -100,6 +106,7 @@ impl Config {
             vapid: None,
             releases: None,
             release_token: None,
+            geoip: None,
         }
     }
 

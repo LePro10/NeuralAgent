@@ -231,6 +231,24 @@ fn account_status(core: &Core, user: &Value) {
 
 // ───────────── relay REST ─────────────
 
+/// The relay this computer talks to (its signed-in one, else the default).
+pub fn relay_url(core: &Core) -> String {
+    core.remote.creds.lock().as_ref().map(|c| c.relay.clone()).unwrap_or_else(relay_default)
+}
+
+/// A fresh access token when signed in (problem reports then name the account).
+pub async fn access_token(core: &Arc<Core>) -> Option<String> {
+    if core.remote.creds.lock().is_none() {
+        return None;
+    }
+    refresh(core).await.ok()
+}
+
+/// The shared HTTP client (rustls, sane timeouts).
+pub fn http(core: &Core) -> &reqwest::Client {
+    &core.remote.http
+}
+
 enum Fail {
     /// The relay no longer knows this device: signed out.
     SignedOut,
@@ -250,7 +268,7 @@ async fn refresh(core: &Arc<Core>) -> Result<String, Fail> {
         .remote
         .http
         .post(format!("{}/api/auth/refresh", c.relay))
-        .json(&json!({ "refresh": c.refresh }))
+        .json(&json!({ "refresh": c.refresh, "version": env!("CARGO_PKG_VERSION"), "os": crate::telemetry::os_label() }))
         .timeout(Duration::from_secs(15))
         .send()
         .await

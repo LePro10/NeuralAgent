@@ -2,19 +2,28 @@ package dev.neuralhub.neuralagent;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.net.Uri;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
 
-/** Builds the notification from the relay's data message {t, kind, host, sid}; a tap opens that agent. */
+/** Builds the notification from the relay's data message {t, kind, host, sid}; a tap opens that agent.
+ *  Admin messages {t: admin, kind, title, body} open the admin area. */
 public class PushService extends FirebaseMessagingService {
     static final String CHANNEL = "agents";
+    static final String ADMIN_CHANNEL = "admin";
 
     @Override
     public void onMessageReceived(RemoteMessage msg) {
         Map<String, String> d = msg.getData();
+        if ("admin".equals(d.get("t"))) {
+            admin(d);
+            return;
+        }
         if (!"attention".equals(d.get("t"))) return;
         String kind = d.get("kind"), host = d.get("host"), sid = d.get("sid");
         if (sid == null) return;
@@ -37,6 +46,30 @@ public class PushService extends FirebaseMessagingService {
         if ("waiting".equals(kind) || "error".equals(kind)) Status.attention(this);
         try {
             NotificationManagerCompat.from(this).notify(sid.hashCode(), n.build());
+        } catch (SecurityException e) {
+            // Notifications were turned off for the app.
+        }
+    }
+
+    /** Admins only: an access request or a problem report; a tap opens the admin area in the browser. */
+    private void admin(Map<String, String> d) {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm.getNotificationChannel(ADMIN_CHANNEL) == null) {
+            NotificationChannel ch = new NotificationChannel(ADMIN_CHANNEL, "Admin", NotificationManager.IMPORTANCE_DEFAULT);
+            ch.setDescription("Access requests and problem reports (admins only)");
+            nm.createNotificationChannel(ch);
+        }
+        String tab = "report".equals(d.get("kind")) ? "reports" : "requests";
+        Intent open = new Intent(Intent.ACTION_VIEW, Uri.parse("https://agent.neuralhub.dev/admin/#" + tab));
+        PendingIntent pi = PendingIntent.getActivity(this, tab.hashCode(), open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        NotificationCompat.Builder n = new NotificationCompat.Builder(this, ADMIN_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_agent)
+                .setContentTitle(d.get("title") != null ? d.get("title") : "NeuralAgent admin")
+                .setContentText(d.get("body") != null ? d.get("body") : "")
+                .setAutoCancel(true)
+                .setContentIntent(pi);
+        try {
+            NotificationManagerCompat.from(this).notify(("admin-" + tab).hashCode(), n.build());
         } catch (SecurityException e) {
             // Notifications were turned off for the app.
         }

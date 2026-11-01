@@ -19,7 +19,12 @@ export const account = await RemoteAccount.open({
   store,
   // A private window may have no IndexedDB; the key then lives as long as the tab.
   keys: "indexedDB" in window ? webKeyStore(store) : memoryKeyStore(),
-  device: { name: deviceName, platform: native ? "android" : ios ? "ios" : "web" },
+  device: {
+    name: deviceName,
+    platform: native ? "android" : ios ? "ios" : "web",
+    version: __NA_WEB__.version,
+    os: [native ? "Android app" : browser, os].filter(Boolean).join(" "),
+  },
 });
 
 export const link = new RelayLink(account);

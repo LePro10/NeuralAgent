@@ -319,6 +319,7 @@ impl Core {
         let (audio, rx) = channel::<Vec<f32>>();
         let stop = CancellationToken::new();
         let id = self.calls.next.fetch_add(1, Ordering::Relaxed);
+        self.telemetry.count("calls", 1);
         if let Some((_, old, _)) = self.calls.active.lock().replace((id, stop.clone(), out.clone())) {
             old.cancel();
         }

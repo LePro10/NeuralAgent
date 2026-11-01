@@ -41,6 +41,7 @@ mod server;
 mod service;
 mod speech;
 mod swarm;
+mod telemetry;
 mod usage;
 
 use std::time::Duration;
@@ -111,6 +112,7 @@ fn serve() -> Result<()> {
         core.resume_after_restart();
         service::watch_handover(core.clone());
         remote::start(&core);
+        telemetry::start(&core);
         core.orch_status();
         tokio::spawn(neural::watch(core.clone()));
         {

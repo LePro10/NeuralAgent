@@ -17,4 +17,9 @@ remote_files_home?: boolean,
 /**
  * What the Discord card shows when `discord_presence` is `custom` (D72). Missing from old daemons.
  */
-discord?: DiscordOptions, };
+discord?: DiscordOptions, 
+/**
+ * Send an anonymous usage ping once a day (Settings → Privacy, docs/notes/insights.md).
+ * Missing means on; `false` turns it off.
+ */
+usage_stats?: boolean, };

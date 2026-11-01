@@ -28,6 +28,7 @@ import { ALERT_TEXT, chime, useAlerts, wantsNotify, wantsSound } from "./lib/ale
 import { writeClipboard } from "./lib/clipboard";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
 import { useUpdateWatch } from "./lib/updates";
+import { useUsageNotice } from "./lib/usageNotice";
 import { MOVED_TO_SETTINGS, SETTINGS_PAGE, requestSettingsSection } from "./lib/settingsRoute";
 import { startTheme } from "./lib/theme";
 
@@ -110,6 +111,7 @@ export function App() {
   const disconnected = useLongDisconnect();
   const { workspace, setWorkspace, sidebarPinned, setSidebarPinned } = useUi();
   useUpdateWatch(); // version label, Update button and dialog (lib/updates.ts)
+  useUsageNotice(); // once: anonymous usage stats are on (lib/usageNotice.ts)
   useWindowDrag();
   // Phones get their own shell and router (components/phone/PhoneApp.tsx); the effects below serve both.
   const phone = useLayoutMode() === "phone";

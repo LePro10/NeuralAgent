@@ -969,3 +969,28 @@ Services launch, which the Dock showed as a second icon): it runs `lsregister -f
 a detached `sh` waits for the old pid, then `open`s the bundle. `tauri-plugin-single-instance`
 makes a second start show the running window on all three systems (it releases its lock in
 `cleanup_before_exit`, so Tauri's restart on Windows/Linux still works).
+
+## D81 — Insights: opt-out anonymous usage ping, user-sent problem reports, cookieless site counts (2026-11-01)
+The owner asked for a complete admin dashboard (locations, platforms, downloads, request
+notifications, device/version for support) and for usage data on by default, ideally including
+Neural prompts. Decision ([notes/insights.md](notes/insights.md)):
+- **Usage ping on by default, content-free.** Daily from the daemon: random install id (hashed on
+  the relay), version, OS, arch, locale, feature counters. Switch in Settings → Privacy and
+  support, with the exact payload shown, plus a one-time notice. Alternative opt-in was rejected
+  by the owner's wish; legitimate interest covers anonymous minimal statistics, and the default is
+  one line to flip.
+- **Prompts only in a problem report, opt-in per report.** Collecting Neural prompts by default
+  would break the product's promise (E2E, "your code and agents are not sent to us") and GDPR
+  data minimisation. A report attaches the last 20 Neural requests only when the user switches it
+  on and sees the JSON before sending.
+- **Country, never IP.** `cf-ipcountry` from a trusted proxy or the DB-IP Lite table; only the
+  two-letter code is stored. No third-party analytics service.
+- **Website without cookies, therefore without a banner.** Page views, referrer host, country and
+  download clicks as anonymous counters; DNT/GPC respected. A consent banner for a site that sets
+  nothing would only cost visitors.
+- **Downloads and update checks counted on the relay** (platform, version, country): installed
+  versions are visible even when the ping is off.
+- **Admin alerts by mail and push** (`{t: "admin"}`) for access requests and problem reports;
+  admin actions go to an audit log. Retention: installs 400 days, solved reports 180 days, audit
+  365 days.
+

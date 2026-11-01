@@ -32,6 +32,15 @@ self.addEventListener("push", (e) => {
   } catch {}
   e.waitUntil(
     (async () => {
+      // Admins: an access request or a problem report arrived (opens the admin area on tap).
+      if (n.t === "admin")
+        return self.registration.showNotification(n.title || "NeuralAgent admin", {
+          body: n.body || "",
+          icon: "/app/icon-192.png",
+          badge: "/app/icon-192.png",
+          tag: `admin-${n.kind || ""}`,
+          data: { admin: n.kind === "report" ? "reports" : "requests" },
+        });
       if (n.t !== "attention") return self.registration.showNotification("NeuralAgent", { body: "Something needs your attention.", icon: "/app/icon-192.png" });
       // Always show something: Safari drops subscriptions whose pushes stay silent. The relay
       // already skips devices that are on screen.
@@ -50,9 +59,10 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const { host, sid } = e.notification.data || {};
+  const { host, sid, admin } = e.notification.data || {};
   e.waitUntil(
     (async () => {
+      if (admin) return self.clients.openWindow(`/admin/#${admin}`);
       const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const win = open.find((c) => new URL(c.url).pathname.startsWith("/app"));
       if (win) {

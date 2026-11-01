@@ -17,6 +17,8 @@ export interface User {
   online: number;
   bytes: number;
   last_seen?: number | null;
+  country?: string | null;
+  platforms?: string[];
 }
 
 export interface Device {
@@ -26,15 +28,33 @@ export interface Device {
   kind: string;
   online: boolean;
   last_seen?: number | null;
+  bytes?: number;
+  created_at?: number;
+  version?: string | null;
+  os?: string | null;
+  country?: string | null;
 }
 
-export interface DayStats {
-  day: string;
-  signins?: number;
-  connections?: number;
-  pairings?: number;
-  requests?: number;
-  active_devices?: number;
+/** One row per day: `day` plus any counter key (signins, dl:mac, page:/ …). */
+export type DayStats = { day: string } & { [key: string]: number | string | undefined };
+
+export interface Count {
+  key: string;
+  n: number;
+}
+
+export interface Installs {
+  total: number;
+  active: { d1: number; d7: number; d30: number };
+  new: number;
+  daily: { day: string; n: number }[];
+  by_app: Count[];
+  by_os: Count[];
+  by_os_version: Count[];
+  by_version: Count[];
+  by_country: Count[];
+  by_arch: Count[];
+  by_language: Count[];
 }
 
 export interface Stats {
@@ -43,6 +63,41 @@ export interface Stats {
   devices: number;
   online: number;
   days: DayStats[];
+  totals: Record<string, number>;
+  installs: Installs;
+  open_reports: number;
+  geoip: boolean;
+}
+
+export type ReportStatus = "open" | "seen" | "solved";
+
+export interface Report {
+  id: string;
+  created_at: number;
+  updated_at: number;
+  status: ReportStatus;
+  user_id?: string | null;
+  email?: string | null;
+  app?: string | null;
+  version?: string | null;
+  os?: string | null;
+  country?: string | null;
+  summary: string;
+  details?: string | null;
+  note?: string | null;
+}
+
+export interface ReportDetail {
+  report: Report & { diagnostics?: unknown };
+  account: null | { user: User; devices: Device[] };
+}
+
+export interface AuditEntry {
+  at: number;
+  actor: string;
+  action: string;
+  target?: string | null;
+  detail?: string | null;
 }
 
 export interface Session {
@@ -268,4 +323,10 @@ export const api = {
   devices: (id: string) => call<{ devices: Device[] }>("GET", `/api/admin/users/${encodeURIComponent(id)}/devices`).then((r) => r.devices),
   deleteDevice: (id: string) => call<unknown>("DELETE", `/api/admin/devices/${encodeURIComponent(id)}`),
   stats: (days = 30) => call<Stats>("GET", `/api/admin/stats?days=${days}`),
+  reports: () => call<{ reports: Report[] }>("GET", "/api/admin/reports").then((r) => r.reports),
+  report: (id: string) => call<ReportDetail>("GET", `/api/admin/reports/${encodeURIComponent(id)}`),
+  updateReport: (id: string, patch: { status?: ReportStatus; note?: string }) =>
+    call<{ report: Report }>("POST", `/api/admin/reports/${encodeURIComponent(id)}`, patch).then((r) => r.report),
+  deleteReport: (id: string) => call<unknown>("DELETE", `/api/admin/reports/${encodeURIComponent(id)}`),
+  audit: () => call<{ audit: AuditEntry[] }>("GET", "/api/admin/audit").then((r) => r.audit),
 };
