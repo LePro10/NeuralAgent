@@ -5,6 +5,25 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
+## Latest (2026-11-01, evening) — copy/paste overhaul (D82), NOT committed, not released
+- Terminal: OSC 52 handler (`lib/osc52.ts` + test), so Claude Code's own mouse selection lands on the clipboard;
+  ⌘C / menu Copy reuse it; menu hints "⌥-drag / Shift-drag to select". One clipboard path (`lib/clipboard.ts`,
+  registered in `DaemonProvider`); desktop native `clipboard_write_text` / `clipboard_text` (arboard).
+- Checks green: typecheck, test, lint:tokens, check:docs, `cargo check -p neuralagent-desktop`.
+- Open: not tried by hand in the real Tauri app yet (needs `pnpm dev` with a test NEURALAGENT_HOME and Claude
+  Code in fullscreen/mouse mode); web remote in Safari falls back to a toast with a Copy button.
+
+## Latest (2026-11-01, afternoon) — landing slimmed down, DEPLOYED, NOT committed
+- Landing 18.5k px -> 14.8k px: Hero centred over a scroll-linked aura (blobs + grid, `--c`) with a release pill and
+  an agent ribbon (HeroRoster removed); new `sections/Highlights` bento (5 motion panes, pointer light, links to
+  /features/); Security shows only the walkthrough (`<Security full />` on /security/ has facts, limits, what leaves);
+  Platforms is now 5 compact tiles (details on /download/); FAQ shows 6, "Show all". Agents + full Spec moved to the new
+  page `/features/` (`src/features.tsx`); new `/security/` (`src/security.tsx`). Nav: Features, Live demo, Security,
+  Download, Changelog. Relay counts the two new pages (`telemetry.rs` PAGES), sitemap updated.
+- Deployed from the working copy: build `0.5.0+mvxw9z5g`, rollback image `neuralagent-relay:prev`. Checks green.
+- Open: commit this; `docs/ADMIN-HANDBUCH.md` has an unrelated uncommitted edit (not mine); no OG images for the two
+  new pages yet (they use /og.png).
+
 ## Where we are (2026-11-01, afternoon)
 - **0.5.0 released and deployed** (D81 insights, [notes/insights.md](notes/insights.md)): admin
   dashboard tabs, anonymous usage ping (opt-out), problem reports with diagnostics, cookieless site

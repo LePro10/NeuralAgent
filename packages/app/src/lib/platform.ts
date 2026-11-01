@@ -72,6 +72,8 @@ export interface Platform {
   shareFile?: (file: { name: string; type: string; data: Blob }) => Promise<void>;
   /** Native shells: put text on the system clipboard (Android WebViews may refuse navigator.clipboard). */
   copyText?: (text: string) => Promise<void>;
+  /** Native shells: the text on the system clipboard (WebKit would ask with its own "Paste" bubble). */
+  readClipboardText?: () => Promise<string | null>;
   /**
    * Desktop (Tauri swallows OS file drops before the page sees them): files dropped on the window,
    * as local paths with the drop position in CSS pixels.

@@ -26,6 +26,7 @@ import {
 } from "@neuralagent/ui";
 import { Copy, Download, GitBranch, GitCompare, Globe, Pencil, Plus, RotateCw, Square, TextSelect, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { copyWithToast } from "../../lib/clipboard";
 import { activityOf, STATUS } from "../../lib/status";
 import { useCatalogSheet, useChanges, useClient, useDaemon, useUi } from "../../lib/store";
 import { ClaudeView } from "../claude/ClaudeView";
@@ -220,7 +221,7 @@ function useSessionActions(session: Session | undefined, workspaceId: string, { 
       label: "Copy session id",
       detail: id,
       Icon: Copy,
-      onSelect: () => void navigator.clipboard?.writeText(id).then(() => toast("Session id copied"), fail),
+      onSelect: () => void copyWithToast(id, undefined, "Session id copied"),
     });
     items.push({ label: session.alive ? "Stop and close" : "Close", Icon: X, destructive: true, divider: true, onSelect: () => (session.alive ? setAsking(true) : void doClose()) });
   }

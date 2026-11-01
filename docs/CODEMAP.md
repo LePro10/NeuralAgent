@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-01 by `node scripts/codemap.mjs` (713 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-01 by `node scripts/codemap.mjs` (715 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -26,7 +26,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## apps/desktop/src/
 - **dev-browser.tsx** (115) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
 - **hud.tsx** (44)
-- **main.tsx** (220)
+- **main.tsx** (222)
 
 ## apps/desktop/src-tauri/
 - **build.rs** (4)
@@ -36,7 +36,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **daemon.rs** (228) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), restart_newest()`
 - **duck.rs** (984) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
 - **hud.rs** (76) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
-- **lib.rs** (223) — `run_service(), run()`
+- **lib.rs** (249) — `run_service(), run()`
 - **main.rs** (11) — Prevents an extra console window on Windows in release builds.
 - **mic.rs** (198) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, probe(), impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
@@ -361,7 +361,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **SettingsPage.tsx** (443) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
 - **SwarmPage.tsx** (103) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
-- **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
+- **TerminalView.tsx** (441) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
 - **UpdateBadge.tsx** (124) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
@@ -379,7 +379,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **ContextSheet.tsx** (102) — How full the context is and what the session cost so far. The ring sits in the composer; · `ContextRing(), ContextSheet()`
 - **DockCard.tsx** (151) — The frame of a card docked where the composer sits (permission, plan, question, menu): · `DockCard(), Btn(), AnswerField()`
 - **Images.tsx** (480) — Pictures in the conversation, like Claude Code desktop shows them: a rounded thumbnail under · `ImageSidContext, ImageAgentContext, interface Pic, GalleryContext, Thumb(), NoImage(), Pictures, Viewer()`
-- **Markdown.tsx** (333) — A small Markdown renderer for assistant text in Claude's reading style (no HTML is ever injected). · `parseBlocks(), copyText(), CopyButton(), CodeBlock(), plainText(), Markdown`
+- **Markdown.tsx** (313) — A small Markdown renderer for assistant text in Claude's reading style (no HTML is ever injected). · `parseBlocks(), copyText, CopyButton(), CodeBlock(), plainText(), Markdown`
 - **Picker.tsx** (157) — Choices in the Claude view (model, effort, permission mode, attachments). Phones: a "pour" · `Picker(), Pour(), PickSection(), PickRow(), PickNote()`
 - **PlanCard.tsx** (96) — Plan approval (ExitPlanMode): the plan as markdown, the CLI's approve choices in its own · `PlanCard()`
 - **PromptCard.tsx** (320) — A menu the CLI shows right now, docked where the composer sits (on phones it takes the · `asPermission(), parseTitle(), interface PromptCardProps, PromptCard(), interface CardProps`
@@ -445,7 +445,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## packages/app/src/components/settings/
 - **AgentsPanel.tsx** (161) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
 - **DiscordPanel.tsx** (202) — Settings → Discord (D72): a privacy preset, what each part of the card shows, and a live preview · `DiscordPanel(), ProfileCard()`
-- **PrivacyPanel.tsx** (160) — Settings → Privacy and support (docs/notes/insights.md): the anonymous usage ping (on unless · `privacySummary(), PrivacyPanel(), PrivacyIcon`
+- **PrivacyPanel.tsx** (161) — Settings → Privacy and support (docs/notes/insights.md): the anonymous usage ping (on unless · `privacySummary(), PrivacyPanel(), PrivacyIcon`
 - **SystemPanel.tsx** (491) — Settings → System (D58-D60): the computer's permissions, how the background service starts, and · `toSetUp, systemSummary(), SystemPanel()`
 - **nav.ts** (13) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column), · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
 - **panels.tsx** (589) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Notifications, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), alertsSummary(), NotificationsPanel(), keepAwakeLabel, AboutPanel()`
@@ -463,7 +463,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## packages/app/src/components/workspace/
 - **ClaudeViewSwitch.tsx** (84) — Chat or terminal for Claude agents. Desktop: one app-wide choice, one switch in the workspace bar · `useClaudeChat(), setAgentChat(), useAgentChat(), ClaudeViewSwitch()`
 - **NewAgentSheet.tsx** (81) — Phones: "+" in a workspace opens this sheet: every agent you can start as a big tile, the · `NewAgentSheet()`
-- **PhoneWorkspace.tsx** (452) — Phones: one agent at a time, full screen, under the Island ("Two Drops", PLAN C1). · `PhoneAgentScreen()`
+- **PhoneWorkspace.tsx** (453) — Phones: one agent at a time, full screen, under the Island ("Two Drops", PLAN C1). · `PhoneAgentScreen()`
 - **islandOverride.ts** (35) — Phones: a layer inside the agent screen (the subagent view) can take over the Island for as long · `interface IslandOverride, IslandOverrideContext, useIslandOverride()`
 - **paneMenu.tsx** (88) — What you can do with one pane, in one place: the desktop pane header's "…" menu and the phone · `usePaneSession(), paneTitle(), usePaneMenu()`
 
@@ -479,7 +479,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
 - **changelog.ts** (75) — Release notes for the update dialog and Settings → Updates. The data is CHANGELOG.md parsed by · `compareVersions(), notesBetween(), notesFromMarkdown(), type InlinePart, inlineParts()`
-- **clipboard.ts** (73) — Writing text to the clipboard everywhere the app runs: the native shell first when it offers it · `writeClipboard(), copyWithToast(), readClipboardText()`
+- **clipboard.ts** (104) — The one clipboard path for the whole app (desktop, web remote, Android). Writing: the native · `setClipboardPlatform(), writeClipboard(), copyWithToast(), copyFromProgram(), readClipboardText()`
 - **cvComposer.test.ts** (288) — Composer and controls logic of the Claude view: command catalogue, prompt kinds and keys, queue, rewind.
 - **cvEntries.test.ts** (173)
 - **cvImages.test.ts** (51)
@@ -500,16 +500,18 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **neural.test.ts** (51)
 - **neural.ts** (162) — What an older daemon (no Neural v2) sends: nothing. · `EMPTY_NEURAL, neuralOf(), neuralNotices(), neuralNoticesMemo(), TASK_WORD, racePick(), taskWord(), taskActivity(), OBS_WORD, obsActivity(), obsDetail(), type Away, awayOf(), awayLine()` +1
 - **openAgent.ts** (73) — "Open this agent", one function for every place that has an agent to show (the Agents list, · `openAgentOnDesktop(), useOpenAgent(), cachedAgent(), rememberAgents()`
+- **osc52.test.ts** (30)
+- **osc52.ts** (34) — OSC 52: a program in the terminal puts text on the clipboard (`ESC ] 52 ; c ; <base64> BEL`). · `OSC52_MAX, parseOsc52()`
 - **phoneRoute.test.ts** (330) — A browser history in memory: pushState/replaceState are instant, go/back land later (as in browsers).
 - **phoneRoute.ts** (517) — Phone navigation: four tabs (Agents, Neural, Projects, Settings), a stack of pages per tab, all · `type Tab, TABS, HOME, type Route, interface Nav, routeKey(), navKey, sameNav, hashOf(), parseHash(), entriesOf(), validNav(), interface PhoneNavState, usePhoneNav` +5
-- **platform.ts** (189) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, type PermissionState, interface SystemPermission, type ServiceStart, interface SystemAutostart, interface SystemStatus, interface SystemApi, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
+- **platform.ts** (191) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, type PermissionState, interface SystemPermission, type ServiceStart, interface SystemAutostart, interface SystemStatus, interface SystemApi, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
 - **settingsRoute.test.ts** (25)
 - **settingsRoute.ts** (35) — Which Settings section to show next. Anything can open Settings at a section (the command · `SETTINGS_PAGE, MOVED_TO_SETTINGS, useSettingsRoute, requestSettingsSection(), takeSettingsSection(), matchesQuery()`
 - **status.ts** (37) — `STATUS, mostUrgent(), since(), activityOf()`
 - **stickModel.test.ts** (118)
-- **store.tsx** (82) — `DaemonProvider(), useClient(), usePlatform(), useDaemon(), useUi, useCatalogSheet, useChanges`
+- **store.tsx** (84) — `DaemonProvider(), useClient(), usePlatform(), useDaemon(), useUi, useCatalogSheet, useChanges`
 - **swarmFeed.test.ts** (36)
 - **swarmFeed.ts** (58) — The swarm conversation as a readable feed: messages in runs (same sender and recipient, close · `interface FeedMessage, type FeedBlock, RUN_GAP_MS, feedBlocks(), toLabel, elapsed()`
 - **termKeys.test.ts** (27)

@@ -69,6 +69,8 @@ const platform: Platform = {
   onTrayRemote: (cb) => subscribe<null>("tray-remote", cb),
   trafficLights: mac,
   startDrag: () => void getCurrentWindow().startDragging(),
+  copyText: (text) => invoke("clipboard_write_text", { text }),
+  readClipboardText: () => invoke<string | null>("clipboard_text"),
   readClipboardImage: async () => {
     const b64 = await invoke<string | null>("clipboard_image");
     if (!b64) return null;

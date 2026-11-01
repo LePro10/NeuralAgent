@@ -10,7 +10,8 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { ContextMenu, haptic, toast, type MenuEntry } from "@neuralagent/ui";
 import { ClipboardPaste, Copy, ScrollText, TextSelect } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { copyWithToast, readClipboardText } from "../lib/clipboard";
+import { copyFromProgram, copyWithToast, readClipboardText } from "../lib/clipboard";
+import { parseOsc52 } from "../lib/osc52";
 import { useClient, usePlatform } from "../lib/store";
 import { terminalText, type TerminalText } from "../lib/termtext";
 import { THEME_EVENT } from "../lib/theme";
@@ -83,6 +84,11 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
   const [selected, setSelected] = useState(false);
+  // What the program last copied itself (OSC 52, e.g. Claude Code's own mouse selection): xterm has
+  // no selection then, but ⌘C and the menu's Copy should still work. Cleared by typing or a click.
+  const programCopy = useRef("");
+  const [hasProgramCopy, setHasProgramCopy] = useState(false);
+  const [mouseMode, setMouseMode] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
   const [text, setText] = useState<TerminalText | null>(null);
   // Snapshot of the buffer when the sheet opens (live output would move the selection).
@@ -122,11 +128,16 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     t.unicode.activeVersion = "11";
     t.loadAddon(new WebLinksAddon((_e, uri) => platform.openExternal(uri)));
 
+    const forgetProgramCopy = () => {
+      if (!programCopy.current) return;
+      programCopy.current = "";
+      setHasProgramCopy(false);
+    };
     t.attachCustomKeyEventHandler((e) => {
       if (isAppShortcut(e)) return false;
       if (copyKey(e, t.hasSelection())) {
         e.preventDefault();
-        const sel = t.getSelection();
+        const sel = t.getSelection() || programCopy.current;
         if (sel) {
           void copyWithToast(sel, platform);
           // Ctrl+C copied: the next one interrupts again.
@@ -134,6 +145,7 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
         }
         return false;
       }
+      if (e.type === "keydown" && !["Meta", "Control", "Shift", "Alt"].includes(e.key)) forgetProgramCopy();
       // Ctrl+Shift+V: the browser's paste (xterm would send ^V).
       if (!isMac() && e.type === "keydown" && e.code === "KeyV" && e.ctrlKey && e.shiftKey && !e.altKey) return false;
       // Shift+Enter = newline inside the prompt (agents read ESC CR as "insert newline").
@@ -146,6 +158,18 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     t.onData((d) => client.write(sid, d));
     t.onBinary((d) => client.write(sid, d));
     t.onSelectionChange(() => setSelected(t.hasSelection()));
+    // Programs that track the mouse select and copy themselves (OSC 52). Only the pane in front of
+    // the user copies: other clients attached to the same session (phone, second window) and the
+    // snapshot replay on attach stay out of the clipboard.
+    let replaying = false;
+    const osc52 = t.parser.registerOscHandler(52, (data) => {
+      const text = parseOsc52(data);
+      if (!text || replaying || !focusedRef.current || !document.hasFocus()) return true;
+      programCopy.current = text;
+      setHasProgramCopy(true);
+      void copyFromProgram(text);
+      return true;
+    });
 
     let size = { cols: 0, rows: 0 };
     // xterm reflows wrapped lines on resize, but TUIs like Claude Code redraw by moving the cursor up
@@ -200,7 +224,8 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       detach = client.attach(sid, {
         reset(snapshot) {
           t.reset();
-          t.write(snapshot);
+          replaying = true;
+          t.write(snapshot, () => (replaying = false));
           refit();
         },
         data(bytes) {
@@ -286,6 +311,9 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     });
     const onFocusIn = () => onFocusRef.current();
     el.addEventListener("focusin", onFocusIn);
+    // A left click starts a new selection (the program's or xterm's): the old copy is stale.
+    const onDown = (e: MouseEvent) => e.button === 0 && forgetProgramCopy();
+    el.addEventListener("mousedown", onDown, true);
 
     // Phones: holding a finger on the output opens it as selectable text (a scroll cancels).
     let hold = 0;
@@ -334,6 +362,8 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       el.removeEventListener("drop", onDrop);
       offDrop?.();
       el.removeEventListener("focusin", onFocusIn);
+      el.removeEventListener("mousedown", onDown, true);
+      osc52.dispose();
       cancelHold();
       el.removeEventListener("pointerdown", onHoldDown, true);
       el.removeEventListener("pointermove", onHoldMove, true);
@@ -357,14 +387,18 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
   }, [focused]);
 
   const mac = isMac();
+  const canCopy = selected || hasProgramCopy;
+  // Nothing selected yet: say how, since programs that use the mouse (Claude Code) take plain drags.
+  const howToSelect = mouseMode ? (mac ? "⌥-drag to select" : "Shift-drag to select") : "Drag to select";
   const menu: MenuEntry[] = [
     {
       label: "Copy",
       Icon: Copy,
-      shortcut: mac ? "⌘C" : "Ctrl+Shift+C",
-      disabled: !selected,
+      shortcut: canCopy ? (mac ? "⌘C" : "Ctrl+Shift+C") : undefined,
+      detail: canCopy ? undefined : howToSelect,
+      disabled: !canCopy,
       onSelect: () => {
-        const sel = term.current?.getSelection();
+        const sel = term.current?.getSelection() || programCopy.current;
         if (sel) void copyWithToast(sel, platform);
       },
     },
@@ -385,7 +419,11 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
 
   // Padding on a wrapper: FitAddon measures the host's box.
   return (
-    <div className="h-full w-full overflow-hidden pt-1 pl-2" onMouseDown={() => onFocusRef.current()}>
+    <div
+      className="h-full w-full overflow-hidden pt-1 pl-2"
+      onMouseDown={() => onFocusRef.current()}
+      onContextMenuCapture={() => setMouseMode((term.current?.modes.mouseTrackingMode ?? "none") !== "none")}
+    >
       {/* Right-click menu (desktop); phones hold to open the text sheet instead. */}
       <ContextMenu items={menu} disabled={touch} className="h-full w-full" preview={<ScreenPeek term={term.current} />}>
         <div ref={host} className="h-full w-full" />

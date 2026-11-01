@@ -11,6 +11,12 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-01
+
+### Fixed
+- **Copy in the terminal works again.** Text you select in Claude Code (and other programs that use the mouse, like Codex, tmux or Neovim) lands on your clipboard right away, and ⌘C / Ctrl+Shift+C or right-click → Copy copies it again. When nothing is selected, the menu tells you how to select (⌥-drag on Mac, Shift-drag elsewhere, for the terminal's own selection).
+- **Paste from the right-click menu** works in the desktop app without a browser prompt, and all copy buttons use the same reliable way to the clipboard.
+
 ## [0.5.0] - 2026-11-01
 
 ### New

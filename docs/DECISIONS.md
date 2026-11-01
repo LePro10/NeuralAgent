@@ -994,3 +994,21 @@ Neural prompts. Decision ([notes/insights.md](notes/insights.md)):
   admin actions go to an audit log. Retention: installs 400 days, solved reports 180 days, audit
   365 days.
 
+## D82 — Terminal copy via OSC 52, one clipboard path, native clipboard on desktop (2026-11-01)
+- **Problem**: Claude Code (and Codex, tmux, Neovim) track the mouse, so a drag selects inside the
+  program, not in xterm.js; the program then copies with OSC 52, which xterm.js ignores without a
+  handler. Result: "Copy" greyed out, nothing on the clipboard.
+- **Decision**: `TerminalView` registers an OSC 52 handler (`lib/osc52.ts`): writes only (a `?`
+  read request would let any program read the clipboard), max 1 MB, only for the focused pane in
+  a focused window and not during snapshot replay (other clients on the same session stay out).
+  The last program copy also feeds ⌘C / Ctrl+Shift+C and the menu's Copy until the next key or
+  left click. The menu explains how to select when nothing is selected (⌥-drag / Shift-drag force
+  xterm's own selection).
+- **One clipboard path** (`lib/clipboard.ts`): `DaemonProvider` registers the shell's clipboard;
+  every copy goes native shell → Clipboard API → textarea fallback. Desktop gets
+  `clipboard_write_text` / `clipboard_text` (arboard, one long-lived handle so Linux/X11 keeps
+  serving the text): OSC 52 arrives without a user gesture, which WebKit's Clipboard API refuses,
+  and WebKit's readText shows its own "Paste" bubble. Browsers that refuse an un-gestured write get
+  a toast with a Copy button.
+- **Not done**: no automatic copy-on-select for xterm's own selection (terminals differ; iTerm2
+  on, Windows Terminal off). Can become a setting.

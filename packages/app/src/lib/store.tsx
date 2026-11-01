@@ -2,6 +2,7 @@ import { DaemonClient } from "@neuralagent/protocol";
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { setClipboardPlatform } from "./clipboard";
 import type { Platform } from "./platform";
 
 interface Ctx {
@@ -12,6 +13,7 @@ interface Ctx {
 const DaemonCtx = createContext<Ctx | null>(null);
 
 export function DaemonProvider({ client, platform, children }: Ctx & { children: ReactNode }) {
+  setClipboardPlatform(platform);
   return <DaemonCtx.Provider value={{ client, platform }}>{children}</DaemonCtx.Provider>;
 }
 

@@ -2,6 +2,7 @@
 import { cn } from "@neuralagent/ui";
 import { Check, Copy, Image as ImageIcon, WrapText } from "lucide-react";
 import { Fragment, memo, useState, type ReactNode } from "react";
+import { writeClipboard } from "../../lib/clipboard";
 import { usePlatform } from "../../lib/store";
 
 type Block =
@@ -140,29 +141,8 @@ function Inline({ text }: { text: string }) {
   );
 }
 
-/** Writes text to the clipboard; falls back to a hidden textarea where the async API is missing (http, old WebViews). */
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    let ok = false;
-    try {
-      ok = document.execCommand("copy");
-    } catch {
-      ok = false;
-    }
-    ta.remove();
-    return ok;
-  }
-}
+/** Writes text to the clipboard (lib/clipboard: native shell, Clipboard API, textarea fallback). */
+export const copyText = (text: string): Promise<boolean> => writeClipboard(text);
 
 export function CopyButton({ text, label = "Copy", withLabel, className }: { text: string; label?: string; withLabel?: boolean; className?: string }) {
   const [done, setDone] = useState(false);

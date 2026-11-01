@@ -85,6 +85,30 @@ async fn voice_learn(voice: State<'_, Arc<Voice>>) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || voice.learn().map_err(|e| format!("{e:#}"))).await.map_err(|e| e.to_string())?
 }
 
+/// One clipboard for the app's lifetime: on Linux (X11) the text we copied is served by our own
+/// process and would vanish with a short-lived handle.
+fn with_clipboard<T>(f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Result<T, String> {
+    static CLIP: std::sync::Mutex<Option<arboard::Clipboard>> = std::sync::Mutex::new(None);
+    let mut slot = CLIP.lock().map_err(|e| e.to_string())?;
+    if slot.is_none() {
+        *slot = Some(arboard::Clipboard::new().map_err(|e| e.to_string())?);
+    }
+    f(slot.as_mut().expect("set above")).map_err(|e| e.to_string())
+}
+
+/// Puts text on the system clipboard. The page's own Clipboard API needs a click first, which
+/// text copied by a program in a terminal (OSC 52) never has.
+#[tauri::command]
+fn clipboard_write_text(text: String) -> Result<(), String> {
+    with_clipboard(|c| c.set_text(text))
+}
+
+/// The text on the system clipboard (the page's readText would make WebKit ask with a bubble).
+#[tauri::command]
+fn clipboard_text() -> Option<String> {
+    with_clipboard(|c| c.get_text()).ok()
+}
+
 /// The image on the system clipboard (a screenshot), PNG as base64, or None. WebViews do not always
 /// hand screenshots to the page on paste.
 #[tauri::command]
@@ -190,6 +214,8 @@ pub fn run() {
             update::update_server,
             dev_log,
             clipboard_image,
+            clipboard_write_text,
+            clipboard_text,
             tray_update,
             voice_status,
             voice_set,

@@ -6,6 +6,7 @@ import type { Diagnostics, DiagnosticsSent } from "@neuralagent/protocol";
 import { Button, Callout, Field, Input, List, Row, Switch, TextArea, toast } from "@neuralagent/ui";
 import { Check, Copy, Eye, LifeBuoy, Send } from "lucide-react";
 import { useState } from "react";
+import { copyWithToast } from "../../lib/clipboard";
 import { useClient, useDaemon, usePlatform } from "../../lib/store";
 
 const fail = (e: unknown) => toast((e as Error).message ?? String(e), { tone: "danger" });
@@ -101,7 +102,7 @@ function ReportForm() {
         title={`Report ${sent} sent`}
         action={
           <div className="flex gap-2">
-            <Button size="sm" variant="glass" Icon={Copy} onClick={() => void navigator.clipboard?.writeText(sent).then(() => toast("Copied"))}>
+            <Button size="sm" variant="glass" Icon={Copy} onClick={() => void copyWithToast(sent)}>
               Copy id
             </Button>
             <Button size="sm" variant="glass" onClick={() => setSent(null)}>
