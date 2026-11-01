@@ -4,7 +4,10 @@
 
 Open items first. Everything else keeps going locally until these are done.
 
-- [ ] **Power round (branch `mobile-overhaul`, after the next build/release)**, details in
+- [ ] **Website and live demo** (5 min, released with 0.4.0): open https://agent.neuralhub.dev on
+  the Mac (Safari) and on your phone, scroll through, try "Try it live" and /demo/ (answer Allow on
+  the phone view). Only emulated Safari/Chrome were tested, no real iPhone or Android.
+- [ ] **Power round (released in 0.4.0: let the app update first)**, details in
   `research-local/team/FINAL.md`:
   - Quit NeuralAgent once with "Stop agents" and open it again (starts the new service host; macOS
     then counts everything as NeuralAgent). Open it from Finder or the Dock.
@@ -22,9 +25,7 @@ Open items first. Everything else keeps going locally until these are done.
     Files → share a file.
   - Optional: Settings → Remote access → home folder on phones (read only).
   - Decide: should projects added from a phone need a confirmation on the computer (D42, review5)?
-- [ ] **Ship the polish round** (after GitHub billing is fixed): re-run the Release workflow for
-  v0.2.1 (tag pushed, never published), then release the `[Unreleased]` changelog section and
-  deploy the relay/website (skills `release`, `deploy-web`). Live relay still serves 0.2.0.
+- [x] **Ship the open rounds**: 0.4.0 released by CI and the relay/website deployed (2026-11-01).
 - [ ] **0.2.0 checks on real devices** (15 min, after installing 0.2.0):
   - macOS: drag the window by the top strip anywhere (also next to the traffic lights),
     double-click it to zoom. Paste a screenshot (Cmd+V) and drop a file into a Claude pane
@@ -38,7 +39,7 @@ Open items first. Everything else keeps going locally until these are done.
     <host>", install it, the page reloads by itself afterwards.
 - [ ] **Website legal data**: fill in name, postal address and contact on `/imprint`, confirm
   Swiss law / private operator in the terms and the server location if you want it stated
-  (`apps/web/src/legal.tsx`). Have `/imprint`, `/privacy`, `/terms` checked before inviting people.
+  (`apps/web/src/site/pages/legal/content.tsx`). Have `/imprint`, `/privacy`, `/terms` checked before inviting people.
 
 - [ ] **GHCR read token for .96** (pull deployment). `gh` cannot create personal access
       tokens. Steps: github.com → Settings → Developer settings → Personal access tokens →
@@ -135,7 +136,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — details in the archive; your own voice on a real phone on your list |
 | M8 swarm: agent teams with visible hand-offs | done (2026-10-30) |
 | M9 themes, auto-update, release CI, downloads | done (2026-10-30) — v0.1.1 and v0.1.2 released through CI |
-| M10 own ideas, polish, final report | **current** — power round on `mobile-overhaul` (D58-D78: system, Neural v2 + Teams, subagents, files, calls, settings/Discord, ducking, memory) integrated, uncommitted; done before: admin handbook `docs/ADMIN-HANDBUCH.md`, session report `apps/web/public/session/index.html`, 0.2.0/0.2.1, mobile-first polish round (D44, D45; not released yet), dev tooling `scripts/dev/`, docs guard. Open: ship, final report |
+| M10 own ideas, polish, final report | **current** — 0.4.0 released and deployed 2026-11-01: phone overhaul (D52-D57), power round (D58-D78: system, Neural v2 + Teams, subagents, files, calls, settings/Discord, ducking, memory), new website with live demo (D79); done before: admin handbook `docs/ADMIN-HANDBUCH.md`, session report `apps/web/public/session/index.html`, 0.2.x-0.3.4, dev tooling `scripts/dev/`, docs guard. Open: owner hand checks, final report |
 
 
 Verification details per milestone (what was tested and how, M1–M9):
