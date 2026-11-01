@@ -58,6 +58,8 @@ export default defineConfig({
         terms: "terms/index.html",
         download: "download/index.html",
         changelog: "changelog/index.html",
+        features: "features/index.html",
+        security: "security/index.html",
         demo: "demo/index.html",
       },
     },

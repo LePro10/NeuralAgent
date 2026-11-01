@@ -32,9 +32,8 @@ export const AGENTS = [
 export const SECTIONS = [
   { id: "top", path: "neuralagent/overview", nav: "" },
   { id: "product", path: "product/walkthrough", nav: "Product" },
-  { id: "spec", path: "product/everything-else", nav: "" },
+  { id: "highlights", path: "product/highlights", nav: "" },
   { id: "security", path: "security/sealed-in-transit", nav: "Security" },
-  { id: "agents", path: "agents/thirteen-clis", nav: "" },
   { id: "download", path: "download/platforms", nav: "Download" },
   { id: "faq", path: "faq/questions", nav: "" },
   { id: "start", path: "start/now", nav: "" },
@@ -49,9 +48,9 @@ export interface NavLink {
   hideMid?: boolean;
 }
 export const NAV_LINKS: NavLink[] = [
-  { label: "Product", href: "#product", id: "product" },
+  { label: "Features", href: "/features/" },
   { label: "Live demo", href: "/demo/" },
-  { label: "Security", href: "#security", id: "security" },
+  { label: "Security", href: "/security/" },
   { label: "Download", href: "#download", id: "download", hideMid: true },
   { label: "Changelog", href: "/changelog/" },
 ];
@@ -62,9 +61,10 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     title: "Product",
     links: [
       { label: "Overview", href: "/#product" },
+      { label: "Features", href: "/features/" },
       { label: "Live demo", href: "/demo/" },
-      { label: "Security", href: "/#security" },
-      { label: "Agents", href: "/#agents" },
+      { label: "Security", href: "/security/" },
+      { label: "Agents", href: "/features/#agents" },
       { label: "FAQ", href: "/#faq" },
     ],
   },

@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-01 by `node scripts/codemap.mjs` (711 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-01 by `node scripts/codemap.mjs` (713 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -53,7 +53,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **win.rs** (148) — Windows: the own volume of every other app's audio session on the default output (WASAPI · `struct Sessions, impl Backend for Sessions`
 
 ## apps/web/
-- **vite.config.ts** (66) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
+- **vite.config.ts** (68) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
 
 ## apps/web/public/
 - **install.sh** (31) — Installs or updates NeuralAgent on macOS:
@@ -65,8 +65,10 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **brand.tsx** (45) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
 - **changelog.tsx** (12) — /changelog entry. Page: src/site/pages/changelog/. Data: virtual:changelog (CHANGELOG.md, see vite.config.ts).
 - **download.tsx** (18) — /download entry. Page: src/site/pages/download/. Foundation: src/site/base.css + foundation.css + src/site/ui.
-- **landing.tsx** (45) — Landing page entry (`/`). Foundation: src/site/base.css + foundation.css + src/site/ui/*.
+- **features.tsx** (27) — /features entry: the whole spec sheet, then the 13 agent CLIs, then the closing call. Foundation: src/site/pa…
+- **landing.tsx** (44) — Landing page entry (`/`). Foundation: src/site/base.css + foundation.css + src/site/ui/*.
 - **legal.tsx** (12) — /imprint, /privacy, /terms entry (one bundle, picked by <body data-page>). Page: src/site/pages/legal/.
+- **security.tsx** (26) — /security entry: the sealed-in-transit walkthrough with every fact (algorithms, honest limits, what leaves yo…
 - **simple.tsx** (12) — 404 entry (404.html). Page: src/site/pages/notfound/. Simple pages stay one small entry.
 
 ## apps/web/src/admin/
@@ -150,7 +152,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **agents.ts** (42) — The 13 agent CLIs exactly as crates/na-daemon/src/catalog.rs names them (order, names, vendors, commands, ins… · `interface AgentInfo, AGENT_INFO, BYO`
 - **faq.ts** (67) — FAQ data. The accordion AND the FAQPage JSON-LD (static, in index.html) come from this one array. After editi… · `interface Faq, FAQ, plain`
 - **icons.ts** (12) — Extra lucide icons for the landing sections Spec, Security, Agents, Platforms, Faq, Final.
-- **platforms.ts** (69) — Platforms and download. Download kinds are the keys of /api/releases/latest -> downloads (never re-parse file… · `interface PlatformLink, interface Platform, PLATFORMS, REQUIREMENTS`
+- **platforms.ts** (62) — Platforms and download. Download kinds are the keys of /api/releases/latest -> downloads (never re-parse file… · `interface PlatformLink, interface Platform, PLATFORMS`
 - **security.ts** (55) — Security section copy and facts (site-audit.md Part B7, DECISIONS D28). Exact algorithms, honest limits. · `PLAIN, CIPHER_HEX, NONCE_HEX, group4, SEAL_STEPS, FACTS, LIMITS, LEAVES`
 - **spec.ts** (133) — The spec sheet: everything the product does, grouped. Facts only (research-local/site-overhaul/site-audit.md … · `interface SpecItem, interface SpecGroup, SPEC`
 - **static.test.ts** (72) — Run: node --experimental-strip-types --test apps/web/src/site/content/static.test.ts
@@ -180,12 +182,13 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 
 ## apps/web/src/site/sections/
 - **Agents.tsx** (179) — Agents: the 13 CLIs as a roster beside a live terminal line. Hover, focus or tap a row: the pane shows the co… · `Agents()`
-- **Faq.tsx** (74) — FAQ: an accessible accordion (buttons with aria-expanded, regions), two columns on desktop. The same array re… · `Faq()`
+- **Faq.tsx** (85) — FAQ: an accessible accordion (buttons with aria-expanded, regions), two columns on desktop. The same array re… · `Faq()`
 - **Final.tsx** (66) — Final call to action: the brand mark assembles from five panes as the section scrolls into view (BRIEF 2.5d),… · `Final()`
-- **Hero.tsx** (114) — Hero: the first half of the signature sequence. Headline, promise, the OS-aware actions, and below them the l… · `Hero()`
-- **Platforms.tsx** (122) — Platforms and download. Links come from /api/releases/latest (`downloads` keys: mac, mac-intel, windows, linu… · `Platforms()`
-- **Security.tsx** (263) — Security: "sealed in transit". One real prompt (Allow npm test?) is sealed on the computer, crosses the relay… · `Security()`
-- **Spec.tsx** (132) — Spec sheet: everything the product does, grouped. Desktop: a category switch (vertical tabs) beside one dense… · `Spec()`
+- **Hero.tsx** (110) — Hero: the first half of the signature sequence. One centred promise over a soft aura, the OS-aware actions, t… · `Hero()`
+- **Highlights.tsx** (117) — Highlights: five things that set NeuralAgent apart, as a bento of small living panes (the full list moved to … · `Highlights()`
+- **Platforms.tsx** (69) — Download, compact: one tile per system, the visitor's own lit and first in line for the click. Links come from · `Platforms()`
+- **Security.tsx** (272) — Security: "sealed in transit". One real prompt (Allow npm test?) is sealed on the computer, crosses the relay… · `Security()`
+- **Spec.tsx** (132) — /features/ page head and the spec sheet: everything the product does, grouped. Desktop: a category switch (ve… · `Spec()`
 - **Stage.tsx** (26) — Signature sequence, second half: the live window docks and becomes a sticky stage; six chapters scroll beside… · `Stage()`
 - **StageChapter.tsx** (56) — The copy of one chapter, shared by the sticky stage (beside the live window) and the stacked layout (above a … · `ChapterBody()`
 - **StageStack.tsx** (80) — Phones and tablets: no sticky stage and no inline iframe (it would fight the page for the touch). Each chapte… · `StageStack()`
@@ -193,7 +196,6 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 
 ## apps/web/src/site/stage/
 - **Devices.tsx** (177) — The devices of the stage: the desktop window (the site's own chrome around the live app), the phone, and the · `DESK, PHONE, LiveWindow, PhoneDevice, PosterDevice(), PosterLoop()`
-- **HeroRoster.tsx** (65) — The hero's quiet status block (BRIEF 2.5b, replacing the canvas field): three real agents of the demo world a… · `HeroRoster()`
 - **LiveFrame.tsx** (237) — One live frame of the demo: a poster that shows instantly, an iframe that joins the shared world behind it, a… · `interface LiveFrameHandle, LiveFrame`
 - **chapters.ts** (128) — The six chapters of the story. Copy uses only facts from research-local/site-overhaul/site-audit.md Part B. · `interface Chapter, CHAPTERS`
 - **mode.ts** (5) — One definition of "the page may run the sticky live stage": room (a 1280 px window cannot be worked with a th… · `STICKY`

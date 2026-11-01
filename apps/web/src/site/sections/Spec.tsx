@@ -1,4 +1,4 @@
-// Spec sheet: everything the product does, grouped. Desktop: a category switch (vertical tabs) beside one dense sheet.
+// /features/ page head and the spec sheet: everything the product does, grouped. Desktop: a category switch (vertical tabs) beside one dense sheet.
 // Phones: collapsible groups. Same data, same rows; every group stays in the DOM (hidden), so nothing is lost to search or readers.
 import "./Spec.css";
 import { Fragment, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -120,10 +120,10 @@ export function Spec() {
   const wide = useMedia("(min-width: 900px)");
   const body: ReactNode = wide ? <Tabs /> : <Accordion />;
   return (
-    <Section id="spec" path="product/everything-else" meta={<span className="na-hide-sm t-num">{SPEC.reduce((n, g) => n + g.items.length, 0)} lines</span>} labelledBy="spec-h">
-      <div className="na-head">
-        <SlotLines as="h2" id="spec-h" className="t-h2" immediate={false} lines={["The whole spec,", "on one sheet"]} stop />
-        <Reveal as="p" index={2} className="t-lead">Seven groups, one plain line each. {wide ? "Pick a group on the left." : "Tap a group to open it."}</Reveal>
+    <Section id="spec" path="features/everything" meta={<span className="na-hide-sm t-num">{SPEC.reduce((n, g) => n + g.items.length, 0)} lines</span>} labelledBy="spec-h" className="pg-first" bodyClassName="spec__body">
+      <div className="na-head pg-head spec__head">
+        <SlotLines as="h1" id="spec-h" className="t-h1" lines={["Everything", "it does"]} stop />
+        <Reveal as="p" index={3} immediate className="t-lead pg-lead">Seven groups, one plain line each. {wide ? "Pick a group on the left." : "Tap a group to open it."}</Reveal>
       </div>
       <Reveal kind="pane" className="spec__wrap">{body}</Reveal>
     </Section>

@@ -167,7 +167,7 @@ pub struct HitBody {
 }
 
 /// Pages of the website that are counted; anything else counts as `other`.
-const PAGES: [&str; 9] = ["/", "/demo/", "/download/", "/changelog/", "/privacy/", "/imprint/", "/terms/", "/404", "/app/"];
+const PAGES: [&str; 11] = ["/", "/demo/", "/features/", "/security/", "/download/", "/changelog/", "/privacy/", "/imprint/", "/terms/", "/404", "/app/"];
 
 pub async fn hit(State(r): State<Arc<Relay>>, v: Visitor, headers: HeaderMap, Json(b): Json<HitBody>) -> ApiResult<Json<Value>> {
     r.limit(v.ip)?;

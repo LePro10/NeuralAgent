@@ -1,0 +1,77 @@
+/* Highlights bento. Foundation tokens only. Motion: transform/opacity, only while a pane is in view ([data-in]). */
+.hl-head { max-width: 40rem; }
+.hl-grid { --py: 0px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+@media (min-width: 720px) { .hl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hl-card--wide { grid-column: 1 / -1; } }
+@media (min-width: 1040px) {
+  .hl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hl-card--wide { grid-column: span 2; }
+  /* Gentle depth while scrolling: the middle column trails a little. */
+  .hl-card:nth-child(2), .hl-card:nth-child(4) { translate: 0 calc(var(--c, 0) * 16px); }
+}
+
+.hl-card { position: relative; display: grid; grid-template-rows: auto 1fr; min-height: 340px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-list); background: var(--color-chrome); overflow: clip; box-shadow: var(--shadow-edge); isolation: isolate; transition: border-color 0.3s; }
+.hl-card::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), color-mix(in oklab, var(--color-accent) 11%, transparent), transparent 70%); opacity: 0; transition: opacity 0.35s; }
+.hl-card:hover { border-color: color-mix(in oklab, var(--color-accent) 30%, var(--rule-2)); }
+.hl-card:hover::before { opacity: 1; }
+.hl-art { position: relative; display: grid; place-items: center; height: 150px; padding: var(--sp-5) var(--sp-5) 0; }
+.hl-copy { display: grid; align-content: end; gap: var(--sp-2); padding: var(--sp-5); }
+.hl-copy p { margin: 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.55; max-width: 44ch; text-wrap: pretty; }
+.hl-chip { display: inline-flex; align-items: center; gap: 6px; width: max-content; color: var(--color-faint); }
+.hl-chip svg { color: var(--color-accent); }
+
+
+/* Voice: a level meter that breathes. */
+.hl-wave { display: flex; align-items: center; gap: 5px; height: 84px; width: min(100%, 520px); }
+.hl-wave i { flex: 1; height: 100%; border-radius: 3px; background: linear-gradient(to top, var(--color-accent-deep), var(--color-accent)); transform: scaleY(0.08); opacity: 0.85; }
+[data-in] .hl-wave i { animation: hl-wave 1.8s ease-in-out infinite; animation-delay: calc(var(--n) * -97ms); }
+@keyframes hl-wave { 0%, 100% { transform: scaleY(0.1); } 30% { transform: scaleY(0.75); } 55% { transform: scaleY(0.3); } 75% { transform: scaleY(0.95); } }
+.hl-wave i:nth-child(3n) { opacity: 0.55; }
+
+/* Race: three lanes fill; the winner glows and is kept. Loops every 6 s. */
+.hl-race { display: grid; gap: 12px; width: 100%; margin: 0; padding: 0; list-style: none; font: 400 12px/1 var(--font-mono); color: var(--color-dim); }
+.hl-race li { display: grid; grid-template-columns: 52px 1fr 34px; align-items: center; gap: 10px; }
+.hl-race b { height: 6px; border-radius: 3px; background: var(--color-fill-2); overflow: hidden; }
+.hl-race b i { display: block; height: 100%; width: calc(var(--w) * 100%); border-radius: inherit; background: var(--color-dim); transform-origin: 0 50%; transform: scaleX(0); }
+.hl-race li[data-win] b i { background: var(--color-accent); }
+.hl-race em { font-style: normal; color: var(--color-accent); opacity: 0; }
+[data-in] .hl-race b i { animation: hl-race 6s var(--ease-out-soft) infinite; animation-delay: calc(var(--n) * 120ms); }
+[data-in] .hl-race em { animation: hl-kept 6s ease infinite; }
+@keyframes hl-race { 0% { transform: scaleX(0); } 55%, 88% { transform: scaleX(1); } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes hl-kept { 0%, 55% { opacity: 0; } 62%, 88% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Ask: a command and the Allow/Deny pair; Allow lights up. */
+.hl-ask { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-tile); background: var(--color-bg); font: 400 12.5px/1.3 var(--font-mono); }
+.hl-ask code { color: var(--color-bright); }
+.hl-ask__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--color-faint); }
+.hl-ask__btns { display: inline-flex; gap: 6px; }
+.hl-ask__btns i { font-style: normal; padding: 5px 10px; border-radius: var(--radius-xs); border: var(--hair) solid var(--rule-2); color: var(--color-dim); }
+[data-in] .hl-ask__btns i[data-on] { animation: hl-allow 4s ease infinite; }
+[data-in] .hl-ask code { animation: hl-blink 4s ease infinite; }
+@keyframes hl-allow { 0%, 45% { background: transparent; color: var(--color-dim); } 55%, 90% { background: var(--color-bright); color: var(--color-on-bright); border-color: var(--color-bright); } 100% { background: transparent; } }
+@keyframes hl-blink { 0%, 50% { opacity: 1; } 56%, 92% { opacity: 0.45; } }
+
+/* Service: a heartbeat line that keeps drawing. */
+.hl-pulse { width: 100%; height: 64px; overflow: visible; }
+.hl-pulse path { fill: none; stroke: var(--color-accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.hl-pulse__base { stroke: var(--rule-2) !important; }
+.hl-pulse__beat { stroke-dasharray: 0.45 1; stroke-dashoffset: 1.45; filter: drop-shadow(0 0 6px var(--color-accent)); }
+[data-in] .hl-pulse__beat { animation: hl-pulse 2.6s linear infinite; }
+@keyframes hl-pulse { to { stroke-dashoffset: 0; } }
+
+/* Memory: a bar that shrinks from 1.3 GB to under 100 MB. */
+.hl-mem { display: grid; gap: 10px; width: 100%; font: 400 12px/1 var(--font-mono); color: var(--color-faint); }
+.hl-mem__bar { height: 10px; border-radius: 5px; background: var(--color-fill-2); overflow: hidden; }
+.hl-mem__bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-deep)); transform-origin: 0 50%; }
+[data-in] .hl-mem__bar i { animation: hl-mem 5s var(--ease-out-soft) infinite; }
+@keyframes hl-mem { 0%, 15% { transform: scaleX(1); } 55%, 90% { transform: scaleX(0.075); } 100% { transform: scaleX(1); } }
+.hl-mem__labels { display: flex; justify-content: space-between; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-card { translate: none !important; }
+  .hl-wave i { animation: none !important; transform: scaleY(0.5); }
+  .hl-race b i { animation: none !important; transform: none; }
+  .hl-race em { animation: none !important; opacity: 1; }
+  .hl-pulse__beat { animation: none !important; stroke-dasharray: none; }
+  .hl-mem__bar i { animation: none !important; transform: scaleX(0.075); }
+  .hl-ask__btns i, .hl-ask code { animation: none !important; }
+}

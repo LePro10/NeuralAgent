@@ -265,7 +265,7 @@ Das Sperren, Entsperren und Löschen von Nutzern wirkt sofort auf offene Verbind
 
 **Benachrichtigung:** Neue Anfrage oder Meldung → Mail und Push an alle Admin-Geräte mit Push. Ein Tipp öffnet den passenden Reiter.
 
-**Länder (einmal auf dem Server einrichten):** `deploy/relay/geoip.sh` lädt die freie DB-IP-Tabelle nach `/var/lib/neuralagent/geoip.csv` und startet das Relay neu. Monatlich per Cron, z. B. `0 4 3 * * /opt/neuralagent/deploy/relay/geoip.sh`. Ohne Tabelle (und ohne Cloudflare) steht als Land `--`. IP-Adressen werden nie gespeichert.
+**Länder (einmal auf dem Server einrichten):** `deploy/relay/geoip.sh` lädt die freie DB-IP-Tabelle nach `/var/lib/neuralagent/geoip.csv` und startet das Relay neu. Eingerichtet am 2026-11-01: Kopie in `/opt/neuralagent/geoip.sh`, root-Cron `17 4 3 * *` (Log `/var/log/neuralagent-geoip.log`). Ohne Tabelle (und ohne Cloudflare) steht als Land `--`. IP-Adressen werden nie gespeichert.
 
 **Aufbewahrung:** Installationen 400 Tage nach dem letzten Lebenszeichen, gelöste Meldungen 180 Tage, Protokoll 365 Tage.
 

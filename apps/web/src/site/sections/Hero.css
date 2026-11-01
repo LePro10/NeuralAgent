@@ -4,59 +4,56 @@
 .hero > .na-frame::before, .hero > .na-frame::after { top: calc(var(--hair) * -1 - 6.5px); }
 .hero__body { padding-block: 0; }
 .hero { --hero-gap: clamp(20px, 2.6vw, 36px); }
-.hero__top { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(24px, 4vw, 36px); padding-block: clamp(32px, 5vw, 56px) clamp(28px, 3.4vw, 44px); }
-.hero__head, .hero__side, .hero__agents, .hero__reserve, .hero__poster, .hero__roster { position: relative; z-index: 1; }
-.hero__roster { display: none; }
-
-.hero__head { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(20px, 2.6vw, 32px); }
-.hero__head .t-display { max-width: 12.5em; }
-.hero__side { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); align-content: start; }
-.hero__lead { max-width: 34em; }
-.hero__cta .na-row { gap: var(--sp-3); }
-/* The phone visitor's own way in (Android app, web remote) is a real button, not a footnote link. */
+.hero__top { position: relative; z-index: 1; display: grid; justify-items: center; text-align: center; gap: clamp(18px, 2.2vw, 28px); padding-block: clamp(40px, 7svh, 88px) clamp(28px, 4svh, 48px); }
+.hero__ribbon, .hero__reserve, .hero__poster { position: relative; z-index: 1; }
+.hero__h { max-width: 12em; font-size: min(var(--fs-display), 11.2svh); }
+.hero__lead { max-width: 31em; font-size: clamp(1.0625rem, 0.8rem + 0.5vw, 1.3125rem); color: var(--color-dim); }
+.hero__cta { display: grid; justify-items: center; gap: var(--sp-3); }
+.hero__cta .na-row { gap: var(--sp-3); justify-content: center; }
 .hero__cta .na-btn[data-variant="ghost"] { min-height: var(--h); padding-inline: var(--sp-4); }
-@media (max-width: 559px) { .hero__cta .na-row { display: grid; } .hero__cta .na-btn { width: 100%; justify-content: center; } }
-.hero__note { margin: var(--sp-3) 0 0; max-width: 64ch; color: var(--color-faint); line-height: 1.5; }
-/* The note's first line is the version, which arrives after first paint: on phones it owns a line from the start. */
-.hero__ver:not(:empty)::after { content: " · "; }
-@media (max-width: 899px) { .hero__ver { display: block; min-height: 1.5em; } .hero__ver::after { content: none !important; } }
-.hero__install { max-width: 37rem; }
-.hero__installcap { margin: 0 0 var(--sp-2); color: var(--color-faint); }
+@media (max-width: 559px) { .hero__cta, .hero__cta .na-row { width: 100%; } .hero__cta .na-row { display: grid; } .hero__cta .na-btn { width: 100%; justify-content: center; } }
+.hero__note { margin: 0; color: var(--color-faint); }
 
-/* Wide: the headline across the top; below it the promise on the left and the actions on the right. It must fit one
-   screen with the window's first edge showing, so the headline scales with the height of the screen too. */
-@media (min-width: 900px) {
-  .hero__top { grid-template-columns: minmax(0, 1fr) minmax(0, 33rem); column-gap: clamp(40px, 5vw, 88px); align-items: end; row-gap: 0; }
-  .hero__head { display: contents; }
-  .hero__head .t-display { grid-column: 1 / -1; grid-row: 1; font-size: min(var(--fs-display), 12.4svh); max-width: none; margin-bottom: var(--hero-gap); }
-  .hero__lead { grid-row: 2; font-size: clamp(1.0625rem, 0.8rem + 0.5vw, 1.3125rem); max-width: 30em; align-self: start; }
-  .hero__side { grid-row: 2; align-self: start; }
-}
+/* The release pill: a live dot, the version, a link to the changelog. */
+.hero__badge { display: inline-flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 14px 0 12px; border: var(--hair) solid var(--rule-2); border-radius: 999px; background: color-mix(in oklab, var(--color-chrome) 70%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: var(--color-ink); font: 400 var(--fs-label)/1 var(--font-mono); text-decoration: none; transition: border-color 0.25s, background-color 0.25s; }
+.hero__badge:hover { border-color: color-mix(in oklab, var(--color-accent) 45%, var(--rule-2)); }
+.hero__badgesep { width: var(--hair); height: 14px; background: var(--rule-2); }
+.hero__badgego { display: inline-flex; align-items: center; gap: 6px; color: var(--color-dim); }
+.hero__badgego svg { transition: transform 0.3s var(--ease-out-soft); }
+.hero__badge:hover .hero__badgego { color: var(--color-accent); }
+.hero__badge:hover .hero__badgego svg { transform: translateX(3px); }
+.hero__pulse { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); }
+.hero__pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: var(--hair) solid var(--color-accent); animation: hero-ping 2.4s var(--ease-out-soft) infinite; }
+@keyframes hero-ping { 0% { opacity: 0.9; transform: scale(0.4); } 80%, 100% { opacity: 0; transform: scale(1.8); } }
 
-/* The agent row: the thirteen names at rest, two rows of seven (the shell is the fourteenth cell). */
-.hero__agents { margin-inline: calc(var(--pad) * -1); padding-inline: var(--pad); }
-.hero__cap { margin: 0 0 var(--sp-3); }
-.hero__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0 calc(var(--pad) * -1); padding: 0; list-style: none; border-top: var(--hair) solid var(--rule); }
-.hero__agent { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 48px; padding: 0 clamp(10px, 1.2vw, 18px); color: var(--color-dim); font: 400 12.5px/1.2 var(--font-mono); box-shadow: inset calc(var(--hair) * -1) 0 0 var(--rule), inset 0 calc(var(--hair) * -1) 0 var(--rule); transition: color 0.2s, background-color 0.2s; }
-.hero__agent svg { flex: none; transition: color 0.2s; }
-.hero__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (hover: hover) { .hero__agent:hover { color: var(--color-bright); background: color-mix(in oklab, var(--color-bright) 3%, transparent); } .hero__agent:hover svg { color: var(--color-accent); } }
-.hero__agent--shell { color: var(--color-faint); }
-/* Narrower: three columns (two under 360 px) so the names still fit. */
-@media (max-width: 1039px) { .hero__row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 359px) { .hero__row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 599px) { .hero__agent { gap: 8px; padding: 0 var(--sp-3); font-size: 12px; } }
+/* The aura: three soft light fields and a fine grid that fades out from the centre. Pure gradients (no filter), slow drift;
+   scroll (--c, 0 at rest) lifts and dims it while the live window takes over. */
+.hero__aura { --q: clamp(0, var(--c, 0) * 1.6, 1); position: absolute; z-index: 0; left: calc(50% - 50vw); width: 100vw; top: 0; height: min(100svh, 980px); pointer-events: none; overflow: clip; opacity: calc(1 - var(--q) * 0.85); transform: translate3d(0, calc(var(--q) * -60px), 0); mask-image: linear-gradient(to bottom, transparent, black 18%, black 55%, transparent); -webkit-mask-image: linear-gradient(to bottom, transparent, black 18%, black 55%, transparent); }
+.hero__blob { position: absolute; border-radius: 50%; will-change: transform; }
+.hero__blob--a { width: 62vw; height: 46vw; max-width: 980px; max-height: 720px; left: 50%; top: 2%; margin-left: -31vw; background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent); animation: hero-drift-a 22s ease-in-out infinite alternate; }
+.hero__blob--b { width: 38vw; height: 38vw; left: -8vw; top: 18%; background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent-deep) 34%, transparent), transparent); animation: hero-drift-b 26s ease-in-out infinite alternate; }
+.hero__blob--c { width: 34vw; height: 34vw; right: -6vw; top: 26%; background: radial-gradient(closest-side, color-mix(in oklab, var(--color-bright) 9%, transparent), transparent); animation: hero-drift-c 30s ease-in-out infinite alternate; }
+@keyframes hero-drift-a { to { transform: translate3d(4vw, 6%, 0) scale(1.08); } }
+@keyframes hero-drift-b { to { transform: translate3d(10vw, -8%, 0) scale(1.15); } }
+@keyframes hero-drift-c { to { transform: translate3d(-9vw, 10%, 0) scale(0.92); } }
+.hero__grid { position: absolute; inset: 0; background-image: linear-gradient(var(--rule) var(--hair), transparent var(--hair)), linear-gradient(90deg, var(--rule) var(--hair), transparent var(--hair)); background-size: 72px 72px; background-position: center top; opacity: 0.55; mask-image: radial-gradient(60% 55% at 50% 30%, black, transparent); -webkit-mask-image: radial-gradient(60% 55% at 50% 30%, black, transparent); }
 
-/* The roster: three real agents as pane titles, bottom-right of the headline's second line. */
-@media (min-width: 1100px) {
-  .hero__roster { display: block; grid-column: 2; grid-row: 1; align-self: end; justify-self: end; width: min(100%, 25rem); margin-bottom: var(--hero-gap); }
-  .hr { margin: 0; padding: 0; list-style: none; border-left: var(--hair) solid var(--rule-2); }
-  .hr__row { display: grid; grid-template-columns: 8px auto 1fr auto; align-items: center; gap: 10px; padding: 7px 0 7px var(--sp-4); border-bottom: var(--hair) solid var(--rule); }
-  .hr__row:first-child { border-top: var(--hair) solid var(--rule); }
-  .hr__who { color: var(--color-ink); }
-  .hr__in { color: var(--color-faint); }
-  .hr__st { justify-self: end; color: var(--color-dim); }
-  .hr__st[data-kind="waiting"] { color: var(--color-accent); }
+/* The ribbon: the thirteen agents (and any shell) drift slowly sideways, faded out at both edges. Hover pauses it. */
+.hero__ribbon { margin-inline: calc(var(--pad) * -1); padding-block: var(--sp-3); overflow: hidden; mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent); }
+.hero__track { display: flex; width: max-content; animation: hero-ribbon 48s linear infinite; }
+.hero__ribbon:hover .hero__track { animation-play-state: paused; }
+@keyframes hero-ribbon { to { transform: translate3d(-50%, 0, 0); } }
+.hero__set { display: flex; margin: 0; padding: 0; list-style: none; }
+.hero__agent { display: inline-flex; align-items: center; gap: 10px; padding: 8px clamp(18px, 2.4vw, 32px); color: var(--color-faint); font: 400 13px/1 var(--font-mono); white-space: nowrap; transition: color 0.2s; }
+.hero__agent:hover { color: var(--color-bright); }
+.hero__agent:hover svg { color: var(--color-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__blob, .hero__pulse::after { animation: none; }
+  .hero__track { animation: none; width: auto; justify-content: center; }
+  .hero__set { flex-wrap: wrap; justify-content: center; }
+  .hero__set[aria-hidden] { display: none; }
+  .hero__ribbon { mask-image: none; -webkit-mask-image: none; }
 }
 
 /* Room for the window: on the sticky layout the live window of the stage sits here. */
@@ -66,9 +63,7 @@
 /* Landscape phones: the headline scales with the height, the actions come before the promise, so "Try it live" is on the first screen. */
 @media (max-height: 520px) and (orientation: landscape) and (max-width: 1099px) {
   .hero__top { gap: 12px; padding-block: 20px 20px; }
-  .hero__head { display: contents; }
-  .hero__head .t-display { font-size: min(var(--fs-display), 14svh); }
-  .hero__side { order: 1; }
-  .hero__lead { order: 2; font-size: 1rem; }
+  .hero__h { font-size: min(var(--fs-display), 14svh); }
+  .hero__lead { font-size: 1rem; }
   .hero__poster { display: none; }
 }

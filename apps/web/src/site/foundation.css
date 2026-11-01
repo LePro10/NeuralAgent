@@ -487,3 +487,10 @@ html[data-scrolled] .na-nav::before, html[data-menu] .na-nav::before { opacity: 
 .na-fold__body > :last-child { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .na-fold__chev { transition: none; } }
 @media (forced-colors: active) { .na-fold, .na-fold > summary { border-color: CanvasText; } }
+
+/* "More on its own page" link under a landing section: a quiet pill with an arrow that nudges on hover. */
+.na-more { display: flex; justify-content: center; margin-top: clamp(28px, 4vw, 48px); }
+.na-morelink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: var(--hair) solid var(--rule-2); border-radius: 999px; color: var(--color-ink); background: transparent; font-family: inherit; text-decoration: none; font-size: var(--fs-small); cursor: pointer; transition: border-color 0.25s, color 0.25s; }
+.na-morelink svg { transition: transform 0.3s var(--ease-out-soft); }
+.na-morelink:hover { color: var(--color-bright); border-color: color-mix(in oklab, var(--color-accent) 45%, var(--rule-2)); }
+.na-morelink:hover svg { transform: translateX(3px); color: var(--color-accent); }

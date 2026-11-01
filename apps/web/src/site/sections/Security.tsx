@@ -48,7 +48,8 @@ function Step({ s }: { s: SealStep }) {
   );
 }
 
-export function Security() {
+/** `full`: the /security/ page, with the exact algorithms, honest limits and what leaves your computer. The landing shows only the walkthrough. */
+export function Security({ full = false }: { full?: boolean }) {
   const pinned = useMedia("(min-width: 900px) and (min-height: 600px) and (prefers-reduced-motion: no-preference)");
   const wide = useMedia("(min-width: 900px)");
   const track = useRef<HTMLDivElement>(null);
@@ -92,9 +93,9 @@ export function Security() {
   }, [pinned]);
 
   return (
-    <Section id="security" path="security/sealed-in-transit" meta={<span className="na-hide-sm">X25519 · AES-256-GCM</span>} labelledBy="security-h">
-      <div className="na-head">
-        <SlotLines as="h2" id="security-h" className="t-h2" immediate={false} lines={["Sealed from your computer", "to your phone"]} stop />
+    <Section id="security" path="security/sealed-in-transit" meta={<span className="na-hide-sm">X25519 · AES-256-GCM</span>} labelledBy="security-h" className={full ? "pg-first" : undefined}>
+      <div className={full ? "na-head pg-head sec__head" : "na-head"}>
+        <SlotLines as={full ? "h1" : "h2"} id="security-h" className={full ? "t-h1" : "t-h2"} immediate={full} lines={["Sealed from your computer", "to your phone"]} stop />
         <Reveal as="p" index={2} className="t-lead">
           {pinned ? "Scroll through one prompt." : "One prompt, from your computer to your phone."} It is sealed on your computer, crosses the relay as ciphertext and opens on your phone. The relay can read the envelope&apos;s address (which account, which device), never the message.
         </Reveal>
@@ -205,7 +206,15 @@ export function Security() {
         </div>
       </div>
 
-      <div className="seal__more">
+      {!full && (
+        <Reveal className="na-more">
+          <a className="na-morelink" href="/security/">
+            Exactly how it works, and its limits <Icon as={ArrowRight} size="sm" />
+          </a>
+        </Reveal>
+      )}
+
+      {full && <div className="seal__more">
         <Reveal className="seal__facts-wrap">
           <Fold title="Exactly how" wide={wide} className="seal__facts">
             <dl className="seal__dl">
@@ -255,7 +264,7 @@ export function Security() {
             </Fold>
           </Reveal>
         </div>
-      </div>
+      </div>}
     </Section>
   );
 }

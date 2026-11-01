@@ -12,7 +12,7 @@ import { SendToComputer } from "./SendToComputer";
 const isLanding = () => location.pathname === "/" || location.pathname === "/index.html";
 const MENU_LINKS = [
   ...NAV_LINKS.slice(0, 3),
-  { label: "Agents", href: "#agents", id: "agents" },
+  { label: "Agents", href: "/features/#agents" },
   { label: "Download", href: "#download", id: "download" },
   { label: "FAQ", href: "#faq", id: "faq" },
   { label: "Changelog", href: "/changelog/" },

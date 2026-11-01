@@ -59,10 +59,3 @@ export const PLATFORMS: Platform[] = [
     notes: ["Open it in Safari, sign in, then Add to Home Screen. Push notifications need the Home Screen install."],
   },
 ];
-
-export const REQUIREMENTS = [
-  { key: "Agents", value: "The CLIs install separately, one click each. They use your own subscriptions or API keys." },
-  { key: "Account", value: "None for the desktop app. Remote access signs in with Google or GitHub, approved on request." },
-  { key: "Voice", value: "Local models, about 630 MB, downloaded when you first use them. Verified on macOS only." },
-  { key: "Updates", value: "The app checks agent.neuralhub.dev and offers the update. Running agents keep going." },
-] as const;

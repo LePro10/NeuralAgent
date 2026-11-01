@@ -42,8 +42,12 @@ function Item({ n, q, a, open, onToggle, uid, index }: { n: number; q: string; a
   );
 }
 
+/** Questions shown before "Show all": the ones people ask first. The rest are one click away (and all are in the JSON-LD). */
+const FIRST = 6;
+
 export function Faq() {
   const uid = useId();
+  const [all, setAll] = useState(false);
   // Phones start with the first answer open (it shows what an answer looks like). Side by side, an open answer would leave a hole
   // beside it, so the grid starts closed.
   const [open, setOpen] = useState<Set<number>>(() => new Set(typeof matchMedia === "function" && matchMedia("(min-width: 900px)").matches ? [] : [0]));
@@ -64,10 +68,17 @@ export function Faq() {
       {/* One grid, row by row: question 1 beside 2, 3 beside 4. Rows stay aligned when an answer opens. */}
       <Reveal kind="rule" className="faq__rule" />
       <ul className="faq__list">
-        {FAQ.map((f, i) => (
+        {(all ? FAQ : FAQ.slice(0, FIRST)).map((f, i) => (
           <Item key={f.q} n={i + 1} q={f.q} a={f.a} open={open.has(i)} onToggle={() => toggle(i)} uid={`${uid}-${i}`} index={(i % 2) * 0.5} />
         ))}
       </ul>
+      {!all && (
+        <div className="na-more">
+          <button type="button" className="na-morelink" onClick={() => setAll(true)}>
+            Show all {FAQ.length} questions <Icon as={Plus} size="sm" />
+          </button>
+        </div>
+      )}
     </Section>
   );
 }

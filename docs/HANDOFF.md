@@ -5,24 +5,16 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
-## Where we are (2026-11-01, evening) — NOT committed, NOT deployed
-- **Insights round (D81, [notes/insights.md](notes/insights.md))** on `mobile-overhaul`, uncommitted:
-  - Relay: `geo.rs` (country from CF header or DB-IP CSV, no IPs stored), `insights.rs` (installs,
-    reports, audit tables, prune), `telemetry.rs` (`/api/telemetry`, `/api/reports`, `/api/hit`),
-    devices get version/OS/country, download and update-check counters, admin push
-    (`Push::notify_admins`) + mail on access requests and reports, new admin routes.
-  - Daemon `telemetry.rs`: daily anonymous ping (on unless `settings.usage_stats == false`; debug
-    builds off), feature counters, `diagnostics_preview` / `diagnostics_send` (redacted log,
-    Neural prompts only when ticked).
-  - App: Settings → Privacy and support (`settings/PrivacyPanel.tsx`), one-time notice
-    (`lib/usageNotice.ts`). Website: cookieless counts (`site/ui/hit.ts`), privacy text updated.
-    Admin UI: tabs Overview/Requests/Users/Reports/Usage/Downloads/Activity.
-  - Checks green: pnpm typecheck/lint:tokens/test, web build, cargo test (workspace + na-relay
-    `test-login`), Android `compileDebugJavaWithJavac` (JDK 21 from Homebrew). Admin UI checked on a
-    local relay with seeded data: `research-local/admin-ui/` (`VISUAL.md`, `shots/`).
-- Next: owner decides commit/release/deploy; on the server install the `deploy/relay/geoip.sh`
-  monthly cron; check the admin push on a real phone; App Privacy panel not screenshotted yet
-  (`ui-check`).
+## Where we are (2026-11-01, afternoon)
+- **0.5.0 released and deployed** (D81 insights, [notes/insights.md](notes/insights.md)): admin
+  dashboard tabs, anonymous usage ping (opt-out), problem reports with diagnostics, cookieless site
+  counts, downloads/update checks per platform/version/country, admin mail + push. Tag `v0.5.0` =
+  `main` = `mobile-overhaul` (`16b95cc`), CI Release run 41312725246 green,
+  `/api/releases/latest` serves 0.5.0. Relay + website live: build `0.5.0+mvxvve17`, healthy,
+  rollback image `neuralagent-relay:prev` (= 0.4.0 build).
+- GeoIP: `/opt/neuralagent/geoip.sh` ran once (DB-IP 2026-11 loaded), root cron `17 4 3 * *`.
+- Not done: App Privacy panel not screenshotted (`ui-check`); admin push not tried on a real phone.
+- Owner rule: always ask which version number before a release.
 
 ## Before that (2026-11-01, midday)
 - **0.4.1 released** (patch, D80): LLM keys out of the macOS keychain into `keys.json` with a
