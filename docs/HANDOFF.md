@@ -5,7 +5,16 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
-## Where we are (2026-11-01, night)
+## Where we are (2026-11-01, midday)
+- **0.4.1 released** (patch, D80): LLM keys out of the macOS keychain into `keys.json` with a
+  one-time migration (no more password prompts on update/settings change, daemon start no longer
+  blocks), update relaunch via Launch Services (no second Dock icon), single-instance plugin on
+  all desktops. Tag `v0.4.1` = `main` = `mobile-overhaul` (`1b4a0e5`), CI run 41305906543 green,
+  `/api/releases/latest` serves 0.4.1. Website/relay NOT redeployed (only `/changelog` is stale;
+  run `deploy-web` if wanted). The 0.4.0→0.4.1 update itself still runs the old relaunch and one
+  last keychain prompt; check after that update that both are gone.
+
+## Before that (2026-11-01, night)
 - **0.4.0 released and deployed.** Tag `v0.4.0` = `main` = `mobile-overhaul` (`c50ee30`). CI
   Release run 41262931077 green (desktop x4 + APK); `/api/releases/latest` serves 0.4.0, the
   update check from 0.3.4 answers 200. Relay + website deployed from that commit: build
