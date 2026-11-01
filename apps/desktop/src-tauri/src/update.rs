@@ -85,6 +85,11 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     let installed = update.install(&bytes);
     installed.map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    if macos::relaunch().is_ok() {
+        app.exit(0);
+        return Ok(());
+    }
     app.restart();
 }
 
@@ -138,6 +143,29 @@ mod macos {
         // Holds the previous `Contents` after a successful swap, the unpacked update otherwise.
         let _ = std::fs::remove_dir_all(&tmp);
         result
+    }
+
+    /// Starts the updated app the way Finder and the Dock do, once this process is gone. A
+    /// direct exec of the binary (Tauri's `restart`) is not a Launch Services launch: the Dock
+    /// then showed a second NeuralAgent icon next to the pinned one. `lsregister -f` first makes
+    /// Launch Services read the new bundle, so it is the same app as the pinned icon.
+    pub fn relaunch() -> Result<()> {
+        let app = bundle()?;
+        let _ = std::process::Command::new(
+            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+        )
+        .arg("-f")
+        .arg(&app)
+        .status();
+        let script = "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; exec /usr/bin/open \"$2\"";
+        std::process::Command::new("/bin/sh")
+            .args(["-c", script, "sh", &std::process::id().to_string()])
+            .arg(&app)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
     }
 
     #[cfg(test)]

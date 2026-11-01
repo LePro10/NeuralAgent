@@ -11,6 +11,11 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Fixed
+- macOS: no more keychain password prompts after updates or when you change a setting. Your Neural keys now live in a file only you can read, like on Linux. After this update macOS may ask one last time to move them over; if you deny, enter the key again in Settings.
+- macOS: after an update the app restarts like a normal launch, so the Dock no longer shows a second NeuralAgent icon.
+- Starting NeuralAgent while it already runs brings the open window to the front instead of opening a second copy (macOS, Windows, Linux).
+
 ## [0.4.0] - 2026-11-01
 
 The biggest update so far: a redesigned phone app, Neural that thinks along, Teams, Files, a background service that keeps your agents running, and a new website with a live demo.

@@ -328,8 +328,8 @@ acknowledgment already plays) and a hint which language the last message was in 
 histories otherwise pulled English questions into German answers).
 
 **Keys.** BYOK per provider (NeuralHub, Anthropic, OpenAI-compatible, Ollama). Release builds on
-macOS/Windows keep keys in the system keychain (`dev.neuralhub.neuralagent.keys`); development
-builds and Linux in `<data>/keys.json` (0600). `NEURALAGENT_LLM_KEY` overrides for tests/CI.
+Windows keep keys in the Credential Manager (`dev.neuralhub.neuralagent.keys`); macOS (since D80),
+Linux and development builds in `<data>/keys.json` (0600). `NEURALAGENT_LLM_KEY` overrides for tests/CI.
 Remote clients can use Neural but cannot set keys.
 
 **Echo.** Clients ask for `echoCancellation`/`noiseSuppression`/`autoGainControl`. WebKit (Tauri
@@ -954,3 +954,18 @@ request the app sends needs an answer there too (`src/demo/daemon/handlers`; the
 every request is answered). Alternatives: videos/screenshots (cannot be tried), a hosted real
 daemon (cost, abuse, secrets), the old hand-drawn simulation (drifted from the app with every
 release).
+
+## D80 — LLM keys leave the macOS keychain; updates relaunch through Launch Services; one app instance (2026-11-01)
+The keychain ties an item to the binary that created it (partition list with the cdhash for a
+self-signed app without a Team ID), so every update asked for the login password again. Worse,
+`orch_status` reads all four provider keys and runs on daemon start and on every settings change:
+the daemon start waited on the prompt ("not answering yet") and changing any setting showed up to
+four prompts. Keys now live in `<data>/keys.json` (0600) on macOS as on Linux, the same trade-off
+as the remote credentials (D43); Windows keeps the Credential Manager, which has no per-binary
+prompts. `secrets::migrate` copies keychain keys into the file once, in a thread after start, with
+a `keys.migrated` marker so the keychain is never asked again.
+After an in-place update the app no longer uses Tauri's `restart` (a direct exec, not a Launch
+Services launch, which the Dock showed as a second icon): it runs `lsregister -f` on the bundle and
+a detached `sh` waits for the old pid, then `open`s the bundle. `tauri-plugin-single-instance`
+makes a second start show the running window on all three systems (it releases its lock in
+`cleanup_before_exit`, so Tauri's restart on Windows/Linux still works).

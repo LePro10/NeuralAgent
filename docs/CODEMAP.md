@@ -255,7 +255,7 @@ Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-
 - **profiles.rs** (168) — Built-in launch profiles and how a profile becomes a command line. · `const INSTALL_PREFIX, builtin(), install_profile(), struct Launch, launch(), const CLAUDE_EVENTS, claude_settings()`
 - **pty.rs** (393) — One process in a pseudo terminal, mirrored by a headless VT emulator. · `struct Chunk, struct Spawn, enum PtyNote, struct Pty`
 - **remote.rs** (859) — Remote access: sign-in with the relay, the connection to it, and phones/browsers of the same · `const DEFAULT_RELAY, struct Remote, start(), handle(), struct Callback, callback(), impl Drop for Sess`
-- **secrets.rs** (49) — Keys the user typed in (LLM providers): the OS keychain in release builds on macOS and
+- **secrets.rs** (100) — LLM keys: Credential Manager on Windows release builds, `<data>/keys.json` (0600) elsewhere; one-time move out of the macOS keychain (D80). · `get(), set(), migrate()`
 - **server.rs** (480) — Local WebSocket server (127.0.0.1 only, token + Origin check). · `random_token(), ct_eq(), struct App, router(), run_client(), run_channel(), struct Conn, not_understood_res(), not_understood()`
 - **service.rs** (189) — The service's side of the host that keeps it running (D59). · `const RESTART, const HANDOVER, static SHUTDOWN, init(), host_mode(), booted_at(), before_login(), system(), restart(), watch_handover()`
 - **speech.rs** (64) — Process-wide speech memory rules (D74, D75). · `const MALLOC_ENV, forget_malloc_env(), parakeet()`

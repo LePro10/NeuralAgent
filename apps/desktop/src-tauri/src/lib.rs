@@ -132,6 +132,9 @@ pub fn run_service(args: &[String]) -> i32 {
 pub fn run() {
     init_logging();
     tauri::Builder::default()
+        // One app window per user: a second start (Start menu, desktop file, Dock while an
+        // update relaunches) shows the running window instead of opening another app.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| tray::show_main(app)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())

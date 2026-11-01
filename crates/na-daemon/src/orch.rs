@@ -80,6 +80,15 @@ impl Core {
             .or_else(|| crate::secrets::get(&self.paths.root, &format!("llm:{}", provider_name(p))))
     }
 
+    /// Moves keys an older version kept in the macOS keychain into the key file, once
+    /// (secrets.rs). Runs off the startup path; afterwards the status is computed again.
+    pub fn migrate_keys(&self) {
+        let accounts: Vec<String> = PROVIDERS.iter().map(|p| format!("llm:{}", provider_name(*p))).collect();
+        if crate::secrets::migrate(&self.paths.root, &accounts) {
+            self.orch_status();
+        }
+    }
+
     /// Recomputes whether Neural can answer (after a key or settings change).
     pub fn orch_status(&self) {
         let keys: Vec<LlmProvider> = PROVIDERS.into_iter().filter(|p| self.llm_key(*p).is_some()).collect();

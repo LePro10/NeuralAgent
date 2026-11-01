@@ -117,6 +117,10 @@ fn serve() -> Result<()> {
             let core = core.clone();
             std::thread::spawn(move || core.refresh_catalog());
         }
+        {
+            let core = core.clone();
+            std::thread::spawn(move || core.migrate_keys());
+        }
         let token = server::random_token();
         let info = DaemonInfo {
             port,
