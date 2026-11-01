@@ -10,6 +10,8 @@
 @import "@neuralagent/ui/styles/claude.css";
 /* Launch screen (lib/launch.ts). */
 @import "./launch.css";
+/* Files explorer: code viewer, markdown colours (components/files). */
+@import "../components/files/code.css";
 
 @source "../";
 @source "../../../ui/ui";

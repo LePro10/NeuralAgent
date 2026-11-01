@@ -1,4 +1,4 @@
-import { type VoiceLevelSource, type VoiceStatus, VoiceHud } from "@neuralagent/app";
+import { type VoiceLevelSource, type VoiceStatus, VoiceHud } from "@neuralagent/app/hud";
 import "@neuralagent/app/styles.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";

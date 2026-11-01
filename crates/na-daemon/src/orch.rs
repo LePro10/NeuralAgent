@@ -1,17 +1,21 @@
 //! Neural, the orchestrator: a conversation with the user's own model that starts, prompts,
-//! watches and stops agents on this computer.
+//! reviews and follows up agents on this computer (D61–D64, docs/notes/neural-v2.md).
+//!
+//! Every model step sees three things: static instructions, a fresh `<world>` block (tasks,
+//! agents, what is new, memory; `neural::world`) and the conversation with the user only
+//! (`neural::history`). Agent events never enter the conversation; the observer in `neural`
+//! wakes Neural when something matters, and what it says on its own is marked `proactive`.
 //!
 //! Neural acts as its own client (`ClientKind::Orchestrator`), so the same approval rules and
-//! the audit log apply as for a phone. The model sees the computer's workspaces and agents
-//! fresh on every step; tools do the rest.
+//! the audit log apply as for a phone.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use na_protocol::{
-    AgentStatus, ApiError, ClientInfo, ClientKind, ErrorCode, Event, LlmCheck, LlmProvider, OrchMessage, OrchRole, Request, StartSession,
-    State,
+    AgentStatus, ApiError, ClientInfo, ClientKind, ErrorCode, Event, Id, LlmCheck, LlmProvider, OrchMessage, OrchRole, Request, State,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -19,25 +23,40 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::{Core, err, now_ms};
-use crate::llm::{Ask, Call, Llm, Msg, Tool};
+use crate::llm::{Ask, Llm, Msg};
+use crate::neural::{history, tools, world};
 
-/// Messages kept in the shared state (and sent to the model as history).
-const KEEP: usize = 60;
+/// Messages kept in the shared state (older ones live on in `neural.summary`).
+const KEEP: usize = 100;
 const HISTORY: usize = 30;
-/// Model steps per user message (each step may run tools).
+/// Model steps per user message (each step may run tools), and per wake-up.
 const MAX_STEPS: usize = 8;
+const WAKE_STEPS: usize = 4;
 
 #[derive(Default)]
 pub struct Orch {
     llm: Llm,
+    /// The turn in progress.
     running: Mutex<Option<CancellationToken>>,
     next: AtomicU64,
+    pub neural: crate::neural::Runtime,
 }
 
 /// Where an answer goes besides the chat: the call speaks it.
 pub type Speech = mpsc::UnboundedSender<String>;
 
-fn me() -> ClientInfo {
+/// Why Neural takes a turn.
+#[derive(Debug, Clone)]
+pub enum Trigger {
+    /// The user wrote (the message is already in the conversation).
+    User,
+    /// The observer: these new observations may matter.
+    Wake(Vec<Id>),
+    /// The user confirmed an action; carry on.
+    Resume(String),
+}
+
+pub(crate) fn me() -> ClientInfo {
     ClientInfo { kind: ClientKind::Orchestrator, name: "Neural".into(), device_id: None }
 }
 
@@ -93,6 +112,7 @@ impl Core {
                     model: &cfg.model,
                     key: key.as_deref(),
                     system: "Answer with one word.",
+                    context: "",
                     msgs: &[Msg::User("Say ok.".into())],
                     tools: &[],
                     quick: false,
@@ -110,8 +130,8 @@ impl Core {
         format!("m{}-{}", now_ms(), self.orch.next.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn orch_post(&self, role: OrchRole, text: impl Into<String>, ok: Option<bool>, session_id: Option<String>) -> OrchMessage {
-        let m = OrchMessage { id: self.orch_id(), role, text: text.into(), at: now_ms(), ok, session_id };
+    pub(crate) fn orch_post(&self, role: OrchRole, text: impl Into<String>, ok: Option<bool>, session_id: Option<String>) -> OrchMessage {
+        let m = OrchMessage { id: self.orch_id(), role, text: text.into(), at: now_ms(), ok, session_id, proactive: false };
         self.emit(Event::OrchMessage { message: m.clone() });
         m
     }
@@ -126,6 +146,14 @@ impl Core {
     pub fn orch_clear(&self) {
         self.orch_stop();
         self.emit(Event::OrchCleared);
+        // A fresh conversation: the summary of the old one goes too. Tasks and memory stay.
+        self.neural_update(|n| {
+            n.summary.clear();
+            n.summary_upto = 0;
+            for o in &mut n.observations {
+                o.seen = true;
+            }
+        });
     }
 
     /// A user message from any client: answered in the background, the answer streams into
@@ -138,22 +166,52 @@ impl Core {
         if !self.read(|s| s.orchestrator.ready) {
             return Err(err(ErrorCode::Unavailable, "Neural has no model yet: add a key in Settings → Neural on the computer"));
         }
-        // A new message interrupts the answer in progress, like in a conversation.
+        // A new message interrupts the answer (or report) in progress, like in a conversation.
         let token = CancellationToken::new();
         if let Some(old) = self.orch.running.lock().replace(token.clone()) {
             old.cancel();
         }
         self.orch_status();
+        self.neural_user_wrote();
         self.orch_post(OrchRole::User, text, None, None);
+        self.orch_spawn(Trigger::User, speech, voice, token);
+        Ok(())
+    }
+
+    /// Neural takes a turn on its own. Never interrupts the user: false when a turn is running.
+    pub fn orch_wake(self: &Arc<Self>, trigger: Trigger) -> bool {
+        if !self.read(|s| s.orchestrator.ready) {
+            return false;
+        }
+        let token = CancellationToken::new();
+        {
+            let mut run = self.orch.running.lock();
+            if run.is_some() {
+                return false;
+            }
+            *run = Some(token.clone());
+        }
+        self.orch_status();
+        self.orch_spawn(trigger, None, false, token);
+        true
+    }
+
+    fn orch_spawn(self: &Arc<Self>, trigger: Trigger, speech: Option<Speech>, voice: bool, token: CancellationToken) {
         let core = self.clone();
         tokio::spawn(async move {
+            let user = matches!(trigger, Trigger::User);
             let r = tokio::select! {
-                r = core.orch_turn(speech, voice, &token) => r,
+                r = core.orch_turn(trigger, speech, voice, &token) => r,
                 _ = token.cancelled() => Ok(()),
             };
             if let Err(e) = r {
                 tracing::warn!("neural: {e:#}");
-                core.orch_post(OrchRole::Notice, format!("Neural could not answer: {e:#}"), Some(false), None);
+                // A failed report is not worth a message; a failed answer is.
+                if user {
+                    core.orch_post(OrchRole::Notice, format!("Neural could not answer: {e:#}"), Some(false), None);
+                } else {
+                    core.neural_report_failed(&format!("{e:#}"));
+                }
             }
             {
                 // Only clear the slot if no newer message replaced this answer.
@@ -163,34 +221,98 @@ impl Core {
                 }
             }
             core.orch_status();
+            core.orch_compact();
         });
-        Ok(())
     }
 
-    async fn orch_turn(self: &Arc<Self>, speech: Option<Speech>, voice: bool, token: &CancellationToken) -> anyhow::Result<()> {
+    /// Open prompts of waiting agents, for the world block.
+    fn waiting_prompts(&self) -> HashMap<Id, na_protocol::CvPrompt> {
+        let waiting: Vec<Id> =
+            self.read(|s| s.sessions.values().filter(|x| x.alive && x.status == AgentStatus::Waiting).map(|x| x.id.clone()).collect());
+        waiting.into_iter().filter_map(|sid| self.cv_current_prompt(&sid).map(|p| (sid, p))).collect()
+    }
+
+    /// The `<world>` block plus the language hint, and the observations it showed as new.
+    fn orch_context(&self) -> (String, Vec<Id>) {
+        let prompts = self.waiting_prompts();
+        self.read(|s| {
+            let cx = world::Ctx {
+                now: now_ms(),
+                clock: chrono::Local::now().format("%A %Y-%m-%d %H:%M").to_string(),
+                host: s.remote.devices.iter().find(|d| d.this).map(|d| d.name.clone()).unwrap_or_else(|| "this computer".into()),
+                prompts: &prompts,
+            };
+            let mut ctx = world::render(s, &cx);
+            ctx.push_str(lang_hint(s));
+            let new = s.neural.observations.iter().filter(|o| !o.seen).map(|o| o.id.clone()).collect();
+            (ctx, new)
+        })
+    }
+
+    async fn orch_turn(
+        self: &Arc<Self>,
+        trigger: Trigger,
+        speech: Option<Speech>,
+        voice: bool,
+        token: &CancellationToken,
+    ) -> anyhow::Result<()> {
         let cfg = self.read(|s| s.settings.llm.clone());
         let model = if voice && !cfg.call_model.trim().is_empty() { cfg.call_model.clone() } else { cfg.model.clone() };
         let key = self.llm_key(cfg.provider);
         // Calls keep less history: a shorter prompt answers faster.
-        let mut msgs = self.read(|s| history(s, if voice { HISTORY / 3 } else { HISTORY }));
-        let tools = tools();
+        let mut msgs = self.read(|s| history::build(&s.orchestrator.messages, &s.neural, if voice { HISTORY / 3 } else { HISTORY }));
+        let user = matches!(trigger, Trigger::User);
+        match &trigger {
+            Trigger::User => {}
+            Trigger::Wake(ids) => push_user(
+                &mut msgs,
+                format!(
+                    "(system) Wake-up: {} new observation(s), see \"New since your last turn\" in <world>. The user did \
+                     not write. Act if it helps (review, check, follow up, answer an agent). Then either write the user a \
+                     short note worth their attention, or answer exactly (quiet).",
+                    ids.len()
+                ),
+            ),
+            Trigger::Resume(note) => {
+                push_user(&mut msgs, format!("(system) {note}\nCarry on from there and tell the user the outcome briefly."))
+            }
+        }
+        let system = system_prompt(voice);
+        let tools = tools::list();
+        let mut shown: HashSet<Id> = HashSet::new();
+        let mut said: Vec<String> = vec![];
         // In calls the first words matter most: the first piece may end at a comma.
         let mut spoken = false;
-        for _ in 0..MAX_STEPS {
+        for _ in 0..if user { MAX_STEPS } else { WAKE_STEPS } {
             if token.is_cancelled() {
                 return Ok(());
             }
-            let system = self.read(|s| system_prompt(s, voice));
-            let mut answer = self.orch_post(OrchRole::Assistant, "", None, None);
+            let (context, new) = self.orch_context();
+            shown.extend(new);
+            let mut answer = OrchMessage {
+                id: self.orch_id(),
+                role: OrchRole::Assistant,
+                text: String::new(),
+                at: now_ms(),
+                ok: None,
+                session_id: None,
+                proactive: !user,
+            };
             let mut last_emit = Instant::now();
             let mut sentence = String::new();
             let started = Instant::now();
+            let ask =
+                Ask { model: &model, key: key.as_deref(), system: &system, context: &context, msgs: &msgs, tools: &tools, quick: voice };
             let turn = self
                 .orch
                 .llm
-                .turn(&cfg, Ask { model: &model, key: key.as_deref(), system: &system, msgs: &msgs, tools: &tools, quick: voice }, |t| {
+                .turn(&cfg, ask, |t| {
+                    // Reports are posted whole (they may turn out to be "(quiet)").
+                    if !user {
+                        return;
+                    }
                     answer.text.push_str(t);
-                    if last_emit.elapsed() > Duration::from_millis(60) {
+                    if last_emit.elapsed() > Duration::from_millis(60) && !answer.text.trim().is_empty() {
                         last_emit = Instant::now();
                         self.emit(Event::OrchMessage { message: answer.clone() });
                     }
@@ -216,151 +338,98 @@ impl Core {
                 input = turn.input_tokens,
                 output = turn.output_tokens,
                 tools = turn.calls.len(),
+                user,
                 "neural step"
             );
-            answer.text = turn.text.trim().to_string();
-            answer.ok = Some(true);
-            if answer.text.is_empty() {
-                // Only tool calls: no empty bubble.
-                answer.ok = Some(false);
-                answer.text.clear();
+            let ids: Vec<String> = self.read(|s| s.sessions.keys().map(|k| world::short(k)).collect());
+            let text = scrub_ids(&clean_answer(&turn.text), &ids);
+            if token.is_cancelled() {
+                return Ok(());
             }
-            self.emit(Event::OrchMessage { message: answer });
+            if !text.is_empty() && !is_quiet(&text) {
+                answer.text = text.clone();
+                answer.ok = Some(true);
+                self.emit(Event::OrchMessage { message: answer });
+                said.push(text);
+            } else if user && !answer.text.is_empty() {
+                // Streamed something that turned out empty: blank the bubble.
+                answer.text.clear();
+                answer.ok = Some(false);
+                self.emit(Event::OrchMessage { message: answer });
+            }
             msgs.push(Msg::Assistant { text: turn.text.clone(), calls: turn.calls.clone() });
             if turn.calls.is_empty() {
-                return Ok(());
+                break;
             }
             for call in &turn.calls {
                 if token.is_cancelled() {
                     return Ok(());
                 }
-                let (content, label, ok, sid) = self.run_tool(call).await;
-                tracing::info!(tool = call.name, args = %call.args, ok, "neural tool");
-                if let Some(label) = label {
-                    self.orch_post(OrchRole::Action, label, Some(ok), sid);
+                let o = self.neural_tool(call, false).await;
+                tracing::info!(tool = call.name, ok = o.ok, "neural tool");
+                if let Some(label) = o.label {
+                    self.orch_post(OrchRole::Action, label, Some(o.ok), o.sid);
                 }
-                msgs.push(Msg::Tool { id: call.id.clone(), content });
+                msgs.push(Msg::Tool { id: call.id.clone(), content: o.content });
             }
+        }
+        // What this turn showed as new is known now.
+        if !shown.is_empty() {
+            self.neural_update(|n| {
+                for o in n.observations.iter_mut().filter(|o| shown.contains(&o.id)) {
+                    o.seen = true;
+                }
+            });
+        }
+        if !user && !said.is_empty() {
+            tracing::info!(words = said.iter().map(|s| s.split_whitespace().count()).sum::<usize>(), "neural reported");
         }
         Ok(())
     }
 
-    /// Runs one tool. Returns what the model sees, an optional line for the chat, success
-    /// and the agent it was about.
-    async fn run_tool(self: &Arc<Self>, call: &Call) -> (String, Option<String>, bool, Option<String>) {
-        let a = &call.args;
-        let s = |k: &str| a[k].as_str().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
-        match call.name.as_str() {
-            "find_folder" => {
-                let q = s("query").unwrap_or_default();
-                let found = self.find_folders(&q);
-                (json!({ "matches": found }).to_string(), None, true, None)
-            }
-            "start_agent" => {
-                let Some(folder) = s("folder") else { return fail("folder is missing") };
-                let ws = match self.resolve_workspace(&folder).await {
-                    Ok(w) => w,
-                    Err(e) => return fail(&e.message),
-                };
-                let profile =
-                    s("agent").map(|p| self.resolve_profile(&p)).unwrap_or_else(|| Ok(self.read(|st| st.settings.default_profile.clone())));
-                let profile = match profile {
-                    Ok(p) => p,
-                    Err(e) => return fail(&e.message),
-                };
-                let start = StartSession {
-                    workspace_id: ws.0.clone(),
-                    profile_id: profile.clone(),
-                    prompt: s("prompt"),
-                    pane_id: None,
-                    cols: None,
-                    rows: None,
-                    resume: None,
-                    cwd: None,
-                    worktree: a["worktree"].as_bool(),
-                };
-                match self.handle(&me(), Request::SessionStart(start)).await {
-                    Ok(v) => {
-                        let sid = v["id"].as_str().unwrap_or("").to_string();
-                        let pname = self.read(|st| st.profiles.iter().find(|p| p.id == profile).map(|p| p.name.clone())).unwrap_or(profile);
-                        let label = format!("Started {pname} in {}", ws.1);
-                        (json!({ "ok": true, "agent": short(&sid) }).to_string(), Some(label), true, Some(sid))
-                    }
-                    Err(e) => (
-                        json!({ "ok": false, "error": e.message }).to_string(),
-                        Some(format!("Could not start an agent in {}: {}", ws.1, e.message)),
-                        false,
-                        None,
-                    ),
-                }
-            }
-            "start_swarm" => {
-                let (Some(folder), Some(goal)) = (s("folder"), s("goal")) else { return fail("folder and goal are needed") };
-                let ws = match self.resolve_workspace(&folder).await {
-                    Ok(w) => w,
-                    Err(e) => return fail(&e.message),
-                };
-                let profile = match s("agent").map(|p| self.resolve_profile(&p)) {
-                    Some(Ok(p)) => Some(p),
-                    Some(Err(e)) => return fail(&e.message),
-                    None => None,
-                };
-                let members = profile.map(|p| crate::swarm::default_team(&p));
-                match self.handle(&me(), Request::SwarmStart { workspace_id: ws.0.clone(), goal, members }).await {
-                    Ok(v) => {
-                        let lead = v["members"][0]["session_id"].as_str().map(str::to_string);
-                        let roles: Vec<&str> = v["members"].as_array().into_iter().flatten().filter_map(|m| m["role"].as_str()).collect();
-                        let label = format!("Started a swarm in {}: {}", ws.1, roles.join(", "));
-                        (json!({ "ok": true, "team": roles }).to_string(), Some(label), true, lead)
-                    }
-                    Err(e) => (
-                        json!({ "ok": false, "error": e.message }).to_string(),
-                        Some(format!("Could not start a swarm in {}: {}", ws.1, e.message)),
-                        false,
-                        None,
-                    ),
-                }
-            }
-            "send_to_agent" => {
-                let (Some(agent), Some(text)) = (s("agent"), s("text")) else { return fail("agent and text are needed") };
-                let Some((sid, name)) = self.resolve_session(&agent) else { return fail("no such agent") };
-                match self.handle(&me(), Request::SessionPrompt { id: sid.clone(), text }).await {
-                    Ok(_) => (json!({ "ok": true }).to_string(), Some(format!("Prompted {name}")), true, Some(sid)),
-                    Err(e) => (
-                        json!({ "ok": false, "error": e.message }).to_string(),
-                        Some(format!("Could not prompt {name}: {}", e.message)),
-                        false,
-                        Some(sid),
-                    ),
-                }
-            }
-            "read_agent" => {
-                let Some(agent) = s("agent") else { return fail("agent is missing") };
-                let Some((sid, _)) = self.resolve_session(&agent) else { return fail("no such agent") };
-                let screen = self.pty(&sid).map(|p| p.screen_text()).unwrap_or_default();
-                let last = self.read(|st| st.sessions.get(&sid).and_then(|x| x.last_message.clone()));
-                (json!({ "screen": tail(&screen, 3500), "last_message": last }).to_string(), None, true, Some(sid))
-            }
-            "stop_agent" => {
-                let Some(agent) = s("agent") else { return fail("agent is missing") };
-                let Some((sid, name)) = self.resolve_session(&agent) else { return fail("no such agent") };
-                match self.handle(&me(), Request::SessionStop { id: sid.clone() }).await {
-                    Ok(_) => (json!({ "ok": true, "stopped": name }).to_string(), Some(format!("Stopped {name}")), true, Some(sid)),
-                    Err(e) => (
-                        json!({ "ok": false, "error": e.message }).to_string(),
-                        Some(format!("Could not stop {name}: {}", e.message)),
-                        false,
-                        Some(sid),
-                    ),
-                }
-            }
-            other => fail(&format!("unknown tool {other}")),
+    /// Folds older turns into `neural.summary` once the conversation is long (in the background).
+    fn orch_compact(self: &Arc<Self>) {
+        let job = self.read(|s| {
+            history::compaction(&s.orchestrator.messages, &s.neural)
+                .map(|(old, upto)| (history::compaction_prompt(&s.neural.summary, &old), upto))
+        });
+        let Some((prompt, upto)) = job else { return };
+        if self.orch.neural.compacting.swap(true, Ordering::SeqCst) {
+            return;
         }
+        let core = self.clone();
+        tokio::spawn(async move {
+            let cfg = core.read(|s| s.settings.llm.clone());
+            let key = core.llm_key(cfg.provider);
+            let model = if cfg.call_model.trim().is_empty() { cfg.model.clone() } else { cfg.call_model.clone() };
+            let ask = Ask {
+                model: &model,
+                key: key.as_deref(),
+                system: "You write short, factual summaries.",
+                context: "",
+                msgs: &[Msg::User(prompt)],
+                tools: &[],
+                quick: true,
+            };
+            match core.orch.llm.turn(&cfg, ask, |_| {}).await {
+                Ok(t) if !t.text.trim().is_empty() => {
+                    let text = crate::neural::observe::clip(t.text.trim(), 1200);
+                    core.neural_update(|n| {
+                        n.summary = text;
+                        n.summary_upto = upto;
+                    });
+                    tracing::info!("neural: conversation compacted");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("neural compaction: {e:#}"),
+            }
+            core.orch.neural.compacting.store(false, Ordering::SeqCst);
+        });
     }
 
     /// Workspace id and name for a workspace id, name or folder path; a folder that is not a
     /// workspace yet is added (and listed in the audit log).
-    async fn resolve_workspace(self: &Arc<Self>, folder: &str) -> Result<(String, String), ApiError> {
+    pub(crate) async fn resolve_workspace(self: &Arc<Self>, folder: &str) -> Result<(String, String), ApiError> {
         let norm = squash(folder);
         if let Some(w) = self.read(|s| {
             s.workspaces
@@ -371,14 +440,15 @@ impl Core {
             return Ok(w);
         }
         let path = std::path::Path::new(folder);
-        if !path.is_absolute() || !path.is_dir() {
+        // A folder macOS guards is not even looked at here; WorkspaceAdd says why (permissions).
+        if !path.is_absolute() || (self.folder_ok(path) && !path.is_dir()) {
             return Err(err(ErrorCode::NotFound, format!("no workspace or folder \"{folder}\"; use find_folder")));
         }
         let v = self.handle(&me(), Request::WorkspaceAdd { path: folder.to_string(), name: None }).await?;
         Ok((v["id"].as_str().unwrap_or("").to_string(), v["name"].as_str().unwrap_or(folder).to_string()))
     }
 
-    fn resolve_profile(&self, p: &str) -> Result<String, ApiError> {
+    pub(crate) fn resolve_profile(&self, p: &str) -> Result<String, ApiError> {
         let n = squash(p);
         self.read(|s| {
             s.profiles
@@ -392,7 +462,7 @@ impl Core {
     }
 
     /// Session id and "Workspace — Title" for a short id, full id or title.
-    fn resolve_session(&self, agent: &str) -> Option<(String, String)> {
+    pub(crate) fn resolve_session(&self, agent: &str) -> Option<(String, String)> {
         let n = squash(agent);
         self.read(|s| {
             let label = |x: &na_protocol::Session| {
@@ -410,7 +480,7 @@ impl Core {
     }
 
     /// Workspaces and folders whose name matches what the user said ("Japan Map").
-    fn find_folders(&self, query: &str) -> Vec<Value> {
+    pub(crate) fn find_folders(&self, query: &str) -> Vec<Value> {
         let q = squash(query);
         if q.is_empty() {
             return vec![];
@@ -426,7 +496,7 @@ impl Core {
                 .collect()
         });
         let known: Vec<String> = self.read(|s| s.workspaces.iter().map(|w| w.path.clone()).collect());
-        for dir in candidate_dirs(&self.env.home) {
+        for dir in candidate_dirs(&self.env.home, |p| self.folder_ok(p)) {
             let name = last_part(&dir.to_string_lossy()).to_string();
             let score = similarity(&q, &squash(&name));
             let path = dir.to_string_lossy().into_owned();
@@ -439,29 +509,12 @@ impl Core {
     }
 }
 
-fn fail(msg: &str) -> (String, Option<String>, bool, Option<String>) {
-    (json!({ "ok": false, "error": msg }).to_string(), None, false, None)
-}
-
 /// First 6 characters of an id: what the model uses to name agents.
 fn short(id: &str) -> String {
     id.chars().take(6).collect()
 }
 
-fn tail(s: &str, max: usize) -> String {
-    let t = s.trim_end();
-    let lines: Vec<&str> = t.lines().map(str::trim_end).filter(|l| !l.is_empty()).collect();
-    let mut out = String::new();
-    for l in lines.iter().rev() {
-        if out.len() + l.len() + 1 > max {
-            break;
-        }
-        out.insert_str(0, &format!("{l}\n"));
-    }
-    out
-}
-
-fn last_part(path: &str) -> &str {
+pub(crate) fn last_part(path: &str) -> &str {
     path.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
@@ -498,7 +551,8 @@ fn similarity(a: &str, b: &str) -> f32 {
 }
 
 /// Project folders people usually keep: two levels below the usual places in the home folder.
-fn candidate_dirs(home: &std::path::Path) -> Vec<std::path::PathBuf> {
+/// `ok`: may this folder be read now (macOS privacy, see permissions.rs)?
+fn candidate_dirs(home: &std::path::Path, ok: impl Fn(&std::path::Path) -> bool) -> Vec<std::path::PathBuf> {
     const ROOTS: &[&str] =
         &["Documents", "Developer", "Projects", "projects", "Code", "code", "dev", "src", "repos", "git", "GitHub", "Desktop", "work"];
     let mut out = vec![];
@@ -516,6 +570,9 @@ fn candidate_dirs(home: &std::path::Path) -> Vec<std::path::PathBuf> {
     };
     for r in ROOTS {
         let root = home.join(r);
+        if !ok(&root) {
+            continue;
+        }
         for d in list(&root) {
             out.extend(
                 list(&d).into_iter().filter(|x| !["node_modules", "target", "build", "dist"].contains(&last_part(&x.to_string_lossy()))),
@@ -539,82 +596,52 @@ fn sentence_end(s: &str, eager: bool) -> Option<usize> {
         .map(|i| i + 1)
 }
 
-/// The conversation as the model sees it: user and assistant turns, with what Neural did and
-/// what happened written as `[log]` notes.
-fn history(s: &State, keep: usize) -> Vec<Msg> {
-    let msgs = &s.orchestrator.messages;
-    let from = msgs.len().saturating_sub(keep);
-    let mut out: Vec<Msg> = vec![];
-    for m in &msgs[from..] {
-        match m.role {
-            OrchRole::User => out.push(Msg::User(m.text.clone())),
-            OrchRole::Assistant if !m.text.is_empty() => out.push(Msg::Assistant { text: m.text.clone(), calls: vec![] }),
-            // With the agent's short id, so "stop it again" knows which one.
-            OrchRole::Action | OrchRole::Notice => out.push(Msg::User(match &m.session_id {
-                Some(sid) => format!("[log] {} [{}]", m.text, short(sid)),
-                None => format!("[log] {}", m.text),
-            })),
-            _ => {}
+/// Adds a user-side line, merged into the last user message if there is one.
+fn push_user(msgs: &mut Vec<Msg>, text: String) {
+    match msgs.last_mut() {
+        Some(Msg::User(t)) => {
+            t.push_str("\n\n");
+            t.push_str(&text);
         }
+        _ => msgs.push(Msg::User(text)),
     }
-    // The model must not start with its own turn.
-    while matches!(out.first(), Some(Msg::Assistant { .. })) {
-        out.remove(0);
-    }
-    out
 }
 
-pub fn system_prompt(s: &State, voice: bool) -> String {
-    let now = chrono::Local::now().format("%A %Y-%m-%d %H:%M");
-    let mut ctx = String::new();
-    ctx.push_str("Workspaces (folders agents may work in):\n");
-    for w in &s.workspaces {
-        ctx.push_str(&format!(
-            "- {} ({}){}\n",
-            w.name,
-            w.path,
-            if w.approved { "" } else { " — not approved: ask the user to approve it on the computer" }
-        ));
-    }
-    if s.workspaces.is_empty() {
-        ctx.push_str("- none yet\n");
-    }
-    ctx.push_str("\nAgents:\n");
-    let mut sessions: Vec<_> = s.sessions.values().filter(|x| x.alive || x.status == AgentStatus::Exited).collect();
-    sessions.sort_by_key(|x| std::cmp::Reverse(x.started_at));
-    let mut n = 0;
-    for x in sessions.iter().filter(|x| x.alive).chain(sessions.iter().filter(|x| !x.alive).take(5)) {
-        let ws = s.workspaces.iter().find(|w| w.id == x.workspace_id).map(|w| w.name.as_str()).unwrap_or("?");
-        let mins = (now_ms() - x.status_since) / 60000;
-        let status = format!("{:?}", x.status).to_lowercase();
-        let last = x
-            .last_message
-            .as_deref()
-            .or(x.last_line.as_deref())
-            .map(|l| format!(" — last: {}", l.chars().take(160).collect::<String>()))
-            .unwrap_or_default();
-        ctx.push_str(&format!("- [{}] {ws} — {} ({}), {status} for {mins} min{last}\n", short(&x.id), x.title, x.profile_id));
-        n += 1;
-    }
-    if n == 0 {
-        ctx.push_str("- none running\n");
-    }
-    let types: Vec<String> = s
-        .profiles
-        .iter()
-        .filter(|p| !p.id.starts_with(crate::profiles::INSTALL_PREFIX) && p.id != "shell")
-        .filter(|p| !p.builtin || s.catalog.is_empty() || s.catalog.iter().any(|c| c.id == p.engine && c.installed))
-        .map(|p| format!("{} (id {})", p.name, p.id))
-        .collect();
-    ctx.push_str(&format!("\nAgent types installed: {}. Default: {}.\n", types.join(", "), s.settings.default_profile));
+/// The model sometimes copies the history's markers; the chat shows them differently.
+fn clean_answer(text: &str) -> String {
+    let t = text.trim();
+    t.strip_prefix("(on your own)").unwrap_or(t).trim().to_string()
+}
 
-    // Long German histories pull answers to German; say plainly what the latest message is in.
+/// Agent short ids are for tools only; models still write them now and then ("Agent (27f4ab)").
+fn scrub_ids(text: &str, ids: &[String]) -> String {
+    let mut t = text.to_string();
+    for id in ids.iter().filter(|i| i.len() == 6) {
+        for pat in [format!(" ({id})"), format!(" [{id}]"), format!("({id})"), format!("[{id}]")] {
+            t = t.replace(&pat, "");
+        }
+    }
+    t
+}
+
+/// "(quiet)": nothing worth telling the user.
+fn is_quiet(text: &str) -> bool {
+    let t = text.trim().to_lowercase();
+    t.starts_with("(quiet)") || t.trim_matches(|c: char| !c.is_alphanumeric()) == "quiet"
+}
+
+/// Long German histories pull answers to German; say plainly what the latest message is in.
+fn lang_hint(s: &State) -> &'static str {
     let latest = s.orchestrator.messages.iter().rev().find(|m| m.role == OrchRole::User).map(|m| m.text.as_str()).unwrap_or("");
-    let lang = match crate::call::lang_of(latest, "") {
-        "de" => " The user's latest message is in German: answer in German.",
-        "en" => " The user's latest message is in English: answer in English.",
+    match crate::call::lang_of(latest, "") {
+        "de" => "\nThe user's latest message is in German: write in German.",
+        "en" => "\nThe user's latest message is in English: write in English.",
         _ => "",
-    };
+    }
+}
+
+/// The instructions: the same every turn (cacheable). Everything that changes is in `<world>`.
+pub fn system_prompt(voice: bool) -> String {
     let style = if voice {
         "You are on a phone call. Speak like a competent colleague on the phone: one or two short, natural \
          sentences, at most about 30 words, unless the user asks for details. Never use lists, markdown, code, file \
@@ -623,118 +650,54 @@ pub fn system_prompt(s: &State, voice: bool) -> String {
          say a few words of what you do (\"Ich schau kurz nach.\"); after it, say the result in one sentence and \
          trust what the tool returned."
     } else {
-        "You are in a chat. Keep answers short and plain; a short list is fine when it helps. No headings."
+        "You are in a chat. Keep answers short and plain; a short list is fine when it helps. No headings, no \
+         greetings, no sign-off."
     };
     format!(
-        "You are Neural, the orchestrator inside NeuralAgent on the computer \"{host}\". The user runs AI coding \
-         agents (Claude Code, Codex and others) in terminal panes on this computer, and talks to you from the desktop \
-         or their phone. You start, prompt, watch, summarise and stop those agents for them.\n\n\
+        "You are Neural, the user's chief of staff for their AI coding agents inside NeuralAgent. The user runs \
+         agents (Claude Code, Codex and others) in terminal panes on their computer and talks to you from the \
+         desktop or their phone. Launching agents is the easy part; your job is that the work gets done: you own \
+         the tasks the user gives you and follow them up until they are really finished.\n\n\
          {style}\n\n\
-         Rules:\n\
-         - Answer in the language of the user's latest message, even if earlier ones were in another language \
-         (German or English; they mix technical English words into German). \
-         In German use the informal \"du\".\n\
-         - Find folders from everyday names (\"Japan Map\" → the Japan Map workspace). If the workspace list does not \
-         clearly match, call find_folder; if two match, ask which one in a few words.\n\
+         What you see:\n\
+         - Every turn starts with a fresh <world> block: your tasks, the agents, what is new since your last turn, \
+         confirmations waiting for the user, your memory and a summary of older conversation. It is the truth \
+         right now. Use it; never recite it back. The conversation itself is only what you and the user said; \
+         \"(did: …)\" lines record your own actions.\n\
+         - Messages starting with \"(system)\" come from NeuralAgent, not from the user.\n\n\
+         How you work:\n\
          - Turn the user's half sentence into a good prompt for the agent: clear goal, the context they gave, what \
-         \"done\" means. Before starting or prompting, say in one short sentence what you are sending, then call the \
-         tool in the same answer.\n\
-         - For status questions use the agent list below; call read_agent only when you need to know what an agent \
-         is doing in detail. Summarise; never read terminal output out.\n\
-         - Lines starting with [log] are records of what happened (your actions, agents finishing). Do not write \
-         [log] lines yourself.\n\
-         - Agents may only be started in approved workspaces; if a tool says something needs confirmation on the \
-         computer, tell the user plainly.\n\
-         - Agent references in tools: the short id in brackets. Never show ids to the user; name agents by \
-         workspace and title. \"it\" or \"the agent\" usually means the one you last started or talked about; \
-         the [log] lines carry its id.\n\
-         - The agent list below is live: it already includes agents you just started.\n\
-         - Trust tool results. Do not correct, revisit or repeat earlier answers unless the user asks.\n\n\
-         Now: {now}.{lang}\n\n{ctx}",
-        host = s.remote.devices.iter().find(|d| d.this).map(|d| d.name.as_str()).unwrap_or("this computer"),
+         \"done\" means. Start work with start_agent and give it a task (or use track_task) so you can follow it \
+         up; add a check command (tests, build) when the project has an obvious one.\n\
+         - Find folders from everyday names (\"Japan Map\" → the Japan Map workspace); call find_folder when the \
+         workspace list does not clearly match; if two match, ask which one in a few words.\n\
+         - When an agent of yours finishes, do not just say \"done\". Look at what it said and changed \
+         (inspect_agent, agent_changes) and run the task's check (run_check). Then report in two or three \
+         sentences: what changed, whether the check passed, what is left. If it is not done, send the agent a \
+         precise follow-up (send_to_agent) and keep the task open; mark it done (update_task) only when it is.\n\
+         - When an agent asks something: answer it yourself (answer_agent) when the answer clearly follows from \
+         the task and is safe; otherwise ask the user in one sentence with the options.\n\
+         - Teams (start_team), only when the user asks or a change is big or risky: \"race\" lets 2 to 4 agents \
+         try the same goal in separate worktrees; you compare the attempts and recommend one, the user picks. \
+         \"review\" pairs a builder with a reviewer who loops until it approves. A team runs its own steps \
+         (checks, the reviewer, feedback to the builder): do not prompt team agents yourself unless the team \
+         is blocked; report its result when it is in.\n\
+         - Memory: remember stable facts and preferences the user tells you (remember), in one short line each; \
+         forget what turns out wrong. Do not store anything secret.\n\
+         - Safety: never instruct agents to delete data, force push, reset, publish or deploy on your own. Tools \
+         that need the user's OK return needs_confirmation: then tell the user in one sentence what is waiting \
+         for their OK.\n\
+         - In tools, agents are the short id in brackets and tasks their id (t1). Never show ids to the user; name \
+         agents by workspace and title and tasks by their title.\n\
+         - Trust tool results. Do not repeat or correct earlier answers unless the user asks.\n\n\
+         Wake-ups: when something new happened while the user was not talking to you, you get a \"(system) \
+         Wake-up\". Act if it helps. Then write to the user only if it is worth their attention: a task that is \
+         finished and checked, a failure, a question only they can answer, an agent that is stuck. One to three \
+         sentences, the news first. If nothing is worth saying, answer exactly (quiet).\n\n\
+         Language: answer in the language of the user's latest message, even if earlier ones were in another \
+         language (German or English; they mix technical English words into German). In German use the \
+         informal \"du\"."
     )
-}
-
-fn tools() -> Vec<Tool> {
-    vec![
-        Tool {
-            name: "find_folder",
-            description: "Find workspaces and project folders on this computer whose name matches what the user said.",
-            params: json!({ "type": "object", "properties": { "query": { "type": "string", "description": "Folder name as the user said it" } }, "required": ["query"] }),
-        },
-        Tool {
-            name: "start_agent",
-            description: "Start an agent in a workspace (name or id) or a folder path from find_folder, optionally with a first prompt. It opens as a new pane on the computer.",
-            params: json!({ "type": "object", "properties": {
-                "folder": { "type": "string", "description": "Workspace name, or folder path from find_folder" },
-                "agent": { "type": "string", "description": "Agent type id, e.g. claude or codex; omit for the default" },
-                "prompt": { "type": "string", "description": "The task, written as a good prompt for a coding agent" },
-                "worktree": { "type": "boolean", "description": "Work in a separate git worktree (only when asked)" }
-            }, "required": ["folder"] }),
-        },
-        Tool {
-            name: "start_swarm",
-            description: "Start a team of four agents (Coordinator, Scout, Builder, Reviewer) on one bigger goal. They plan, hand tasks to each other and report back; their messages show on the Swarm page. Use it only when the user asks for a team or swarm.",
-            params: json!({ "type": "object", "properties": {
-                "folder": { "type": "string", "description": "Workspace name, or folder path from find_folder" },
-                "goal": { "type": "string", "description": "What the team should achieve, as a clear brief" },
-                "agent": { "type": "string", "description": "Agent type id for every member; omit for the default" }
-            }, "required": ["folder", "goal"] }),
-        },
-        Tool {
-            name: "send_to_agent",
-            description: "Send a prompt or an answer to a running agent.",
-            params: json!({ "type": "object", "properties": { "agent": { "type": "string", "description": "Short id" }, "text": { "type": "string" } }, "required": ["agent", "text"] }),
-        },
-        Tool {
-            name: "read_agent",
-            description: "Read the agent's current screen and last message to see what it is doing or asking.",
-            params: json!({ "type": "object", "properties": { "agent": { "type": "string", "description": "Short id" } }, "required": ["agent"] }),
-        },
-        Tool {
-            name: "stop_agent",
-            description: "Stop (interrupt) a running agent.",
-            params: json!({ "type": "object", "properties": { "agent": { "type": "string", "description": "Short id" } }, "required": ["agent"] }),
-        },
-    ]
-}
-
-/// Agents that finish, fail or wait become notices in the conversation, so Neural knows and the
-/// chat shows it.
-pub async fn watch(core: Arc<Core>) {
-    let mut rx = core.subscribe(None).rx;
-    loop {
-        match rx.recv().await {
-            Ok((_, Event::Attention { session_id, kind, text })) => {
-                let Some(label) = core
-                    .resolve_session(&session_id)
-                    .map(|x| x.1)
-                    .or_else(|| core.read(|s| s.sessions.get(&session_id).map(|x| x.title.clone())))
-                else {
-                    continue;
-                };
-                let what = match kind {
-                    na_protocol::AttentionKind::Done => "finished",
-                    na_protocol::AttentionKind::Waiting => "needs input",
-                    na_protocol::AttentionKind::Error => "stopped with an error",
-                };
-                let detail =
-                    if text.trim().is_empty() { String::new() } else { format!(": {}", text.chars().take(200).collect::<String>()) };
-                core.orch_post(OrchRole::Notice, format!("{label} {what}{detail}"), None, Some(session_id.clone()));
-                if let Some((ws, title)) = core.read(|s| {
-                    s.sessions.get(&session_id).map(|x| {
-                        let ws = s.workspaces.iter().find(|w| w.id == x.workspace_id).map(|w| w.name.clone()).unwrap_or_default();
-                        (ws, x.title.clone())
-                    })
-                }) {
-                    core.call_news(kind, ws, title);
-                }
-            }
-            Ok(_) => {}
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-            Err(_) => return,
-        }
-    }
 }
 
 pub fn trim(messages: &mut Vec<OrchMessage>) {
@@ -767,7 +730,28 @@ mod tests {
     }
 
     #[test]
-    fn tail_keeps_the_last_lines() {
-        assert_eq!(tail("a\nb\n\nc\n", 4), "b\nc\n");
+    fn quiet_reports_stay_quiet() {
+        assert!(is_quiet("(quiet)"));
+        assert!(is_quiet(" quiet. "));
+        assert!(is_quiet("(quiet) nothing new"));
+        assert!(!is_quiet("Japan Map is done; the tests pass."));
+        assert_eq!(clean_answer("(on your own) Fertig."), "Fertig.");
+        assert_eq!(scrub_ids("Ich habe einen Agent (27f4ab) gestartet [27f4ab].", &["27f4ab".into()]), "Ich habe einen Agent gestartet.");
+    }
+
+    #[test]
+    fn wake_notes_merge_into_the_last_user_message() {
+        let mut m = vec![Msg::User("hi".into())];
+        push_user(&mut m, "(system) Wake-up".into());
+        assert_eq!(m.len(), 1);
+        m.push(Msg::Assistant { text: "x".into(), calls: vec![] });
+        push_user(&mut m, "(system) Wake-up".into());
+        assert_eq!(m.len(), 3);
+    }
+
+    #[test]
+    fn the_instructions_do_not_change_between_turns() {
+        assert_eq!(system_prompt(false), system_prompt(false));
+        assert!(system_prompt(true).contains("phone call"));
     }
 }

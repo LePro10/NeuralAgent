@@ -4,6 +4,24 @@
 
 Open items first. Everything else keeps going locally until these are done.
 
+- [ ] **Power round (branch `mobile-overhaul`, after the next build/release)**, details in
+  `research-local/team/FINAL.md`:
+  - Quit NeuralAgent once with "Stop agents" and open it again (starts the new service host; macOS
+    then counts everything as NeuralAgent). Open it from Finder or the Dock.
+  - Settings → System → *Set up all permissions*: Full Disk Access, Accessibility, Microphone; then
+    *Restart the service*. Optional: autostart *When the Mac starts* (admin password once).
+    Check read-only with `scripts/macos-permissions.sh`.
+  - Neural: pick Active / Quiet / Off in its panel. Try a team (Teams → New team, Haiku profile).
+  - Ducking: Settings → Voice → Other audio; dictate and call Neural with music playing; for calls
+    allow Spotify/Music once. Unplug AirPods while music is lowered, plug back in.
+  - Discord: open Discord, pick a preset in Settings → Discord, look at your profile; quit Discord,
+    the card goes within ~1 min.
+  - Memory: dictate once, wait 5 min, Activity Monitor → `neuralagent` well under 100 MB.
+  - New APK on a real Android phone: music lowers in a call and comes back; headset mid-call; a real
+    phone call puts Neural on hold and it resumes; hanging up right at the start does not crash;
+    Files → share a file.
+  - Optional: Settings → Remote access → home folder on phones (read only).
+  - Decide: should projects added from a phone need a confirmation on the computer (D42, review5)?
 - [ ] **Ship the polish round** (after GitHub billing is fixed): re-run the Release workflow for
   v0.2.1 (tag pushed, never published), then release the `[Unreleased]` changelog section and
   deploy the relay/website (skills `release`, `deploy-web`). Live relay still serves 0.2.0.
@@ -71,10 +89,6 @@ Open items first. Everything else keeps going locally until these are done.
       Developer Portal (app `1563621751861153933` → App Icon), GitHub OAuth App (logo),
       Firebase project settings. **Not** at Google (would trigger a verification review).
       For Discord also: Rich Presence → Art Assets → upload the logo with the name `logo`.
-- [ ] **Discord presence check** (1 min, Discord was not running while I built it): open
-      Discord, start any agent in NeuralAgent → your Discord profile shows "NeuralAgent ·
-      Working with AI agents" within ~20 s. Or run
-      `cargo test -p na-daemon shows_in_discord -- --ignored --nocapture` with Discord open.
 
 - [ ] **Install the released app** (5 min). macOS, without any prompt: in Terminal
   `curl -fsSL https://agent.neuralhub.dev/install.sh | sh`. Other platforms (or the DMG):
@@ -86,9 +100,6 @@ Open items first. Everything else keeps going locally until these are done.
   macOS app (no right-click on first start); a Windows code-signing certificate would silence
   SmartScreen. Tell me if you get either; CI only needs the secrets.
 
-- [ ] **Try a swarm** (5 min, optional): sidebar → *Swarm* → *New swarm*, pick a project and a
-  small goal, keep the default team (Claude). Watch the messages; Stop when done. Uses your
-  Claude quota (pick a Haiku profile to keep it cheap).
 
 ## Done on your side (verified)
 
@@ -124,7 +135,7 @@ Open items first. Everything else keeps going locally until these are done.
 | M7 Neural: chat + live call, lock-screen call on Android | done (2026-10-30) — details in the archive; your own voice on a real phone on your list |
 | M8 swarm: agent teams with visible hand-offs | done (2026-10-30) |
 | M9 themes, auto-update, release CI, downloads | done (2026-10-30) — v0.1.1 and v0.1.2 released through CI |
-| M10 own ideas, polish, final report | **current** — done: admin handbook `docs/ADMIN-HANDBUCH.md`, session report `apps/web/public/session/index.html`, 0.2.0/0.2.1, mobile-first polish round (D44, D45; not released yet), dev tooling `scripts/dev/`, docs guard. Open: ship, final report |
+| M10 own ideas, polish, final report | **current** — power round on `mobile-overhaul` (D58-D78: system, Neural v2 + Teams, subagents, files, calls, settings/Discord, ducking, memory) integrated, uncommitted; done before: admin handbook `docs/ADMIN-HANDBUCH.md`, session report `apps/web/public/session/index.html`, 0.2.0/0.2.1, mobile-first polish round (D44, D45; not released yet), dev tooling `scripts/dev/`, docs guard. Open: ship, final report |
 
 
 Verification details per milestone (what was tested and how, M1–M9):

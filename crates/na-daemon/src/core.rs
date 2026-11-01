@@ -129,6 +129,7 @@ impl Core {
             // Their agents stopped with the previous daemon.
             swarms: persisted.swarms.into_iter().map(|w| Swarm { ended: true, ..w }).collect(),
             swarm_messages: persisted.swarm_messages,
+            neural: crate::neural::load(&paths.root),
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -296,6 +297,7 @@ impl Core {
 
     async fn handle_checked(self: &Arc<Self>, client: &ClientInfo, req: Request) -> ApiResult {
         crate::policy::check(self, client, &req)?;
+        crate::permissions::check(self, client, &req)?;
         match req {
             Request::SwarmStart { workspace_id, goal, members } => Ok(json!(self.swarm_start(workspace_id, goal, members)?)),
             Request::SwarmSend { swarm_id, to, text } => {
@@ -315,6 +317,14 @@ impl Core {
                 self.orch_stop();
                 Ok(json!(null))
             }
+            r @ (Request::NeuralMode { .. }
+            | Request::NeuralTaskEdit { .. }
+            | Request::NeuralNoteAdd { .. }
+            | Request::NeuralNoteRemove { .. }
+            | Request::NeuralConfirm { .. }
+            | Request::NeuralTeamStart { .. }
+            | Request::NeuralTeamPick { .. }
+            | Request::NeuralTeamCleanup { .. }) => Box::pin(self.neural_handle(r)).await,
             Request::OrchClear => {
                 self.orch_clear();
                 Ok(json!(null))
@@ -331,11 +341,17 @@ impl Core {
             Request::HostModelDownload { id } => self.model_download(&id).map(|_| Value::Null),
             Request::HostModelDelete { id } => self.model_delete(&id).map(|_| Value::Null),
             Request::HostUpdateCheck => Ok(json!(self.update_check().await?)),
+            Request::HostSystem => Ok(json!(crate::service::system(self))),
+            Request::HostRestart => {
+                crate::service::restart(&self.paths.root).map_err(|e| err(ErrorCode::Unavailable, format!("{e:#}")))?;
+                Ok(Value::Null)
+            }
             Request::HostUi { op, args } => {
                 // Installing waits for the download; the reply comes when the app is about to restart.
                 let wait = std::time::Duration::from_secs(if op == "update.install" { 1800 } else { 130 });
                 self.host_ctl.call(&op, args, wait).await
             }
+            Request::HostNotice { topic, .. } if topic == "neural" => Err(err(ErrorCode::BadRequest, "reserved topic")),
             Request::HostNotice { topic, data } => {
                 self.emit(Event::HostNotice { topic, data });
                 Ok(Value::Null)
@@ -479,7 +495,11 @@ impl Core {
                     .map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
                 Ok(json!(catalog))
             }
-            Request::SettingsSet { settings } => {
+            Request::SettingsSet { mut settings } => {
+                // Files (D67): letting phones browse the home folder is switched at the computer only.
+                if client.kind != ClientKind::Desktop {
+                    settings.remote_files_home = self.read(|s| s.settings.remote_files_home);
+                }
                 let voice_changed = self.read(|s| s.settings.call != settings.call);
                 self.emit(Event::SettingsSet { settings });
                 if voice_changed {
@@ -488,9 +508,20 @@ impl Core {
                 self.orch_status();
                 Ok(Value::Null)
             }
-            Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path),
-            Request::FsRoots => Ok(crate::fsbrowse::roots(&self.env.home)),
-            Request::FsMkdir { path, name } => crate::fsbrowse::mkdir(&self.env.home, client, &path, &name),
+            Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path, &self.folder_gate(Some(client))),
+            Request::FsRoots => Ok(crate::fsbrowse::roots(&self.env.home, &self.folder_gate(Some(client)))),
+            Request::FsMkdir { path, name } => {
+                crate::fsbrowse::mkdir(&self.env.home, client, &path, &name, &self.folder_gate(Some(client)))
+            }
+            r @ (Request::FileList { .. }
+            | Request::FileRead { .. }
+            | Request::FileSave { .. }
+            | Request::FileUpload { .. }
+            | Request::FileSearch { .. }) => {
+                let gate = self.folder_gate(Some(client));
+                let (home, roots) = (self.env.home.clone(), self.read(|s| crate::files::roots(s, client, &self.env.home, &gate)));
+                blocking(move || crate::files::handle(&home, &roots, &gate, r)).await
+            }
             Request::GitChanges { workspace_id, session_id } => {
                 let (dir, base) = self.git_target(&workspace_id, session_id.as_ref())?;
                 blocking(move || crate::git::changes(Path::new(&dir), base.as_deref()).map_err(git_err)).await.map(|c| json!(c))
@@ -574,6 +605,7 @@ impl Core {
                 self.emit(Event::McpSet { servers: list });
                 Ok(json!(added))
             }
+            Request::DiscordPreview { presence, options } => Ok(json!(crate::discord::preview(self, presence, options))),
             Request::UsageReport { days } => {
                 let since = crate::usage::since_day(days.clamp(1, 400));
                 let me = self.clone();
@@ -643,7 +675,13 @@ impl Core {
         if BUSY.swap(true, std::sync::atomic::Ordering::SeqCst) {
             return;
         }
+        // Without Full Disk Access, background reads in Documents & co. could raise a macOS
+        // dialog nobody answers (D58): only where an agent works or macOS already answered.
+        let gate = self.folder_gate(None);
         for w in self.read(|s| s.workspaces.clone()) {
+            if gate.shut(Path::new(&w.path)).is_some() {
+                continue;
+            }
             let git = crate::git::summary(Path::new(&w.path));
             let same = match (&git, &w.git) {
                 (Some(a), Some(b)) => a.branch == b.branch && a.changed == b.changed && a.ahead == b.ahead && a.behind == b.behind,
@@ -682,6 +720,19 @@ impl Core {
             }
         }
         BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Today's usage rows of every Claude Code / Codex conversation (as last read) and agent
+    /// time per day, for the Discord card. Cheap: no transcript is read here.
+    /// Today's usage rows (`None` while a usage scan holds them: never waits) and the busy days.
+    pub fn usage_today(&self) -> (Option<Vec<UsageRow>>, BTreeMap<String, i64>) {
+        let rows = self.usage.try_rows(&crate::usage::today());
+        (rows, self.busy_days())
+    }
+
+    /// Agent busy time per day (`YYYY-MM-DD` → ms).
+    pub fn busy_days(&self) -> BTreeMap<String, i64> {
+        self.inner.lock().busy_days.clone()
     }
 
     /// Replaces one engine's limits; emits only when something other than the time changed,
@@ -864,6 +915,8 @@ impl Core {
             },
         )
         .map_err(|e| err(ErrorCode::Internal, format!("could not start {}: {e:#}", profile.name)))?;
+        // It runs in its folder now: macOS answered for it, if it guards it.
+        self.folder_gate(None).answered(Path::new(&session.cwd), &Ok(()));
 
         let now = now_ms();
         session.alive = true;
@@ -1273,6 +1326,12 @@ pub fn apply(s: &mut State, ev: &Event) {
         Event::LimitsSet { limits } => s.limits = limits.clone(),
         Event::CatalogSet { catalog } => s.catalog = catalog.clone(),
         Event::SettingsSet { settings } => s.settings = settings.clone(),
+        // Neural's state travels as a host notice: older clients ignore it (D64).
+        Event::HostNotice { topic, data } if topic == "neural" => {
+            if let Ok(n) = serde_json::from_value(data.clone()) {
+                s.neural = n;
+            }
+        }
         Event::Attention { .. } | Event::HostNotice { .. } => {}
         Event::OrchMessage { message } => {
             let msgs = &mut s.orchestrator.messages;

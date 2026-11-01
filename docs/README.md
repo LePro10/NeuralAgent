@@ -27,4 +27,12 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/mobile-polish.md`](notes/mobile-polish.md) | The phone/Android polish round. |
 | [`notes/launch.md`](notes/launch.md) | The launch screen on desktop, web and Android: one frame, one motion (D49). |
 | [`notes/mobile-overhaul.md`](notes/mobile-overhaul.md) | The phone overhaul: 4 tabs + router, agent screen, transcript, composer and controls, subagents, `cv_action` (D52-D57). |
+| [`notes/subagents.md`](notes/subagents.md) | Subagents and background work: cards, the running-work strip, nesting, the daemon side (D65, D66). |
+| [`notes/settings-discord.md`](notes/settings-discord.md) | Settings structure (every section a page, search, groups) and the Discord card (D71, D72). |
 | [`notes/design-system.md`](notes/design-system.md) | Design-system rules (D45): tokens, phone navigation, overlays, activity marks, page checklist. Read before building a screen. |
+| [`notes/neural-v2.md`](notes/neural-v2.md) | Neural v2: clean context (world state, observations, compaction), proactive reports, tasks, memory, guard, Teams instead of Swarm (D61-D64). |
+| [`notes/ducking.md`](notes/ducking.md) | Lowering music and other audio while dictating and in calls on the desktop (D73). |
+| [`notes/calls.md`](notes/calls.md) | Calls with Neural: start timeline, model warm-up policy, honest connection states, Android audio focus and ducking (D69, D70). |
+| [`notes/system-integration.md`](notes/system-integration.md) | macOS permissions (why prompts came back, Full Disk Access), the service host that keeps the service running, autostart at login/boot on macOS, Windows, Linux (D58-D60). |
+| [`notes/files.md`](notes/files.md) | Files explorer: desktop pane and phone pages, the daemon's `file_*` requests, roots and the home switch, path checks, audit, viewer and hand-offs (D67, D68). |
+| [`notes/performance.md`](notes/performance.md) | Memory: speech models on demand, one Parakeet per daemon, `MallocSpaceEfficient`, `ProcessType`, the lean HUD bundle, measurements and open points (D74, D75). |

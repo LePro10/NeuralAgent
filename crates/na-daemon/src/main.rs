@@ -18,6 +18,7 @@ mod cv_screen;
 mod cv_tasks;
 mod discord;
 mod env;
+mod files;
 mod fsbrowse;
 mod git;
 mod history;
@@ -26,8 +27,10 @@ mod host;
 mod layout;
 mod llm;
 mod mcp;
+mod neural;
 mod orch;
 mod paths;
+mod permissions;
 mod policy;
 mod preview;
 mod profiles;
@@ -35,6 +38,8 @@ mod pty;
 mod remote;
 mod secrets;
 mod server;
+mod service;
+mod speech;
 mod swarm;
 mod usage;
 
@@ -46,6 +51,7 @@ use tracing_subscriber::EnvFilter;
 use crate::paths::{DaemonInfo, Paths, write_private};
 
 fn main() -> Result<()> {
+    speech::forget_malloc_env();
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("statusline") => {
@@ -82,6 +88,7 @@ fn main() -> Result<()> {
 fn serve() -> Result<()> {
     let paths = Paths::resolve()?;
     init_logging(&paths);
+    service::init();
     tls_init();
 
     // One daemon per data dir. The lock is held for the lifetime of the process.
@@ -95,16 +102,17 @@ fn serve() -> Result<()> {
     tracing::info!(shell = %env.shell, "login environment captured ({} vars)", env.vars.len());
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
-    rt.block_on(async move {
+    let res = rt.block_on(async move {
         let core = core::Core::load(paths.clone(), env);
         let port: u16 = std::env::var("NEURALAGENT_DAEMON_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(0);
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
         let port = listener.local_addr()?.port();
         *core.port.lock() = port;
         core.resume_after_restart();
+        service::watch_handover(core.clone());
         remote::start(&core);
         core.orch_status();
-        tokio::spawn(orch::watch(core.clone()));
+        tokio::spawn(neural::watch(core.clone()));
         {
             let core = core.clone();
             std::thread::spawn(move || core.refresh_catalog());
@@ -150,7 +158,7 @@ fn serve() -> Result<()> {
                         let (setting, working) = core
                             .read(|s| (s.settings.keep_awake, s.sessions.values().any(|x| x.status == na_protocol::AgentStatus::Working)));
                         awake.update(setting, working);
-                        discord.update(core.read(discord::presence));
+                        discord.update(&core);
                     }
                     if n.is_multiple_of(30) {
                         core.call_tick();
@@ -183,7 +191,11 @@ fn serve() -> Result<()> {
             .await?;
         let _ = std::fs::remove_file(paths.daemon_json());
         anyhow::Ok(())
-    })?;
+    });
+    // Do not wait for long blocking jobs (e.g. the first usage scan) on exit: a restart or an
+    // update swap waits for this process to be gone.
+    rt.shutdown_timeout(std::time::Duration::from_secs(2));
+    res?;
     drop(lock);
     Ok(())
 }
@@ -196,11 +208,15 @@ async fn shutdown_signal() {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = term.recv() => {}
+            _ = service::SHUTDOWN.notified() => {}
         }
     }
     #[cfg(not(unix))]
     {
-        let _ = tokio::signal::ctrl_c().await;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = service::SHUTDOWN.notified() => {}
+        }
     }
 }
 

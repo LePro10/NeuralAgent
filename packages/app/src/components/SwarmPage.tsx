@@ -1,6 +1,8 @@
 // Swarms: teams of agents on one goal that hand work to each other, and their conversation.
 // Desktop: the page header of every top-level page, then the list beside the open swarm.
 // Phones: the list as a page; a swarm is the next page of the phone router (`#/swarm/<id>`).
+// With a Neural daemon (`neural` feature) the page is "Teams" (race / build + review) and the old
+// swarms sit below as "Classic swarms"; an older daemon keeps the classic swarm page unchanged.
 import type { Swarm } from "@neuralagent/protocol";
 import { Button, Empty, IconButton, Page, useLayoutMode } from "@neuralagent/ui";
 import { Plus, Users } from "lucide-react";
@@ -11,10 +13,16 @@ import { Glow } from "./Glow";
 import { NewSwarmSheet } from "./swarm/NewSwarm";
 import { SwarmDetail } from "./swarm/SwarmDetail";
 import { SwarmGroups } from "./swarm/SwarmList";
+import { TeamsPage } from "./swarm/TeamsPage";
 
 const EMPTY_DETAIL = "One goal, a team of agents: a coordinator plans, a scout looks things up, a builder writes the code, a reviewer checks it.";
 
 export function SwarmPage() {
+  const neural = useDaemon((c) => (c.status === "open" ? c.has("neural") : false));
+  return neural ? <TeamsPage /> : <ClassicSwarmPage />;
+}
+
+function ClassicSwarmPage() {
   const phone = useLayoutMode() === "phone";
   const swarms = useDaemon((c) => c.state?.swarms ?? []);
   const sorted = useMemo(() => [...swarms].sort((a, b) => Number(a.ended) - Number(b.ended) || b.started_at - a.started_at), [swarms]);

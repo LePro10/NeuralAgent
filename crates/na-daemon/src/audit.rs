@@ -42,6 +42,12 @@ impl Audit {
             return;
         }
         let p = &v["p"];
+        // Files (D67): logged once when opened (the first piece), an upload when it ends or fails.
+        if (action == "file_read" && p["offset"].as_u64().unwrap_or(0) > 0)
+            || (action == "file_upload" && result.is_ok() && p["last"] != true)
+        {
+            return;
+        }
         let target = core.read(|s| describe(s, p));
         let who = client.device_id.clone().unwrap_or_else(|| client.name.clone());
         let mut seen = self.lock.lock();
@@ -62,6 +68,24 @@ impl Audit {
             error: result.err().map(|e| e.message.clone()),
         };
         // Written under the lock so lines never interleave.
+        if let Err(e) = self.append(&entry) {
+            tracing::warn!("audit log: {e:#}");
+        }
+    }
+
+    /// Records something Neural did that is not a request: a check it ran, a prompt it answered
+    /// on its own, a confirmation the user gave it (`neural_check`, `neural_allow`, …).
+    pub fn note(&self, action: &str, target: Option<String>, ok: bool, error: Option<String>) {
+        let entry = AuditEntry {
+            at: now_ms(),
+            client: ClientKind::Orchestrator,
+            device: "Neural".into(),
+            action: action.into(),
+            target,
+            ok,
+            error,
+        };
+        let _g = self.lock.lock();
         if let Err(e) = self.append(&entry) {
             tracing::warn!("audit log: {e:#}");
         }
@@ -96,9 +120,12 @@ impl Audit {
 const SKIP: &[&str] = &[
     "fs_list",
     "fs_roots",
+    "file_list",
+    "file_search",
     "git_changes",
     "git_diff",
     "usage_report",
+    "discord_preview",
     "history_search",
     "cv_image",
     "cv_task_output",
@@ -108,6 +135,7 @@ const SKIP: &[&str] = &[
     "audit_list",
     "host_models",
     "host_update_check",
+    "host_system",
     "host_notice",
 ];
 
@@ -121,6 +149,9 @@ fn describe(state: &State, p: &Value) -> Option<String> {
     let ws_id = p["workspace_id"].as_str().or_else(|| p["id"].as_str());
     if let Some(w) = ws_id.and_then(|id| state.workspaces.iter().find(|w| w.id == id)) {
         return Some(w.name.clone());
+    }
+    if let (Some(dir), Some(name)) = (p["dir"].as_str(), p["name"].as_str()) {
+        return Some(format!("{}/{name}", dir.trim_end_matches('/')));
     }
     p["path"].as_str().or_else(|| p["device_id"].as_str()).map(str::to_string)
 }

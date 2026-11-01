@@ -4,5 +4,8 @@
 <dict>
   <key>com.apple.security.device.audio-input</key>
   <true/>
+  <!-- Music/Spotify volume during calls (src/duck/mac.rs), only after the user allowed it. -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
 </dict>
 </plist>

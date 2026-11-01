@@ -5,6 +5,7 @@ import {
   Button,
   Composer,
   ConfirmSheet,
+  Sheet,
   EmptyChatHero,
   IconButton,
   IconTile,
@@ -24,14 +25,19 @@ import {
   type ComposerHandle,
   type Suggestion,
 } from "@neuralagent/ui";
-import { Activity as ActivityIcon, Bell, Check, ChevronRight, Ellipsis, Eraser, KeyRound, Phone, Play, Settings2, Users, X } from "lucide-react";
+import { Activity as ActivityIcon, Bell, Check, ChevronRight, Ellipsis, Eraser, KeyRound, ListChecks, Phone, Play, Settings2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { startCall } from "../lib/call";
+import { startCall, useCallWarm } from "../lib/call";
 import { useOpenAgent } from "../lib/openAgent";
 import { humanError } from "../lib/agentReason";
 import { NOTICE, byDay, clock, plainText, shortAgo, useNow } from "../lib/agentui";
 import { activityOf } from "../lib/status";
 import { useClient, useDaemon, useUi } from "../lib/store";
+import { awayOf, neuralOf } from "../lib/neural";
+import type { State } from "@neuralagent/protocol";
+import { AwayCard, PendingCards, ProactiveHeader } from "./neural/NeuralBits";
+import { NeuralPanel } from "./neural/NeuralPanel";
+import { TeamDetail } from "./swarm/TeamDetail";
 import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { Glow } from "./Glow";
 
@@ -41,6 +47,7 @@ const EDGE_Y: CSSProperties = { maskImage: "linear-gradient(180deg, transparent,
 const SUGGESTIONS: Suggestion[] = [
   { title: "What are my agents doing?", Icon: ActivityIcon, prompt: "What are my agents doing right now?" },
   { title: "Start an agent", detail: "in one of your workspaces", Icon: Play, prompt: "Start an agent in " },
+  { title: "Catch me up", detail: "what happened while I was away", Icon: ListChecks, prompt: "Catch me up: what happened while I was away, and what needs me?" },
 ];
 
 const KIND: Record<string, { activity: Activity; word: string; tone: string }> = {
@@ -51,11 +58,14 @@ const KIND: Record<string, { activity: Activity; word: string; tone: string }> =
 
 /**
  * Neural, the orchestrator: one conversation shared by the desktop, the browser and the phone.
- * On phones this is the home screen: who Neural is, what your agents told it (grouped by day,
- * one tap opens the agent), the live agents, and the composer.
+ * The conversation is only you and Neural (plus what it said on its own, marked as such); what it
+ * knows and owns (tasks, what it noticed, memory, how proactive it is) is the panel beside it on
+ * wide desktops, a sheet elsewhere (D61–D63).
  */
 export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   const client = useClient();
+  // A call is likely from here: the computer loads its speech models now (D69).
+  useCallWarm(client);
   const orch = useDaemon((c) => c.state?.orchestrator);
   const scroller = useRef<HTMLDivElement>(null);
   const composer = useRef<ComposerHandle>(null);
@@ -68,6 +78,16 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   // Keyboard: Android resizes the page (the tab bar hides); iOS overlays it (lift by its height).
   const kbOpen = useKeyboardOpen();
   const kb = useKeyboardInset(usePortalTarget());
+  const neural = useDaemon((c) => c.state?.neural);
+  // Tasks and memory need a Neural v2 daemon (`neural`); older daemons (0.3.x) answer it with an error.
+  const v2 = useDaemon((c) => c.status === "open" && c.has("neural"));
+  const onPlan = v2 ? () => setPlan(true) : undefined;
+  const [plan, setPlan] = useState(false);
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const team = neural?.tasks.find((t) => t.id === teamId);
+  const now = useNow();
+  const away = useMemo(() => (orch ? awayOf({ orchestrator: orch, neural } as State, now) : null), [orch, neural, now]);
+  const openTasks = neuralOf({ neural } as State).tasks.filter((t) => t.status !== "done" && t.status !== "failed").length;
 
   // Follow the conversation while it grows.
   useEffect(() => {
@@ -87,11 +107,13 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
     <div className="relative flex h-full min-h-0 flex-col" style={{ paddingLeft: "var(--sidebar-space)", paddingTop: "var(--safe-top)", paddingBottom: bottom }}>
       {!phone && <Glow />}
       {phone ? (
-        <PhoneHeader ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} />
+        <PhoneHeader ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} onPlan={onPlan} tasks={openTasks} />
       ) : (
-        <Header ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} />
+        <Header ready={orch.ready} busy={orch.busy} empty={empty} onSettings={onSettings} onClear={() => setClearing(true)} onPlan={onPlan} tasks={openTasks} />
       )}
 
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div ref={scroller} className="scroller relative min-h-0 flex-1 overflow-y-auto px-4" style={EDGE_Y}>
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 pt-2 pb-6">
           {!orch.ready && <ModelCallout onSettings={onSettings} />}
@@ -126,6 +148,8 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
           ) : (
             <Feed messages={messages} busy={orch.busy} />
           )}
+          {away && !orch.busy && <AwayCard away={away} busy={orch.busy} onCatchUp={() => send("Catch me up: what happened while I was away, and what needs me?")} />}
+          <PendingCards />
           {waitingForWords && <ThinkingIndicator variant="dots" label="Neural is thinking" />}
         </div>
       </div>
@@ -151,6 +175,20 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
           />
         </div>
       </div>
+      </div>
+      {!phone && v2 && (
+        <aside aria-label="What Neural knows" className="scroller hidden w-80 shrink-0 overflow-y-auto border-l border-line px-4 pt-2 pb-6 xl:block">
+          <NeuralPanel onOpenTask={(t) => setTeamId(t.id)} />
+        </aside>
+      )}
+      </div>
+
+      <Sheet open={plan} onClose={() => setPlan(false)} title="Neural" eyebrow="Tasks and memory" size="md">
+        <NeuralPanel className="pb-4" onOpenTask={(t) => setTeamId(t.id)} />
+      </Sheet>
+      <Sheet open={!!team} onClose={() => setTeamId(null)} title={team?.team?.pattern === "race" ? "Race" : "Build + review"} eyebrow="Team" size="lg">
+        {team && <TeamDetail task={team} />}
+      </Sheet>
 
       <ConfirmSheet
         open={clearing}
@@ -166,14 +204,15 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   );
 }
 
-function Header({ ready, busy, empty, onSettings, onClear }: { ready: boolean; busy: boolean; empty: boolean; onSettings?: () => void; onClear: () => void }) {
+function Header({ ready, busy, empty, onSettings, onClear, onPlan, tasks }: HeaderProps) {
   const client = useClient();
   const sessions = useDaemon((c) => c.state?.sessions);
   const live = Object.values(sessions ?? {}).filter((s) => s?.alive && !s.profile_id.startsWith("install:") && s.profile_id !== "shell").length;
-  const status = !ready ? "Needs a model" : busy ? "Working…" : live > 0 ? `Watching ${live} ${live === 1 ? "agent" : "agents"}` : "Your agents’ orchestrator";
+  const status = statusLine(ready, busy, live, tasks);
   const items = [
+    ...(onPlan ? [{ label: "Tasks and memory", Icon: ListChecks, onSelect: onPlan }] : []),
     ...(onSettings ? [{ label: "Neural settings", Icon: Settings2, onSelect: onSettings }] : []),
-    ...(!empty ? [{ label: "Clear conversation", Icon: Eraser, destructive: true, divider: !!onSettings, onSelect: onClear }] : []),
+    ...(!empty ? [{ label: "Clear conversation", Icon: Eraser, destructive: true, divider: true, onSelect: onClear }] : []),
   ];
   return (
     <header className="relative flex shrink-0 items-center gap-3 px-4 pt-2 pb-3" data-tauri-drag-region>
@@ -189,6 +228,13 @@ function Header({ ready, busy, empty, onSettings, onClear }: { ready: boolean; b
             {busy ? <Shimmer className="truncate">{status}</Shimmer> : <span className="truncate">{status}</span>}
           </div>
         </div>
+        {onPlan && (
+          <span className="xl:hidden">
+            <Button variant="glass" size="sm" Icon={ListChecks} onClick={onPlan} className="rounded-full">
+              {tasks > 0 ? `Tasks · ${tasks}` : "Tasks"}
+            </Button>
+          </span>
+        )}
         {ready && (
           <Button variant="accent" size="sm" Icon={Phone} onClick={() => void startCall(client)} className="rounded-full">
             Call
@@ -211,14 +257,15 @@ function Header({ ready, busy, empty, onSettings, onClear }: { ready: boolean; b
 }
 
 /** Phones: the tab's large light title, what Neural is doing, Call and the options. */
-function PhoneHeader({ ready, busy, empty, onSettings, onClear }: { ready: boolean; busy: boolean; empty: boolean; onSettings?: () => void; onClear: () => void }) {
+function PhoneHeader({ ready, busy, empty, onSettings, onClear, onPlan, tasks }: HeaderProps) {
   const client = useClient();
   const sessions = useDaemon((c) => c.state?.sessions);
   const live = Object.values(sessions ?? {}).filter((s) => s?.alive && !s.profile_id.startsWith("install:") && s.profile_id !== "shell").length;
-  const status = !ready ? "Needs a model" : busy ? "Working…" : live > 0 ? `Watching ${live} ${live === 1 ? "agent" : "agents"}` : "Your agents’ orchestrator";
+  const status = statusLine(ready, busy, live, tasks);
   const items = [
+    ...(onPlan ? [{ label: "Tasks and memory", Icon: ListChecks, onSelect: onPlan }] : []),
     ...(onSettings ? [{ label: "Neural settings", Icon: Settings2, onSelect: onSettings }] : []),
-    ...(!empty ? [{ label: "Clear conversation", Icon: Eraser, destructive: true, divider: !!onSettings, onSelect: onClear }] : []),
+    ...(!empty ? [{ label: "Clear conversation", Icon: Eraser, destructive: true, divider: true, onSelect: onClear }] : []),
   ];
   return (
     <header className="flex shrink-0 items-end gap-2 px-4 pt-3 pb-2">
@@ -226,6 +273,11 @@ function PhoneHeader({ ready, busy, empty, onSettings, onClear }: { ready: boole
         <div className="eyebrow mb-1 truncate">{busy ? <Shimmer>{status}</Shimmer> : status}</div>
         <h1 className="text-large-title font-light text-bright">Neural</h1>
       </div>
+      {onPlan && (
+        <IconButton label={tasks > 0 ? `Tasks and memory, ${tasks} open` : "Tasks and memory"} variant="glass" onClick={onPlan}>
+          <ListChecks />
+        </IconButton>
+      )}
       {ready && (
         <IconButton label="Call Neural" variant="glass" onClick={() => void startCall(client)}>
           <Phone />
@@ -244,6 +296,15 @@ function PhoneHeader({ ready, busy, empty, onSettings, onClear }: { ready: boole
       )}
     </header>
   );
+}
+
+type HeaderProps = { ready: boolean; busy: boolean; empty: boolean; onSettings?: () => void; onClear: () => void; onPlan?: () => void; tasks: number };
+
+function statusLine(ready: boolean, busy: boolean, live: number, tasks: number): string {
+  if (!ready) return "Needs a model";
+  if (busy) return "Working…";
+  const parts = [live > 0 ? `Watching ${live} ${live === 1 ? "agent" : "agents"}` : "", tasks > 0 ? `${tasks} ${tasks === 1 ? "task" : "tasks"}` : ""].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Your agents’ orchestrator";
 }
 
 function ModelCallout({ onSettings }: { onSettings?: () => void }) {
@@ -352,6 +413,12 @@ function Line({ m, live }: { m: OrchMessage; live: boolean }) {
       return <UserBubble animate={false} time={clock(m.at)}>{m.text}</UserBubble>;
     case "assistant":
       if (!m.text) return null;
+      if (m.proactive)
+        return (
+          <AssistantMessage header={<ProactiveHeader at={m.at} />} className="border-l-2 border-accent pl-3">
+            <StreamingText text={m.text} live={false} />
+          </AssistantMessage>
+        );
       return (
         <AssistantMessage>
           <StreamingText text={m.text} live={live} />

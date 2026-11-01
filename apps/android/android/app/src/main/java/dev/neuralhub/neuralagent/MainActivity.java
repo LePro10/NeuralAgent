@@ -57,6 +57,8 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void onPageStarted(WebView view) {
                     handedOff = false;
+                    // A (re)loaded page has no call: end what a call in the old page left on.
+                    endCallAudio();
                 }
 
                 @Override
@@ -95,6 +97,18 @@ public class MainActivity extends BridgeActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handle(intent);
+    }
+
+    /** The page that ran the call is gone (reload, activity closed): free focus, mode and service. */
+    private void endCallAudio() {
+        CallService.stop(this);
+        CallAudio.stop(this);
+    }
+
+    @Override
+    public void onDestroy() {
+        endCallAudio();
+        super.onDestroy();
     }
 
     @Override
@@ -139,7 +153,8 @@ public class MainActivity extends BridgeActivity {
             // Show over the lock screen right away, before the page has started the call.
             if (call.equals("start")) calling(true);
             else {
-                CallService.stop(this);
+                // Hang up from the notification: also when the page cannot answer any more.
+                endCallAudio();
                 calling(false);
             }
             NativePlugin.dial(call.equals("start"));

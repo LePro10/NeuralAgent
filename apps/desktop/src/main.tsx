@@ -1,4 +1,4 @@
-import { App, DaemonProvider, storedZoom, type ChangelogEntry, type Platform, type ServiceSwitch, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
+import { App, DaemonProvider, storedZoom, type ChangelogEntry, type DuckApp, type Platform, type ServiceSwitch, type SystemAutostart, type SystemStatus, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { getVersion } from "@tauri-apps/api/app";
@@ -8,7 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -61,6 +61,8 @@ const platform: Platform = {
     return typeof p === "string" ? p : null;
   },
   openExternal: (url) => void openUrl(url),
+  openPath: (path) => openPath(path),
+  revealPath: (path) => revealItemInDir(path),
   notify: (title, body) => void notifyAllowed().then((ok) => ok && sendNotification({ title, body })),
   focused: () => focused,
   trayStatus: (counts) => void invoke("tray_update", counts).catch(() => {}),
@@ -92,6 +94,21 @@ const platform: Platform = {
     learn: () => invoke<string>("voice_learn"),
     onStatus: (cb) => subscribe<VoiceStatus>("voice", cb),
     onCommand: (cb) => subscribe<string>("voice-command", cb),
+    duckApps: () => invoke<DuckApp[]>("duck_apps"),
+    allowDuckApps: () => invoke<DuckApp[]>("duck_allow_apps"),
+  },
+  // A call in this window: music and other apps go quieter while it runs (src-tauri/src/duck.rs).
+  call: {
+    active: (on) => void invoke("duck_call", { on }).catch(() => {}),
+    onDial: () => () => {},
+  },
+  // Settings → System: permissions and autostart of this computer (src-tauri/src/system.rs, D58-D60).
+  system: {
+    status: () => invoke<SystemStatus>("system_status"),
+    request: (id) => invoke("system_request", { id }),
+    open: (id) => invoke("system_open", { id }),
+    repair: (id) => invoke("system_repair", { id }),
+    setAutostart: (autostart: SystemAutostart) => invoke<SystemStatus>("system_autostart", { autostart }),
   },
   updates: {
     versions: async () => ({ app: await getVersion(), service: serviceVersion }),
@@ -112,6 +129,9 @@ const platform: Platform = {
     },
   },
 };
+
+// A fresh page has no call: a reload in the middle of one must not leave other audio lowered.
+void invoke("duck_call", { on: false }).catch(() => {});
 
 /** `listen` resolves its unsubscribe later; hand back a plain function. */
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
@@ -167,6 +187,9 @@ client.serveHost(async (op, args) => {
       return invoke("voice_set", { config: args });
     case "voice.learn":
       return invoke<string>("voice_learn");
+    case "system.status":
+      // Read only for phones: what is missing here and how the service starts.
+      return invoke<SystemStatus>("system_status");
     case "update.versions":
       return { app: await getVersion(), service: serviceVersion };
     case "update.install":

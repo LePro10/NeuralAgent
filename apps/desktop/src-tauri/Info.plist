@@ -4,5 +4,12 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>NeuralAgent listens while you hold the dictation shortcut, and for “Hey Neural” when the wake word is on. Audio never leaves this Mac.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>NeuralAgent turns Music and Spotify down while you are in a call with Neural, and back up afterwards. It only changes their volume.</string>
+  <key>LSEnvironment</key>
+  <dict>
+    <key>MallocSpaceEfficient</key>
+    <string>1</string>
+  </dict>
 </dict>
 </plist>

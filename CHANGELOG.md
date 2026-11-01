@@ -14,35 +14,55 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 ### New
 - NeuralAgent is now open source (AGPL-3.0). Anyone can read the code and suggest changes on GitHub.
 - **Phone redesign**: four tabs (Agents, Neural, Projects, Settings). Every screen has its own address, so back (button, edge swipe, Android back, browser back) always goes one step back, and opening an agent on the phone no longer moves your computer's panes.
-- **Agents inbox** on the phone: Needs you, Working, Done, with swarms grouped. Answer a waiting agent (Allow / Deny / Reply) right in the list; the tab shows how many need you. A notification opens that agent's conversation at once.
-- **New agent sheet** on the phone: pick project, agent and first prompt, optionally its own worktree, or start a new swarm. Projects tab with a page per project (its agents, changes, past conversations).
+- **Agents inbox** on the phone: Needs you, Working, Done, with teams grouped. Answer a waiting agent (Allow / Deny / Reply) right in the list; the tab shows how many need you. A notification opens that agent's conversation at once.
+- **New agent sheet** on the phone: pick project, agent and first prompt, optionally its own worktree, or start a team. Projects tab with a page per project (its agents, files, changes, past conversations).
 - **Agent screen**: the agent fills the phone under one small floating bar. Tap it for the project, other agents and actions (stop, restart, rename, changes, copy id); swipe it to reach the next agent. Chat or Terminal is remembered per agent.
 - **Command palette** with every Claude Code command grouped, plus your own commands, skills and plugins, with search, recents and argument hints. Fast mode switch in the model picker; `!command` runs a shell command, `# note` asks Claude to remember it.
 - **Context and usage sheet**: real context size and cost, Compact, Start fresh, plan limits. Rewind to an earlier message (code, conversation, both or summarize) from its long-press menu.
-- **Tasks sheet and subagents**: running subagents, background shells and monitors are listed live; each subagent is a card that opens its own transcript inside the agent screen.
+- **Subagents and background work**: a small pill above the text field says what runs ("3 agents running · 1 shell"). Tap it for the list with status, time, last step and tokens; tap a row to read that subagent's own transcript. Each subagent is also a card in the conversation; nested ones show under the agent that started them, big fan-outs are grouped ("5 Explore agents · 3 running") and Back walks out one level at a time. Stop one background agent or shell, or all of them: it checks it has the right task first and never types over text you left unsent on the computer.
 - Messages typed while Claude works show as queued chips with Send now and Edit.
+- **Neural thinks along**: it keeps a list of tasks and follows them up. When an agent finishes it looks at what changed, runs the tests and tells you the result on its own, asks you only what it cannot answer itself, and notices agents that seem stuck. Choose how proactive it is: Active, Quiet or Off. Tasks cut off by a restart are marked as stopped and Neural tells you once.
+- Neural's conversation is clean now: agent events no longer fill the chat. A panel shows its tasks, what it noticed and what it remembers (you can edit the notes). After a break, “While you were away” sums up what happened, and “Catch me up” asks Neural for the story.
+- Neural asks before risky steps (deleting files, force pushing, publishing), also when they hide behind quotes, `;`, a new line or a trailing flag: you get Allow / Deny in the chat, and an Allow answers only the exact prompt you saw. "Yes, don't ask again" always needs you.
+- **Teams** replace Swarm: give one goal to several agents. Race lets 2 to 4 agents try it in separate worktrees, Neural compares them and you keep the best ("Clean up worktrees" removes a finished race's leftovers after you confirm, never on its own); Build + review has a reviewer check the builder's work until it approves. Old swarms stay readable.
+- **Files**: browse a project's folder from the desktop (a Files pane next to your agents) or the phone (Files on the project page). Sort, search, show hidden files, see git changes, open code with line numbers and colours, Markdown, pictures, PDFs, audio and video; big files open with their first part, UTF-16 and Latin-1 text read-only.
+- Edit and save text files right in Files; if an agent changed the file meanwhile, you are asked before anything is overwritten. Add files from your phone into a project (refused with a clear message when the computer would run low on space), download or share files to the phone, copy a path or send it to an agent. On the computer: open in its own app or show in Finder.
+- Phones only see approved projects. Settings → Remote access on the computer can allow the whole home folder (read only); key and token folders (`.ssh`, `.aws`, `.config`, …) and Desktop, Documents, Downloads and Library stay closed from the phone.
+- **Settings → System**: see which macOS permissions NeuralAgent has, open the right place in System Settings with one click, or let "Set up all permissions" walk you through them. Choose whether the background service starts when you log in or already when the computer starts, and restart it from your phone.
+- **Discord card you design**: presets (General, Stats, Detailed) or Custom, where you pick both lines and the image tooltip (agents, subagents, tokens today or this session, cost, model, agent CLIs, agent time today, your streak, files changed, project) plus party size "(2 of 5)", timer and button. A live preview in Settings shows exactly what Discord shows, and whether Discord is open. Project names stay private unless you turn them on.
+- Music and other audio now drop to a quiet background level while you dictate, say “Hey Neural” or are in a call with Neural on the desktop, and fade back afterwards, also when the output device (e.g. AirPods) changes meanwhile. Switch and level in Settings → Voice → Other audio; on a Mac, calls lower Music and Spotify once you allow it. On Android, calls lower other audio too.
 
 ### Improved
+- macOS no longer asks again for access to Documents, Desktop or Downloads after every update: the background service and its agents now count as NeuralAgent itself. Grant Full Disk Access once and remote work never stops at a dialog on the Mac. If the service stops unexpectedly, it starts again by itself.
+- NeuralAgent uses much less memory on the Mac (about 1.3 GB down to well under 100 MB when idle): the dictation model is freed five minutes after its last use and comes back when you dictate or say "Hey Neural", calls and Claude dictation share one speech model, and freed memory goes back to macOS at once. Agents keep running exactly as before.
+- Calls with Neural connect at once: the voice is prepared while the Neural page is open, and a cold start takes about a second instead of four.
+- The call screen says "Connecting…" until your computer really listens and "Reconnecting…" when the connection drops; the call then continues by itself. Microphone problems are explained in plain words.
+- Settings has a search field and clearer groups (Agents and tools, Computer); the same order on the computer, the web remote and phones. Agents, Profiles, a profile and an MCP server each open as a Settings page instead of a side panel; "Install agents…" anywhere opens Settings → Agents.
 - The Claude composer on phones rests as one slim row; tapping it adds mode, model, commands, files and the context ring. Menus open out of the composer.
 - Permission cards take the composer's place on phones, stay small with Show full, and let you tell Claude what to do instead. Plan approval and multiple-choice questions (tabs, multi-select, Other) look like Claude's own.
 - The conversation: tool steps collapse into one quiet line ("Ran 6 commands, read 3 files"), edits show real diffs, notices (hooks, compaction, "Worked for 3m", errors) are quiet lines, and tables and code read well at 360 px.
 - Scrolling stays at the end while Claude writes and stops following the moment you scroll up; a "N new" pill brings you back.
 - Tap a message for Copy, Copy as Markdown or Select text. One picture viewer for every image in the chat.
-- Calmer phone look: flat background, lighter titles, lighter glass on Android, and dim text now meets AA contrast in every colour scheme, light and dark.
-- Lists and the agent chat fade out softly under the status bar and the floating bar.
+- Calmer phone look: flat background, lighter titles, lighter glass on Android, and dim text now meets AA contrast in every colour scheme, light and dark. Lists and the agent chat fade out softly under the status bar and the floating bar.
 - Failed agents say why in plain words (tap for the raw error). Hook calls no longer show as an agent's last line.
 - Phone notices: at most one, at the top. No "finished" toasts, one calm pill when the computer is out of reach, update notice once per start.
 - Android: Back walks back and minimises at the start; the keyboard no longer stays "stuck open"; status bar icons follow light and dark.
-- Phones: the terminal has one compact key row above the keyboard.
+- Phones: the terminal has one compact key row above the keyboard; phone links can open one subagent directly (`#/agent/…/sub/…`), and its buttons are full finger size.
+- The web remote works with a computer that still runs an older NeuralAgent: new parts (Files, Teams, Neural's tasks) simply do not show, and a request the computer does not know gets a clear "update NeuralAgent" error instead of waiting forever or dropping the connection.
 
 ### Fixed
+- macOS: working from the phone no longer makes the Mac ask "NeuralAgent would like to access Documents" (or Desktop, Downloads, iCloud Drive, other volumes). Without Full Disk Access such folders show as "Needs Full Disk Access on the Mac" in the folder picker and Files, and background checks and Neural leave them alone, unless the Mac already allowed it.
 - "Working" is reliable again when Claude Code uses a status line.
 - A tool result is no longer lost when a hook line sits between the call and its result.
 - An answer can no longer land on a newer question, and phone actions can no longer press Enter into an open permission dialog.
 - Two quick agent switches on the phone land on the second agent; closing two sheets at once leaves no stray back step.
 - Errors from answering, Send now and mode switches show a short message.
 - Desktop: pasted text starting with "#" or "!" stays text.
-- Settings values that do not fit move under their label; phone lists say "Connecting to your computer..." instead of "No agents yet".
+- Settings values that do not fit move under their label; phone lists say "Connecting to your computer..." instead of "No agents yet". Editing a profile or an MCP server on the phone no longer pops up the keyboard by itself, and "Delete server" looks like the other delete buttons.
+- Calls: hanging up while the call was still starting and calling again no longer ends the new call; a call taken over by another device says so; a computer that never gets ready ends the call after 45 s with a reason instead of "Connecting…" for good.
+- Android calls: media plays at normal volume again afterwards instead of staying in call mode; the call's audio settings and the music ducking are released when the app is closed or reloaded mid-call; a headset connected during a call takes the sound; a real phone call puts the call with Neural on hold ("On hold during your phone call") and it resumes afterwards; starting a call without the microphone permission or hanging up right as it starts no longer crashes the app.
+- Discord: "Live on Discord" now goes away within about a minute after Discord quits, and a Discord that stops answering can no longer freeze the status; it reconnects when Discord is back.
+- Stopping NeuralAgent's background service takes at most a few seconds instead of up to a minute.
 
 ## [0.3.4] - 2026-10-30
 

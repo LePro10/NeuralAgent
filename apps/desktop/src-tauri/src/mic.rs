@@ -115,6 +115,17 @@ impl Mic {
     }
 }
 
+/// Opens the microphone for a moment in the background: on macOS that is what shows the
+/// microphone dialog the first time (Settings → System → Permissions). Nothing is kept.
+pub fn probe() {
+    std::thread::spawn(|| {
+        if let Ok(mic) = Mic::open() {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(mic);
+        }
+    });
+}
+
 impl Drop for Mic {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);

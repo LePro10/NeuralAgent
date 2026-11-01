@@ -1,6 +1,7 @@
 import type { Connect } from "@neuralagent/protocol";
 import type { ReactNode } from "react";
 import type { CallAudioApi } from "./callaudio";
+import type { CallHold } from "./callState";
 import type { VoiceApi } from "./voice";
 
 /** Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. */
@@ -48,6 +49,13 @@ export interface Platform {
     active: (on: boolean) => void;
     /** "Call Neural" was picked outside the page (quick tile, notification): start or end a call. */
     onDial: (cb: (start: boolean) => void) => () => void;
+    /**
+     * Android: another app took the sound (`phone`: a phone call, it comes back by itself;
+     * `other`: an app that keeps it) or gave it back (`null`). The call is on hold meanwhile.
+     */
+    onHold?: (cb: (held: CallHold | null) => void) => () => void;
+    /** Android: take the sound back for a held call; false while another app still has it. */
+    resume?: () => Promise<boolean>;
   };
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;
@@ -57,6 +65,11 @@ export interface Platform {
   webUpdate?: WebUpdateApi;
   /** Native shells: the image on the system clipboard (the WebView cannot always read it), or null. */
   readClipboardImage?: () => Promise<File | null>;
+  /** Desktop (the host is this machine): open a file with its default app / show it in Finder (Files, D67). */
+  openPath?: (path: string) => Promise<void>;
+  revealPath?: (path: string) => Promise<void>;
+  /** Android: hand a file from the computer to another app (open with, save, send). Browsers download instead. */
+  shareFile?: (file: { name: string; type: string; data: Blob }) => Promise<void>;
   /** Native shells: put text on the system clipboard (Android WebViews may refuse navigator.clipboard). */
   copyText?: (text: string) => Promise<void>;
   /**
@@ -69,6 +82,53 @@ export interface Platform {
    * app owns zoom; browsers keep their own page zoom (lib/zoom.ts).
    */
   zoom?: (scale: number) => Promise<void> | void;
+  /** Desktop: OS permissions and autostart of this computer (Settings → System, D58-D60). */
+  system?: SystemApi;
+}
+
+export type PermissionState = "granted" | "missing" | "denied" | "unknown";
+
+export interface SystemPermission {
+  /** `full_disk_access` | `accessibility` | `microphone` | `screen_recording` | `automation`. */
+  id: string;
+  title: string;
+  /** What it is for, in one sentence. */
+  detail: string;
+  state: PermissionState;
+  /** Without it, remote work stops at a dialog on the computer's screen. */
+  remote: boolean;
+  optional: boolean;
+}
+
+export type ServiceStart = "off" | "login" | "boot";
+
+export interface SystemAutostart {
+  /** When the background service starts by itself. */
+  service: ServiceStart;
+  /** Open the window at login too. */
+  window: boolean;
+}
+
+export interface SystemStatus {
+  os: "macos" | "windows" | "linux" | string;
+  permissions: SystemPermission[];
+  autostart: SystemAutostart;
+  /** Autostart cannot point at this copy of the app (run from a download or disk image). */
+  blocked?: string;
+  /** Autostart pointed at another copy of the app and was set again. */
+  stale: boolean;
+}
+
+export interface SystemApi {
+  status: () => Promise<SystemStatus>;
+  /** Asks the OS (a dialog where it has one) or opens the right Settings pane. */
+  request: (id: string) => Promise<void>;
+  /** Opens the Settings pane for this permission. */
+  open: (id: string) => Promise<void>;
+  /** Forgets a stale entry (on in Settings but not working) and asks again. */
+  repair: (id: string) => Promise<void>;
+  /** "boot" asks for the administrator password once. */
+  setAutostart: (a: SystemAutostart) => Promise<SystemStatus>;
 }
 
 export interface UpdateInfo {

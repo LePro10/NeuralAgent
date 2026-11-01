@@ -662,3 +662,284 @@ they meet WCAG AA in every scheme. Removed: the gradient orb avatar, cards insid
 dot noise, the centred greeting. Motion stays transform and opacity with the existing springs.
 Alternatives: keeping the ground gradient on phones (costly, noisy behind text), a heavier glass
 look (jank on mid-range Android).
+
+## D58 — One permission for remote work, and background code stays out of protected folders (2026-10-31)
+Remote work must never wait for a macOS dialog on the computer's screen. We ask for **Full Disk
+Access** once, for the app (the stable bundle identity, so updates keep it), instead of the
+per-folder prompts (Documents, Desktop, Downloads, iCloud, volumes) that appear one by one when an
+agent first touches a folder. Settings → System shows every permission live (read without
+prompting), opens the right pane, walks through the missing ones, repairs a stale entry
+(`tccutil reset` for our bundle id only) and tells the phone what is missing. Background code
+(the git refresh) skips protected folders without Full Disk Access unless an agent works there,
+so the service never causes a prompt on its own. Alternatives: per-folder grants (several
+dialogs, each can surprise a remote user), a privileged helper (needs Apple Developer ID and
+notarization), or asking at install time (macOS has no API to request Full Disk Access; the user
+must switch it on).
+
+## D59 — A host process keeps the service running and makes it "NeuralAgent" to macOS (2026-10-31)
+The service outlives the app, so after the first app restart macOS charged it and every agent to
+the bare service binary — a new TCC identity per version, hence prompts after every update. The
+app now starts `neuralagent --service` (its own signed executable, no window), disclaimed with
+`responsibility_spawnattrs_setdisclaim`, which starts the service, restarts it after a crash
+(backoff), `exec`s the newest app on `host.restart` (remote "Restart the service"), idles on
+`host.stop` and is what launchd runs for autostart. Markers in the data dir instead of IPC: they
+survive the service's exit, which is exactly when the host reads them. Alternatives: let the app
+supervise (dies with the app), launchd only (no app-mode restart, no update hand-off), SMAppService
+(needs a Developer ID to be dependable and cannot be tested without touching the real system),
+or signing the service binary like the app (TCC still sees a separate identity per path).
+
+## D60 — Autostart: off, at login, at boot, chosen per computer (2026-10-31)
+"At login" uses per-user mechanisms without a password (LaunchAgent, HKCU Run, systemd user unit).
+"At boot" needs one administrator prompt (LaunchDaemon with `UserName`, a Task Scheduler S4U task,
+systemd linger) and is honest about what does not work before login: locked keychain on macOS
+(Claude Code's login, Neural keys), no microphone, FileVault waits for the password, no
+Windows credentials. The boot service hands over to the login service once the user is logged in
+and no agent runs. Switching off removes entries but never stops a running service; every
+generated file is tested (plutil, plans per OS, a re-rooted dry run). Alternative: always install
+at boot (a password prompt and caveats for people who only want "at login").
+
+## D61 — Neural's context: instructions, a fresh world, and the conversation only (2026-10-31)
+Every model step gets three things: static instructions (the same every turn, cached), a
+`<world>` block rendered fresh from the state (`neural::world`: tasks, agents with status and
+open prompt, "new since your last turn", confirmations, memory, summary, workspaces), and the
+conversation with the user only (`neural::history`). Agent events no longer enter the chat as
+notices or `[log]` user messages: they are `State.neural.observations` and show in the world
+block once, then move to "earlier". What Neural did in a turn is one "(did: …)" line in its own
+answer. Past 30 turns the older ones are compacted into `neural.summary` by a quick model call.
+Alternatives: keep notices in the history and trim harder (the clutter the owner complained
+about), a vector memory (opaque, hard to edit), sending the full state as JSON (large, noisy).
+
+## D62 — Teams replace Swarm: Neural runs the team (2026-10-31)
+A team is a Neural task with `team` set. Two patterns: **race** (2–4 agents, often different
+engines, try the same goal in separate worktrees; Neural measures each attempt: changed files,
+lines, the check command; the user picks one, which merges it and discards the others) and
+**build + review** (a builder, then a reviewer that ends with `VERDICT: APPROVED` or
+`VERDICT: CHANGES`; changes go back to the builder, up to 3 rounds). The model may start a team
+(`start_team`) and the Teams page can (`neural_team_start`). The classic swarm (four roles
+messaging each other through a bus) stays readable and stoppable for old clients and old data,
+but nothing starts new ones, and Neural lost its `start_swarm` tool. Alternatives: keep Swarm as
+a separate feature (unused, the owner never tried it), let Neural chat inside a swarm (still the
+role-play noise, no measurable result).
+
+## D63 — Neural reports on its own, rarely and with a reason (2026-10-31)
+The observer (`neural::watch`) turns attention events, exits and stuck agents (no visible
+change for 15 min) into observations. Only observations about agents Neural tracks in a task
+wake it, and only kinds that matter (done, waiting, error, check failed, team; stuck only in
+mode Active). The pulse batches them (8 s), keeps 45 s between wakes, at most 12 per hour, and
+never interrupts a user turn. A wake is a turn of at most 4 steps; the model answers `(quiet)`
+when nothing is worth saying, otherwise its message is posted with `proactive: true` (styled as
+"On its own"). Modes: Active, Quiet, Off. Phone pushes stay the existing attention pushes; Neural
+adds one only for a stuck agent of its own or a confirmation it waits for. A guard
+(`neural::guard`) holds destructive prompts, unsafe check commands and risky answers as
+`neural.pending` until the user allows them (audit `neural_allow` / `neural_deny`); safe
+permission prompts of Neural's own agents (read-only tools, test/build commands) are allowed
+directly and logged. "While you were away" is computed in the client from the state, no model
+call; "Catch me up" asks Neural. Alternatives: speak on every event (spam), a fixed timer
+digest (late for failures, noise when nothing happened).
+
+## D64 — Neural's state travels as a host notice (2026-10-31)
+`State.neural` is optional in TypeScript and live updates are `host_notice { topic: "neural",
+data }`: the client's `apply` has no default case, so a new event type would break old phone
+builds, which ignore host notices. Clients may not send that topic. `OrchMessage.proactive` is
+optional (old builds show such messages as normal answers). New requests `neural_*` are gated
+with the daemon feature "neural". The daemon keeps the state in `neural.json` (not
+`state.json`); pending confirmations do not survive a restart. Alternative: new events per
+change (smaller, but breaks old clients).
+
+## D65 — One model and one look for subagents and background work (2026-10-31)
+Subagent cards, the running-work strip above the composer, the Tasks sheet and the subagent
+view share one pure model (`claude/work.ts`: status, title, detail line, summary, tree) and one
+set of rows (`WorkRow.tsx`). The strip is a pill ("3 agents running · 1 shell") that unfolds into
+the list; finished items stay 45 s after this client saw them end, then leave. Nested agents sit
+under their parent; 4+ agents of one parent started within 2.5 s fold into one group (workflow
+and ultracode fan-outs). A running card is always a button: before the daemon knows the agent's
+id it opens by its tool call and attaches once the id arrives. Overlays hand their history entry
+to the subagent view in the same step, so Back always pops one level. The composer's tasks badge
+is gone (the strip replaces it; `/tasks` still opens the sheet). Alternatives: a tasks badge
+in the composer (one more control, no detail), a separate list per surface (they drifted apart),
+subagents as phone routes (the router mounts one page; the subagent belongs to its conversation).
+One background agent or shell stops from its row: `CvAction::StopTask { id }` (feature
+`cv_stop_task`), played by the daemon through the `/tasks` dialog with a screen check before `x`;
+on any doubt it closes the dialog and stops nothing.
+
+## D66 — The daemon reads subagent metadata for nesting and finish (2026-10-31)
+`cv_tasks::scan` reads each `agent-<id>.meta.json` (`parentAgentId`, `spawnDepth`,
+`requestShape`, `finished`, `stoppedByUser`, `toolUseId`) besides the transcript: children link
+to their parent (`CvTask.parent`), nested background agents end when their meta says so (they
+get no task notification), and tokens come from the last assistant usage. New optional
+`CvTask.active` (last transcript write) shows a quiet agent. An agent "waiting on its own
+background work" (interim notification) stays running; a finished agent whose transcript gets a
+newer entry (by timestamp, not mtime) runs again. `cv_attach { agent }` is accepted
+once the meta file exists, so a just-started agent opens at once. Scan cap 80 → 400 files,
+newest first. Alternatives: hooks only (no parent id in `SubagentStart`, no finish for nested
+agents), watching the folder with notify (one more watcher per session for little gain).
+
+## D67 — Files: where the explorer may look, and who may change that (2026-10-31)
+A file browser on desktop (a pane kind `files`, kept in the layout) and phones (router pages
+`#/files/<ws>/…`, `#/file/<ws>/…`), served by new requests `file_list`, `file_read`, `file_save`,
+`file_upload` and `file_search` (`crates/na-daemon/src/files.rs`, `docs/notes/files.md`). Every
+path is checked twice: lexically (no `..` out of a root) and after `canonicalize` (symlinks must
+land inside a root too). Roots: the desktop gets every workspace and the home folder; phones and
+browsers only approved workspaces, plus the home folder read-only when
+`Settings.remote_files_home` is on; Neural (orchestrator) gets none, its agents have the
+terminal. That switch can only be changed from the computer (the daemon keeps the old value when
+a remote `settings_set` carries it). That keeps the home folder's default narrow, but it is not a
+security boundary against a paired device: a paired phone or browser is trusted by design (D42) and
+can add any folder as an approved workspace (`workspace_add`) and start a shell there, which reaches
+further than the explorer. A lost phone is handled by revoking it (Settings → Remote access), not
+by this switch. Listings never look inside child folders and mark Desktop, Documents, Downloads,
+Library and media folders `protected`. Without Full Disk Access, folders macOS guards are never
+opened for remotes or in the background at all (`permissions::Gate`, see
+`docs/notes/system-integration.md`), so no TCC prompt appears unasked.
+Reads come in 512 KiB pieces (max 1 MiB) so they fit relay frames; uploads the same way, into a
+`.part` file renamed at the end, never overwriting (numbered name). Saves carry the mtime they were
+based on; a newer file on disk is a `conflict` and the user decides. Remote reads (first piece)
+and writes go to `audit.jsonl`; listing and search do not. Alternatives: reuse `fs_list` (stats
+`<child>/.git` everywhere, home-wide for phones), whole-file reads (break the 16 MiB frame and
+phone memory), a read-only remote (the owner asked to edit and upload from the phone).
+
+## D68 — Files: one viewer, features gate, hand-offs (2026-10-31)
+The viewer picks by extension and content: code and text with line numbers and a small built-in
+highlighter (no new dependency, about 20 languages, 400-line blocks with `content-visibility`),
+Markdown rendered with the Claude view's renderer (source a tap away), images, audio, video and
+PDFs (inline only on the desktop; Android web views cannot), anything else as a card. Text over
+512 KiB opens with its first part and "Load all" up to 4 MiB; bigger files are download only.
+Files on another device leave as a blob download (web) or the Android share sheet (new native
+`shareFile`, needs the next APK); the desktop opens them in their own app or shows them in Finder
+(opener plugin). The UI offers Files only when the daemon lists `"files"` in `HelloOk.features`,
+because an unknown request closed relay sessions on older daemons. "Send to agent" types the
+path into a Claude chat composer (window event) or the terminal. Alternatives: Shiki/Prism
+(heavy, async, extra bundle), a probe request (kills old relay sessions), sending file contents
+to the agent (paths are enough; the agent can read them).
+
+## D69 — Call models warm up lazily, load in parallel, and newer requests are gated (2026-10-31)
+The speech models for calls (about 1 GB) load on `call_start` or on `call_warm`, which the Neural
+page sends when it opens, after a reconnect and when it comes back to the front; they are freed
+`KEEP_LOADED` (5 min) after the last call or warm-up (`crates/na-daemon/src/call.rs`,
+`docs/notes/calls.md`). Nothing loads at daemon start or on connect, and no timer re-warms. STT
+and TTS load in parallel, the acknowledgments follow in the background, and the engines lock is
+never held during a load. A cold call start went from 3.2–4.8 s to 1.2 s, and to 5–55 ms with
+the warm-up. `HelloOk.features` lists newer requests (`na_protocol::DAEMON_FEATURES`); clients
+send them only when listed, and a remote message the daemon cannot parse is skipped instead of
+closing the session. Alternatives: keep the models loaded all the time (1 GB for an idle
+computer), or load them at connect (every phone glance would cost 1 GB for 5 minutes).
+
+## D70 — The call screen says what the line really does (2026-10-31)
+"Connecting…" until the microphone is open and the computer listens, then the timer;
+"Reconnecting…" while the connection is gone (the client re-sends `call_start`, and the call
+resumes); the call ends with a reason after 15 s without an answer or 45 s offline. Microphone
+failures get words the caller can act on (`packages/app/src/lib/callState.ts`). Android sets the
+call audio mode at the tap, takes transient audio focus that lets other apps duck
+(`AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`, `USAGE_ASSISTANT`), starts the microphone foreground
+service only with the permission granted, and never restores the WebView's own communication
+mode after a call. Alternative: a voice-communication focus (the system may mute media for a
+"call" instead of ducking it).
+
+## D71 — Settings: every section is a page, nothing slides in (2026-10-31)
+Agents and Profiles were one side sheet (`AgentCatalog`) that Settings opened like an action; the
+MCP editor was a sheet too. They are now Settings sections and detail pages with the same
+navigation everywhere: phones push `#/settings/<section>[/<detail>]`, desktop shows them in the
+right column with a back button (Escape goes back). `SettingsNav` gained `back()`, and a section
+can rebuild a detail from its key (`detail(key)`) so a reload keeps the profile editor open.
+`useCatalogSheet().setOpen(true)` keeps working for every caller: it now redirects to Settings →
+Agents (phones push the page in the current tab, so back returns to where you were) and installs
+run in the workspace you came from. Groups are the same on all surfaces: [Appearance,
+Notifications] · Neural and voice · Agents and tools [Agents, Profiles, MCP servers, Workspaces] ·
+Computer [Remote access (desktop), System, Discord, Advanced] · [Updates, About]; remotes put
+"This device" first. A search field filters sections by name, keywords and group.
+Confirmations (`ConfirmSheet`) stay sheets: they are a question, not a place.
+Alternatives: keeping sheets on phones only (two mental models), a modal dialog on desktop (hides
+the list you came from), moving the catalog out of Settings (it is configuration, not a task).
+
+## D72 — Discord presence: presets, a card you compose, a real preview (2026-10-31)
+`discord_presence` stays the privacy preset (Off, General, Detailed) and gains `stats` (numbers,
+never a name) and `custom`, which uses the new `Settings.discord: DiscordOptions`: a stat for each
+text line and the image tooltip (`DiscordStat`: activity, agents, subagents, project, model,
+engine, tokens this session/today, cost today, agent time today, streak, files changed, none),
+plus party size, timer, button and `project_names` (off by default: "In a project"). Changing any
+part in Settings starts from what shows and switches to Custom, so a preset never changes behind
+your back. The daemon computes the card (`discord::card`) from the state, usage rows of today,
+agent time per day and the running subagents the Claude view saw; a stat with nothing to say is
+left out (the first line falls back to the activity). Updates go out at most every 15 s
+(clearing at once); the thread stays connected while presence is on, so Settings can say whether
+Discord is open. `discord_preview` returns the card for the saved (or given) settings, what was
+last sent and when the next update may go; with no agent running it returns an example with two
+made-up agents (`sample: true`). The preview in Settings draws a Discord profile with the app's
+tokens from that answer, so it is exactly what Discord gets. Old daemons have no `discord` field:
+the panel then shows the three old presets and no preview.
+Alternatives: a fixed set of toggles (cannot pick what the lines say), computing the card in the
+UI (would drift from what the daemon sends), sending every change at once (Discord rate limit).
+
+## D73 — Lowering other audio while the user talks (2026-10-31)
+While the dictation hotkey is held, after "Hey Neural" and during a call in the desktop app, other
+audio fades to a level (default 20 %) and fades back 0.8 s after the user is done
+(`apps/desktop/src-tauri/src/duck.rs`, `docs/notes/ducking.md`). macOS has no API to duck other
+apps, so: dictation and wake word lower the system output volume (no prompt, this app is silent
+then); calls lower only Music and Spotify through Apple Events, and only after the user pressed
+Allow in Settings on the Mac (permission checked silently before every use, players never
+launched, no prompt from remotes). Windows lowers every other process's WASAPI session, Linux
+every other `pactl` stream; both skip this app's process tree so Neural's voice stays loud.
+Originals go to `<data>/duck.json` first and are restored on the next start after a crash and on
+exit; a volume the user changes while lowered is left as they set it. Alternatives: the system
+volume in calls too (Neural gets quieter with the music; gain make-up clips), Core Audio process
+taps (per-app incl. browsers, but a "record system audio" prompt and all system sound through our
+process), voice-processing I/O ducking (also ducks the web view's own call audio, 4 fixed levels).
+
+## D74 — Speech models load on demand and leave after five idle minutes, one Parakeet per daemon (2026-10-31)
+The desktop app's dictation/wake-word model (Parakeet, about 0.6-1 GB plus up to 0.5 GB of ONNX
+arena after long utterances) was loaded on first use and kept for good; that was the "1.3 GB"
+in Activity Monitor. It now unloads after `STT_KEEP` (5 min) without dictation, a wake word or a
+recording (`apps/desktop/src-tauri/src/voice.rs`, `unload_idle`, checked every 15 s, never
+while busy) and is warmed again on the hotkey press and right after "Hey Neural", so the
+command after the wake word is not slower. The wake-word detector itself stays loaded (small).
+In the daemon, calls (D69/D78 keep-alive unchanged) and Claude-view dictation get Parakeet from
+`crates/na-daemon/src/speech.rs`: while either holds it the other reuses the same instance
+(weak reference, no keep-alive of its own), instead of a second 1 GB copy. Alternatives: keep
+the model (the owner's complaint), unload at once (each dictation would pay the 1-2 s load),
+dictation through the daemon (one model per Mac, but a protocol change; open point).
+
+## D75 — Freed memory goes back to macOS at once; the service host runs as Interactive (2026-10-31)
+macOS libmalloc keeps freed large blocks and fragmented small regions dirty, so after a model
+unload the process still showed 130-400 MB. `MallocSpaceEfficient=1` (read once at process
+start) returns them at once (measured: daemon with Parakeet 594 vs 1155 MB, after unload
+25 vs 127-399 MB; no measurable latency or CPU change). The host sets it when it starts the
+daemon (`daemon::lean`, `apps/desktop/src-tauri/src/daemon.rs`, `service.rs`), the app gets it
+from `LSEnvironment` in `Info.plist` (Finder, Dock, `open`, login items), and the daemon removes
+it from its environment first thing in `main` (`speech::forget_malloc_env`) so agents, shells
+and tools it starts run exactly as before. The login and boot host jobs get
+`ProcessType Interactive` (`autostart.rs`), so launchd does not apply its background CPU/IO
+limits to the service and its agents. Alternatives: `malloc_zone_pressure_relief` (released
+nothing in a test on this macOS), a different allocator (mimalloc/jemalloc: a bigger change for
+the same effect), leaving the variable for agents too (would change their behaviour).
+
+## D77 — Neural's guard: prose vs commands, confirmations bound to what you saw, a wake cap per task (2026-10-31)
+Review of Neural v2 (D61–D64). The guard is a heuristic, so it is tuned for both directions:
+- **Commands** (`run_check`, an agent's permission prompt) are read strictly: quotes, `\`, `;`,
+  `&`, newlines and `$(…)`/`${…}` cannot hide a second command; `git push` counts as forced with
+  `-f`/`--force*`/`+ref`/`--mirror`/`--delete` anywhere after `push`; allow-listed read tools lose
+  the options that write or run things (`sort -o`, `rg --pre`, `git diff --output`, `git branch x`,
+  `git remote remove`, `tail -f`).
+- **Prompts** to agents are prose: a rule the prompt itself states as forbidden ("no force push",
+  "keine git-Operationen wie reset") does not trigger a confirmation (negation in the same clause,
+  six words back; "don't hesitate to…" is no negation). Without this the careful prompts the system
+  prompt asks for stopped every start (seen with a real model).
+- **Allow runs once and only on what you saw**: an `answer_agent` confirmation stores the prompt's id
+  and description; if the agent shows another prompt by then, nothing is answered. "Yes, and don't
+  ask again" (and any lasting option) needs the user unless the call is a safe check; auto-allow
+  only ever presses a one-time yes. Neural (as a client) cannot send `neural_confirm`,
+  `neural_mode` or `neural_team_pick`.
+- **No follow-up loops**: at most 6 wake-ups per task until the user writes again; a team
+  agent's turn does not wake Neural (the team's own steps report), but a team result always does,
+  also when it closed the task. Failed wake-ups (no key, 429, timeout) are one row in "What Neural
+  noticed"; the model call has a 90 s answer and 120 s stall timeout.
+- **Bounded `<world>`**: at most 12 open tasks (newest first, the rest counted), waiting agents and
+  Neural's own agents listed before others, history messages clipped to 6000 characters.
+
+## D78 — Warm-ups alone keep the call models at most 15 minutes (2026-10-31)
+`call_warm` (D69) may load or keep the call's speech models only within a stretch of warm-ups
+no longer than `WARM_MAX` (15 min) since its first one; later warm-ups of that stretch are
+ignored until a call starts or warm-ups pause for `WARM_PAUSE` (10 min)
+(`crates/na-daemon/src/call.rs`, `warm_step`). A phone left on the Neural page that wakes or
+reconnects every few minutes therefore holds the 1 GB for at most about 20 minutes, not for
+good; the cost after that is one cold start (about a second). Alternative: a client-side limit
+(every web remote and app version would need it, and old ones would not have it).

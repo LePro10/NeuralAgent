@@ -198,25 +198,12 @@ impl Usage {
 
     /// Rows for days `>= since_day` (`YYYY-MM-DD`); `workspace` maps a folder to a workspace.
     pub fn rows(&self, since_day: &str, workspace: impl Fn(&str) -> Option<String>) -> Vec<UsageRow> {
-        let g = self.inner.lock();
-        let mut agg: BTreeMap<(String, &'static str, String, Option<String>), Bucket> = BTreeMap::new();
-        for f in g.files.values() {
-            let ws = workspace(&f.cwd);
-            for ((day, model), b) in f.buckets.range((since_day.to_string(), String::new())..) {
-                agg.entry((day.clone(), f.engine, model.clone(), ws.clone())).or_default().merge(b);
-            }
-        }
-        agg.into_iter()
-            .map(|((day, engine, model, workspace_id), b)| UsageRow {
-                day,
-                engine: engine.into(),
-                model,
-                workspace_id,
-                tokens: b.tokens,
-                cost_usd: b.cost_usd(),
-                calls: b.calls,
-            })
-            .collect()
+        rows_of(&self.inner.lock(), since_day, workspace)
+    }
+
+    /// `rows` without waiting: `None` while a scan holds the lock (for async ticks, e.g. Discord).
+    pub fn try_rows(&self, since_day: &str) -> Option<Vec<UsageRow>> {
+        self.inner.try_lock().map(|g| rows_of(&g, since_day, |_| None))
     }
 
     /// Everything one conversation used (subagents included).
@@ -524,6 +511,27 @@ pub fn since_day(days: u32) -> String {
 
 pub fn today() -> String {
     Local::now().format("%Y-%m-%d").to_string()
+}
+
+fn rows_of(g: &Inner, since_day: &str, workspace: impl Fn(&str) -> Option<String>) -> Vec<UsageRow> {
+    let mut agg: BTreeMap<(String, &'static str, String, Option<String>), Bucket> = BTreeMap::new();
+    for f in g.files.values() {
+        let ws = workspace(&f.cwd);
+        for ((day, model), b) in f.buckets.range((since_day.to_string(), String::new())..) {
+            agg.entry((day.clone(), f.engine, model.clone(), ws.clone())).or_default().merge(b);
+        }
+    }
+    agg.into_iter()
+        .map(|((day, engine, model, workspace_id), b)| UsageRow {
+            day,
+            engine: engine.into(),
+            model,
+            workspace_id,
+            tokens: b.tokens,
+            cost_usd: b.cost_usd(),
+            calls: b.calls,
+        })
+        .collect()
 }
 
 #[cfg(test)]

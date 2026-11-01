@@ -53,15 +53,42 @@ public class NativePlugin extends Plugin {
         instance.notifyListeners("dial", o, true);
     }
 
-    /** The page started or ended a call: keep the microphone on with the screen locked meanwhile. */
+    /**
+     * The call lost the sound to another app (`held`: a phone call when `phone`, else an app that
+     * keeps it) or got it back. Not kept for a later page: a stale hold must not pause a new call.
+     */
+    static void callHold(boolean held, boolean phone) {
+        if (instance == null) return;
+        JSObject o = new JSObject();
+        o.put("held", held);
+        o.put("phone", phone);
+        instance.notifyListeners("callHold", o, false);
+    }
+
+    /** A tap on a held call: take the sound back. `resumed` false while another app still has it. */
+    @PluginMethod
+    public void callResume(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("resumed", CallAudio.resume());
+        call.resolve(r);
+    }
+
+    /**
+     * The page started or ended a call. Sent at the tap (call audio mode, other apps ducked, route)
+     * and again once the microphone is open: only then may the microphone foreground service
+     * start (Android 14 refuses it without the permission), which keeps the call listening with
+     * the screen locked.
+     */
     @PluginMethod
     public void callActive(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
         JSObject r = new JSObject();
         if (on) {
-            CallService.start(getContext());
             if (call.getString("route") != null) CallAudio.save(getContext(), call.getString("route"));
             r.put("output", CallAudio.start(getContext(), CallAudio.saved(getContext())));
+            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                CallService.start(getContext());
+            }
         } else {
             CallService.stop(getContext());
             CallAudio.stop(getContext());
@@ -115,6 +142,49 @@ public class NativePlugin extends Plugin {
             }
             call.resolve(r == null ? new JSObject() : r);
         });
+    }
+
+    /**
+     * A file from the computer (Files, D67) handed to another app: written to the cache, offered as
+     * "open with" (view) and "share" (send) in one chooser. Old copies go after an hour.
+     */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        String data = call.getString("data");
+        String type = call.getString("type", "application/octet-stream");
+        String name = call.getString("name", "file");
+        if (data == null) {
+            call.reject("No data");
+            return;
+        }
+        try {
+            java.io.File dir = new java.io.File(getContext().getCacheDir(), "shared");
+            if (!dir.isDirectory() && !dir.mkdirs()) throw new java.io.IOException("no cache folder");
+            java.io.File[] old = dir.listFiles();
+            long now = System.currentTimeMillis();
+            if (old != null) for (java.io.File f : old) if (now - f.lastModified() > 3_600_000L) f.delete();
+            String safe = name.replace('/', '_').replace('\\', '_').replace('\0', '_');
+            if (safe.isEmpty() || safe.startsWith(".")) safe = "file" + safe;
+            java.io.File out = new java.io.File(dir, safe);
+            try (java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
+                os.write(Base64.decode(data, Base64.DEFAULT));
+            }
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", out);
+            android.content.Intent view = new android.content.Intent(android.content.Intent.ACTION_VIEW)
+                .setDataAndType(uri, type)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND)
+                .setType(type)
+                .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            send.setClipData(ClipData.newRawUri(safe, uri));
+            android.content.Intent chooser = android.content.Intent.createChooser(send, safe);
+            chooser.putExtra(android.content.Intent.EXTRA_INITIAL_INTENTS, new android.content.Intent[] { view });
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage() == null ? "Could not share the file" : e.getMessage());
+        }
     }
 
     /** Text onto the system clipboard (the WebView may refuse navigator.clipboard.writeText). */

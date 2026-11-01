@@ -1,22 +1,24 @@
 /**
  * The input at the bottom, shaped like Claude's. Resting: one 48px pill (attach "+", the text,
  * mic ↔ send, stop while Claude works). Focused or holding text, a second row grows in:
- * permission mode, model · effort, "/" (command palette), "@" (files), the tasks badge and the
- * context ring. It grows to about 40% of the visible height, then scrolls inside.
+ * permission mode, model · effort, "/" (command palette), "@" (files) and the
+ * context ring (background work sits in the strip above it, `WorkStrip`). It grows to about 40%
+ * of the visible height, then scrolls inside.
  * Choices pour out of it on phones (`Picker`) and open as popovers above it on desktop.
  * `!cmd` runs a shell command (the CLI's bash mode), `# note` asks Claude to save a memory.
  */
 import type { CvCommand, CvMessage, CvMeta } from "@neuralagent/protocol";
 import { cn, prefersReducedMotion } from "@neuralagent/ui";
-import { ArrowUp, AtSign, BookmarkPlus, Camera, ChevronDown, ChevronRight, ClipboardPaste, FileText, Images, ListTodo, Loader, Mic, Paperclip, Plus, RotateCw, Slash, SquareTerminal, Terminal, X, Zap } from "lucide-react";
+import { ArrowUp, AtSign, BookmarkPlus, Camera, ChevronDown, ChevronRight, ClipboardPaste, FileText, Images, Loader, Mic, Paperclip, Plus, RotateCw, Slash, SquareTerminal, Terminal, X, Zap } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useClient, usePlatform } from "../../lib/store";
+import { takeInsert } from "../files/send";
 import { act, cycleMode, memoryPrompt, resolveInput, runKeys, sendPrompt, serverActions, shellSteps, type Armed, typedMode } from "./actions";
 import { CommandPalette } from "./CommandPalette";
 import { type Command, mergeCommands, opensDialog, saveRecent, searchCommands } from "./commands";
 import { ContextRing, ContextSheet } from "./ContextSheet";
 import { filesOf, isImage, pathToken, readClipboardFiles, uploadFile } from "./files";
-import { contextOf, fastOf, queuedOf, tasksRunning } from "./metaInfo";
+import { contextOf, fastOf, queuedOf } from "./metaInfo";
 import { DEFAULT_EFFORT, EFFORT_NOTE, EFFORTS, effortName, MODELS, MODES, modeOf, modelAlias, modelName } from "./models";
 import { PickNote, PickRow, PickSection, Picker } from "./Picker";
 import { addQueued, expire, type Queued, reconcile, SEND_NOW, shownQueue, TAKE_BACK } from "./queue";
@@ -311,6 +313,16 @@ export function Composer({ sid, meta, busy, phone, empty, disabled, hidden, mess
     window.addEventListener("na-paste-image", on);
     return () => window.removeEventListener("na-paste-image", on);
   });
+  // Files' "Send to agent" (files/send.ts): paths queued for this agent's next message.
+  useEffect(() => {
+    const take = () => {
+      const t = takeInsert(sid);
+      if (t) setText((x) => `${x}${x && !/\s$/.test(x) ? " " : ""}${t} `);
+    };
+    take();
+    window.addEventListener("na-insert-text", take);
+    return () => window.removeEventListener("na-insert-text", take);
+  }, [sid]);
   const onDrop = (e: DragEvent) => {
     setDragging(false);
     const f = filesOf(e.dataTransfer);
@@ -491,7 +503,6 @@ export function Composer({ sid, meta, busy, phone, empty, disabled, hidden, mess
   const alias = modelAlias(meta.model);
   const effort = meta.effort || DEFAULT_EFFORT;
   const ctx = contextOf(meta);
-  const running = tasksRunning(meta);
   const fast = fastOf(meta);
   const kind = armed ?? "prompt";
   const expanded = !phone || focused || text.length > 0 || chips.length > 0 || popup !== null;
@@ -707,17 +718,6 @@ export function Composer({ sid, meta, busy, phone, empty, disabled, hidden, mess
                 <Round label="Stop (Esc)" onClick={stop}>
                   <span className="size-2.5 rounded-cv-xs bg-current" />
                 </Round>
-              )}
-              {running > 0 && (
-                <button
-                  type="button"
-                  onClick={() => (onTasks ? onTasks() : (void prompt("/tasks"), onTerminal("/tasks")))}
-                  aria-label={`${running} running in the background`}
-                  className="flex h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-cv-meta text-cv-text-2 transition-colors hover:bg-cv-hover"
-                >
-                  <ListTodo size={16} strokeWidth={1.8} />
-                  <span className="rounded-full bg-cv-chip px-1.5 font-cv-mono">{running}</span>
-                </button>
               )}
               {ctx && (
                 <button type="button" onClick={() => setContextOpen(true)} aria-label={`${ctx.pct}% of the context used`} title={`${ctx.pct}% of the context used`} className="grid size-11 shrink-0 place-items-center rounded-full transition-colors hover:bg-cv-hover">

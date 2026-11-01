@@ -3256,6 +3256,7 @@ dependencies = [
  "image",
  "keepawake",
  "keyring",
+ "libc",
  "na-crypto",
  "na-protocol",
  "na-voice",
@@ -3395,6 +3396,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ureq 3.5.0",
+ "windows 0.62.2",
 ]
 
 [[package]]

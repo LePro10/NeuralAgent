@@ -35,6 +35,8 @@ export function AgentsInbox() {
   const retap = usePhoneNav((s) => (s.tab === "agents" ? s.retap : 0));
   const openCatalog = useCatalogSheet((c) => c.setOpen);
   const [adding, setAdding] = useState(false);
+  // With a Neural daemon the swarm page is "Teams" (D64).
+  const teams = useDaemon((c) => c.status === "open" && c.has("neural"));
   const add = (
     <IconButton label="New agent" variant="glass" onClick={() => setAdding(true)}>
       <Plus />
@@ -66,7 +68,7 @@ export function AgentsInbox() {
         )}
         <div className="mt-7">
           <List>
-            <Row Icon={Users} title="Swarms" onClick={() => phoneRouter().push({ k: "swarms" })} />
+            <Row Icon={Users} title={teams ? "Teams" : "Swarms"} onClick={() => phoneRouter().push({ k: "swarms" })} />
             <Row Icon={History} title="History" detail="Past conversations on this computer" onClick={() => phoneRouter().push({ k: "history" })} />
           </List>
         </div>

@@ -1,0 +1,104 @@
+/* Files explorer (D68): the code viewer. Line numbers come from `data-n` (so copying text never
+ * copies them); blocks of lines skip layout while off screen (`content-visibility`), which keeps a
+ * 4 MB log smooth. Syntax colours are the system colours mixed toward the text colour, so they
+ * stay calm in light and dark. */
+
+.fv-code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-ink);
+  tab-size: 4;
+  min-width: 100%;
+  width: max-content;
+  padding-block: 8px 24px;
+}
+.fv-code[data-wrap="true"] {
+  width: auto;
+}
+[data-mode="phone"] .fv-code {
+  font-size: 12px;
+}
+
+.fv-block {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(var(--fv-rows, 400) * 1.6 * 12.5px);
+}
+
+.fv-line {
+  display: grid;
+  grid-template-columns: var(--fv-gutter, 4ch) minmax(0, 1fr);
+  column-gap: 14px;
+  padding-inline-end: 16px;
+  white-space: pre;
+}
+.fv-code[data-wrap="true"] .fv-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv-line::before {
+  content: attr(data-n);
+  text-align: right;
+  color: var(--color-faint);
+  user-select: none;
+  -webkit-user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.fv-line:hover::before {
+  color: var(--color-dim);
+}
+.fv-line > span:empty::after {
+  content: " ";
+}
+
+.fv-com { color: var(--color-faint); font-style: italic; }
+.fv-str { color: color-mix(in oklab, var(--color-sys-green) 72%, var(--color-bright)); }
+.fv-num, .fv-lit { color: color-mix(in oklab, var(--color-sys-orange) 75%, var(--color-bright)); }
+.fv-kw { color: color-mix(in oklab, var(--color-sys-pink) 70%, var(--color-bright)); }
+.fv-type { color: color-mix(in oklab, var(--color-sys-teal) 75%, var(--color-bright)); }
+.fv-fn { color: color-mix(in oklab, var(--color-sys-blue) 75%, var(--color-bright)); }
+.fv-tag { color: color-mix(in oklab, var(--color-sys-red) 70%, var(--color-bright)); }
+.fv-attr { color: color-mix(in oklab, var(--color-sys-yellow) 70%, var(--color-bright)); }
+.fv-prop { color: color-mix(in oklab, var(--color-sys-indigo) 65%, var(--color-bright)); }
+
+/* The editor: the same type as the viewer, no chrome. */
+.fv-edit {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  tab-size: 4;
+  color: var(--color-bright);
+  background: transparent;
+  resize: none;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+}
+[data-mode="phone"] .fv-edit {
+  font-size: 16px; /* below 16px iOS zooms into the field */
+}
+
+/* Markdown shown in the app's colours rather than the Claude view's warm ones. */
+.fv-md {
+  --cv-text: var(--color-bright);
+  --cv-text-2: var(--color-ink);
+  --cv-muted: var(--color-dim);
+  --cv-line: var(--color-line-2);
+  --cv-line-soft: var(--color-line);
+  --cv-sunken: var(--color-fill-1);
+  --cv-hover: var(--color-fill-2);
+  --cv-code-bg: var(--color-fill-2);
+  --cv-code-ink: color-mix(in oklab, var(--color-sys-orange) 75%, var(--color-bright));
+}
+
+/* Pictures on a checkerboard so transparent ones stay visible. */
+.fv-checker {
+  background-color: var(--color-fill-1);
+  background-image:
+    linear-gradient(45deg, var(--color-fill-2) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-fill-2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-fill-2) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-fill-2) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}

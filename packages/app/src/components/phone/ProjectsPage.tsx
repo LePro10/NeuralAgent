@@ -2,12 +2,14 @@
 // project's page: its agents, a new agent, its git changes, its past conversations.
 import type { Workspace } from "@neuralagent/protocol";
 import { Button, ConfirmSheet, Empty, IconButton, List, Menu, Page, Row, toast, type MenuEntry } from "@neuralagent/ui";
-import { Copy, Ellipsis, FileDiff, Folder, FolderGit2, FolderPlus, History, Pin, PinOff, Plus, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, FileDiff, Folder, FolderGit2, FolderOpen, FolderPlus, History, Pin, PinOff, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { writeClipboard } from "../../lib/clipboard";
 import { phoneRouter, usePhoneNav } from "../../lib/phoneRoute";
 import { STATUS, activityOf, mostUrgent } from "../../lib/status";
 import { useChanges, useClient, useDaemon, usePlatform } from "../../lib/store";
+import { HomeFolderRow } from "../files/HomeAccess";
+import { useFilesSupported } from "../files/support";
 import { pickHostFolder } from "../FolderBrowser";
 import { InboxSections, inboxEyebrow, useInbox } from "./AgentsInbox";
 import { NewSheet } from "./NewSheet";
@@ -89,6 +91,7 @@ export function ProjectsPage() {
           </List>
           <List>
             <Row Icon={FolderPlus} title="Add project folder" onClick={() => void add()} />
+            <HomeFolderRow />
           </List>
         </div>
       )}
@@ -105,6 +108,7 @@ export function ProjectPage({ id }: { id: string }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(false);
   const loaded = useHasState();
+  const files = useFilesSupported();
   if (!w) {
     return (
       <Page title="Project">
@@ -152,6 +156,7 @@ export function ProjectPage({ id }: { id: string }) {
           />
           <List>
             {inbox.counts.all > 0 && <Row Icon={Plus} title="New agent" onClick={() => setAdding(true)} />}
+            {files && (w.approved || platform.kind === "desktop") && <Row Icon={FolderOpen} title="Files" onClick={() => phoneRouter().push({ k: "files", ws: w.id })} />}
             {w.git && <Row Icon={FileDiff} title="Changes" value={w.git.changed ? String(w.git.changed) : "None"} onClick={() => showChanges(w.id)} />}
             <Row Icon={History} title="Past conversations" onClick={() => phoneRouter().push({ k: "history", project: w.id })} />
           </List>

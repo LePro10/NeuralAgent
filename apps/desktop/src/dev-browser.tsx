@@ -3,7 +3,8 @@
 // Fake updates for UI checks (lib/updates.ts), changelog from a web build at `changelog=<url>`:
 //   &update=0.3.0[&app=0.2.1][&service=0.2.0][&serviceError=1]   desktop: app update available
 //   &web=1[&update=0.3.0]                                          web remote: newer build deployed
-import { App, DaemonProvider, type ChangelogEntry, type Platform, type ServiceSwitch } from "@neuralagent/app";
+//   &system=missing|granted[&os=macos|windows|linux]               fake Settings → System (permissions, autostart)
+import { App, DaemonProvider, type ChangelogEntry, type Platform, type ServiceSwitch, type SystemStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { createRoot } from "react-dom/client";
@@ -51,7 +52,61 @@ if (q.get("web")) {
     service: { get: () => svc, subscribe: () => () => {}, retry: () => {} },
   };
 }
-const client = new DaemonClient(platform.connect, { kind: "desktop", name: platform.clientName });
+if (q.get("system")) {
+  // Granting happens a few seconds after "asking", so the guided setup can be watched going on.
+  const all = q.get("system") === "granted";
+  const st: SystemStatus = {
+    os: q.get("os") ?? "macos",
+    stale: false,
+    autostart: { service: all ? "boot" : "off", window: false },
+    permissions: [
+      {
+        id: "full_disk_access",
+        title: "Full Disk Access",
+        detail: "Agents can work in Documents, Desktop, Downloads and iCloud Drive without a dialog on the Mac.",
+        state: all ? "granted" : "missing",
+        remote: true,
+        optional: false,
+      },
+      {
+        id: "accessibility",
+        title: "Accessibility",
+        detail: "Dictation types the text for you.",
+        state: all ? "granted" : "missing",
+        remote: false,
+        optional: false,
+      },
+      {
+        id: "microphone",
+        title: "Microphone",
+        detail: "Dictation, wake word and calls.",
+        state: "granted",
+        remote: false,
+        optional: false,
+      },
+      {
+        id: "screen_recording",
+        title: "Screen Recording",
+        detail: "Only for agents that look at the screen.",
+        state: "missing",
+        remote: false,
+        optional: true,
+      },
+    ],
+  };
+  const grant = (id: string) => setTimeout(() => (st.permissions = st.permissions.map((p) => (p.id === id ? { ...p, state: "granted" } : p))), 2500);
+  platform.system = {
+    status: async () => structuredClone(st),
+    request: async (id) => void grant(id),
+    open: async () => {},
+    repair: async (id) => void grant(id),
+    setAutostart: async (a) => ((st.autostart = a), structuredClone(st)),
+  };
+}
+const client = new DaemonClient(platform.connect, {
+  kind: "desktop",
+  name: platform.clientName,
+});
 createRoot(document.getElementById("root")!).render(
   <DaemonProvider client={client} platform={platform}>
     <App />

@@ -6,6 +6,7 @@
 // voice models in $NEURALAGENT_HOME/models. HOLD=<ms> keeps the call open at the end.
 // Env: NOISE=<amplitude 0..1> adds white noise to everything sent; ECHO=<0..1> leaks Neural's
 // audio back into the microphone (imperfect echo cancellation); OUT=<dir> saves what Neural said.
+// WARM=<ms> sends `call_warm` first (like the Neural page) and starts the call that much later.
 import { readFileSync, writeFileSync } from "node:fs";
 import { daemonInfo, testHome } from "./lib.mjs";
 const home = testHome();
@@ -42,6 +43,9 @@ let echoQueue = []; // 16 kHz samples to leak back
 const log = [];
 let state = "";
 let heardN = 0;
+// Call start timeline (client clock): call_start sent → each first state.
+let t0 = 0;
+const firstState = {};
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.t !== "call") return;
@@ -58,6 +62,7 @@ ws.onmessage = (e) => {
     log.push(`  ⏹ flush (barge-in)`);
   } else if (ev.k === "state") {
     state = ev.state;
+    if (!(ev.state in firstState)) firstState[ev.state] = now - t0;
     if (ev.error) log.push(`  state ${ev.state}: ${ev.error}`);
   } else if (ev.k === "heard") {
     // A new answer starts: what came before belonged to the previous one.
@@ -69,6 +74,11 @@ ws.onmessage = (e) => {
 };
 await new Promise((r) => (ws.onopen = r));
 ws.send(JSON.stringify({ t: "hello", v: 1, client: { kind: "desktop", name: "call-test" } }));
+if (process.env.WARM) {
+  ws.send(JSON.stringify({ t: "call_warm" }));
+  await sleep(Number(process.env.WARM));
+}
+t0 = Date.now();
 ws.send(JSON.stringify({ t: "call_start" }));
 
 // The microphone: 20 ms frames in real time; speech from the queue, else silence.
@@ -94,6 +104,7 @@ let running = true;
 
 const waitFor = async (cond, ms) => { const t = Date.now(); while (!cond() && Date.now() - t < ms) await sleep(20); return cond(); };
 if (!(await waitFor(() => state === "listening", 60000))) { console.log("never listening:", log.join("\n")); process.exit(1); }
+console.log(`connect: ${Object.entries(firstState).map(([k, v]) => `${k} ${v} ms`).join(", ")}`);
 
 const results = [];
 let n = 0;

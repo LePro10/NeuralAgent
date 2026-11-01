@@ -722,7 +722,31 @@ fn envelope(core: &Arc<Core>, key: &StaticKey, from: &str, env: &str, sessions: 
             };
             let opened = e["ct"].as_str().and_then(|c| unb64(c).ok()).map(|frame| s.e2e.lock().open(&frame));
             let msg = match opened {
-                Some(Ok(pt)) => serde_json::from_slice::<ClientMsg>(&pt).ok(),
+                Some(Ok(pt)) => match serde_json::from_slice::<ClientMsg>(&pt) {
+                    Ok(m) => Some(m),
+                    // Sealed by the client (so authenticated) but not understood: a newer client
+                    // (see `na_protocol::DAEMON_FEATURES`). Skip it, like a local connection does.
+                    // Log only its type: serde's message can quote field values.
+                    Err(err) => {
+                        let (kind, id) = crate::server::not_understood(&String::from_utf8_lossy(&pt));
+                        tracing::warn!(
+                            device = from,
+                            kind = %kind,
+                            line = err.line(),
+                            col = err.column(),
+                            "remote client message not understood (newer client?): skipped"
+                        );
+                        // A request still gets its answer (like a local connection), so the client
+                        // does not wait forever.
+                        if let Some(id) = id
+                            && let Ok(res) = serde_json::to_vec(&crate::server::not_understood_res(&kind, id))
+                        {
+                            let frame = s.e2e.lock().seal(&res);
+                            let _ = out.try_send(route(from, json!({ "k": "d", "sid": sid, "ct": b64(&frame) })));
+                        }
+                        return;
+                    }
+                },
                 _ => None,
             };
             match msg {
@@ -779,7 +803,12 @@ async fn serve_session(
     match tokio::time::timeout(Duration::from_secs(15), rx.recv()).await {
         Ok(Some(ClientMsg::Hello { v, .. })) if v == PROTOCOL_VERSION => {
             let _ = out
-                .send(ServerMsg::HelloOk { v: PROTOCOL_VERSION, daemon_version: env!("CARGO_PKG_VERSION").into(), host: core.host.clone() })
+                .send(ServerMsg::HelloOk {
+                    v: PROTOCOL_VERSION,
+                    daemon_version: env!("CARGO_PKG_VERSION").into(),
+                    host: core.host.clone(),
+                    features: na_protocol::daemon_features(),
+                })
                 .await;
             crate::server::run_channel(core, client, out, &mut rx).await;
         }

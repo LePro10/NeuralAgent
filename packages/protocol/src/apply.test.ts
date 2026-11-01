@@ -45,3 +45,10 @@ test("swarm messages are updated in place and removed with their swarm", () => {
   s = apply(s, { e: "swarm_removed", id: "sw" });
   assert.equal(s.swarms.length + s.swarm_messages.length, 0);
 });
+
+test("neural state arrives as a host notice; other topics change nothing", () => {
+  const neural = { mode: "active" as const, tasks: [], notes: [{ id: "n1", text: "uses pnpm", at: 1 }], observations: [], pending: [], summary_upto: 0 };
+  const s = apply(empty, { e: "host_notice", topic: "neural", data: neural });
+  assert.equal(s.neural?.notes[0]!.text, "uses pnpm");
+  assert.equal(apply(s, { e: "host_notice", topic: "other", data: { x: 1 } }), s);
+});

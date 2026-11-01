@@ -1,6 +1,6 @@
 import type { LayoutNode, PaneContent, Tab, WorkspaceLayout } from "@neuralagent/protocol";
 import { Button, ConfirmSheet, Menu, StatusDot, cn, toast, useLayoutMode, type MenuEntry } from "@neuralagent/ui";
-import { Download, GitBranch, LayoutGrid, Plus, X } from "lucide-react";
+import { Download, FolderOpen, GitBranch, LayoutGrid, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeTab, gridOf, newTab, order, panes, removePane, setContent, setSizes, splitPane, swapPanes, updateTab } from "../lib/layout";
 import { STATUS, mostUrgent } from "../lib/status";
@@ -9,6 +9,7 @@ import { useCatalogSheet, useChanges, useClient, useDaemon, useUi } from "../lib
 import { useWorktreeStart } from "../lib/worktree";
 import { AgentGlyph } from "./AgentGlyph";
 import type { PaneActions } from "./Pane";
+import { useFilesSupported } from "./files/support";
 import { PaneTree, type TreeCtx } from "./PaneTree";
 import { isAppShortcut } from "./TerminalView";
 import { ClaudeViewSwitch } from "./workspace/ClaudeViewSwitch";
@@ -193,6 +194,22 @@ function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab 
   const showChanges = useChanges((c) => c.show);
   const { worktrees, setWorktrees } = useUi();
   const worktree = useWorktreeStart(workspaceId);
+  const filesOk = useFilesSupported();
+  const wsPath = useDaemon((c) => c.state?.workspaces.find((w) => w.id === workspaceId)?.path);
+  // Files (D67): the tab's Files pane, or a new one: in an empty focused pane, else split to its right.
+  const openFiles = () =>
+    wsPath &&
+    editTab((t) => {
+      const all = panes(t.root);
+      const have = all.find((p) => p.content.kind === "files");
+      if (have) return { ...t, focused: have.id, zoomed: undefined };
+      const at = all.find((p) => p.id === t.focused) ?? all[0];
+      if (!at) return t;
+      const content: PaneContent = { kind: "files", path: wsPath };
+      if (at.content.kind === "empty") return { ...setContent(t, at.id, content), focused: at.id, zoomed: undefined };
+      const next = splitPane(t, at.id, "row", content);
+      return { ...next, zoomed: undefined, focused: panes(next.root).find((p) => p.content.kind === "files")?.id ?? next.focused };
+    });
 
   const arrange = (n: number) => {
     const byId = new Map(panes(tab.root).map((p) => [p.id, p.content]));
@@ -280,6 +297,11 @@ function DesktopBar({ workspaceId, layout, tab, save, addTab, closeTab, editTab 
           ) : (
             <span className="pr-1.5" />
           )}
+        </button>
+      )}
+      {filesOk && (
+        <button type="button" aria-label="Files" title="Files of this project" onClick={openFiles} className="hoverable grid size-8 shrink-0 place-items-center rounded-full text-dim hover:text-ink">
+          <FolderOpen size={16} strokeWidth={1.7} />
         </button>
       )}
       <Menu

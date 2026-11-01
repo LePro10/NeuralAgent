@@ -9,4 +9,8 @@ ok?: boolean,
 /**
  * Agent this is about (open it from the chat).
  */
-session_id?: string, };
+session_id?: string, 
+/**
+ * Neural said this on its own (a report, not an answer).
+ */
+proactive?: boolean, };

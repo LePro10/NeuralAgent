@@ -4,6 +4,7 @@ import { Bot, Globe, KeyRound, LogOut, Monitor, QrCode, ShieldCheck, Smartphone 
 import { useEffect, useState, type ReactNode } from "react";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
 import { ago } from "../lib/time";
+import { FilesHomeAccess } from "./files/HomeAccess";
 
 /**
  * Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone".
@@ -151,6 +152,7 @@ function Account({ remote }: { remote: RemoteState }) {
 
       {approved && <AddPhone disabled={remote.status !== "online"} />}
       {approved && remote.devices.length > 0 && <Devices devices={remote.devices} />}
+      {approved && <FilesHomeAccess />}
       {approved && <Activity />}
 
       <List label="Security" footer="Compare this code with the one shown when a phone connects for the first time.">

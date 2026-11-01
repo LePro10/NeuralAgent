@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use base64::Engine;
@@ -56,11 +57,35 @@ impl ClaudeView {
     pub fn has_tail(&self, sid: &Id) -> bool {
         self.tails.lock().contains_key(sid)
     }
+
+    /// Running subagents per Claude Code session, as hooks and attaches last saw them (Discord card).
+    pub fn subagents_running(&self) -> HashMap<Id, u32> {
+        let tails: Vec<(Id, Arc<Tail>)> = self.tails.lock().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        tails
+            .into_iter()
+            .map(|(sid, t)| {
+                // This runs on the async tick: never wait while the Claude view thread reads a
+                // transcript or scans subagent files under this lock; the last count stands in.
+                let n = match t.st.try_lock() {
+                    Some(st) => {
+                        let n = st.tasks.agents_running();
+                        t.agents.store(n, Ordering::Relaxed);
+                        n
+                    }
+                    None => t.agents.load(Ordering::Relaxed),
+                };
+                (sid, n)
+            })
+            .filter(|(_, n)| *n > 0)
+            .collect()
+    }
 }
 
 struct Tail {
     tx: broadcast::Sender<CvEvent>,
     st: Mutex<TailState>,
+    /// Running subagents when `subagents_running` last got the lock.
+    agents: AtomicU32,
 }
 
 #[derive(Default)]
@@ -1199,7 +1224,7 @@ impl Core {
             .entry(sid.clone())
             .or_insert_with(|| {
                 let st = TailState { meta: CvMeta { actions: Some(true), ..Default::default() }, ..Default::default() };
-                Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st) })
+                Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st), agents: AtomicU32::new(0) })
             })
             .clone()
     }
@@ -1252,7 +1277,10 @@ impl Core {
             None => Ok(main),
             Some(a) => {
                 let p = cv_tasks::subagent_path(&main, a).ok_or_else(|| err(ErrorCode::BadRequest, "not an agent id"))?;
-                if p.exists() { Ok(p) } else { Err(err(ErrorCode::NotFound, "this agent has no transcript")) }
+                // A subagent that was just launched may not have written its transcript yet: the
+                // stream starts empty and fills in once the file appears.
+                let known = || p.with_extension("meta.json").exists() || self.cv_tail(sid).st.lock().tasks.get(a).is_some();
+                if p.exists() || known() { Ok(p) } else { Err(err(ErrorCode::NotFound, "this agent has no transcript")) }
             }
         }
     }
@@ -1451,7 +1479,7 @@ impl Core {
                 .entry((sid.clone(), a.to_string()))
                 .or_insert_with(|| {
                     let st = TailState { path: Some(path), sidechain: true, ..Default::default() };
-                    Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st) })
+                    Arc::new(Tail { tx: broadcast::channel(512).0, st: Mutex::new(st), agents: AtomicU32::new(0) })
                 })
                 .clone();
             let mut st = tail.st.lock();
@@ -1520,6 +1548,18 @@ impl Core {
         self.cv.tails.lock().get(sid).and_then(|t| t.st.lock().prompt.clone())
     }
 
+    /// A task of the loaded conversation (for actions on it).
+    pub(crate) fn cv_task(&self, sid: &Id, id: &str) -> Option<CvTask> {
+        let tail = self.cv.tails.lock().get(sid).cloned()?;
+        tail.st.lock().tasks.get(id).cloned()
+    }
+
+    /// The running tasks of the loaded conversation.
+    pub(crate) fn cv_running_tasks(&self, sid: &Id) -> Vec<CvTask> {
+        let Some(tail) = self.cv.tails.lock().get(sid).cloned() else { return vec![] };
+        tail.st.lock().tasks.list().into_iter().filter(|t| t.status == "running").collect()
+    }
+
     /// The text of a user prompt in the loaded conversation.
     pub(crate) fn cv_user_text(&self, sid: &Id, message_id: &str) -> Option<String> {
         let tail = self.cv.tails.lock().get(sid).cloned()?;
@@ -1570,7 +1610,8 @@ impl Core {
 
     /// A file the conversation named, if it is one the phone may read (see `ReadRoots`).
     fn cv_confined(&self, sid: &Id, path: &str) -> Result<PathBuf, ApiError> {
-        let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone()));
+        // A project folder macOS guards stays out until it may be read (permissions::Gate).
+        let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())).filter(|c| self.folder_ok(Path::new(c)));
         confined(Path::new(path), &read_roots(cwd.as_deref()))
             .ok_or_else(|| err(ErrorCode::Forbidden, "this file is outside the conversation's folders"))
     }
@@ -1578,7 +1619,7 @@ impl Core {
     pub fn cv_commands(&self, sid: &Id) -> Vec<CvCommand> {
         let mut out = cv_commands::builtin();
         let cwd = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())).unwrap_or_default();
-        if !cwd.is_empty() {
+        if !cwd.is_empty() && self.folder_ok(Path::new(&cwd)) {
             cv_commands::collect_commands(&Path::new(&cwd).join(".claude/commands"), "", "project", &mut out, 0);
             cv_commands::collect_skills(&Path::new(&cwd).join(".claude/skills"), "", "skill", &mut out);
         }
@@ -1612,7 +1653,9 @@ impl Core {
     }
 
     pub fn cv_files(&self, sid: &Id, query: &str) -> Vec<String> {
-        let Some(cwd) = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())) else { return vec![] };
+        let Some(cwd) = self.read(|s| s.sessions.get(sid).map(|x| x.cwd.clone())).filter(|c| self.folder_ok(Path::new(c))) else {
+            return vec![];
+        };
         let files = list_files(Path::new(&cwd));
         match_files(&files, query, 40)
     }
@@ -1654,15 +1697,8 @@ impl Core {
                         ));
                     }
                     let threads = std::thread::available_parallelism().map(|n| n.get().clamp(2, 4) as i32).unwrap_or(2);
-                    let s = Arc::new(
-                        na_voice::stt::Stt::load(na_voice::stt::SttModel {
-                            kind: na_voice::stt::SttKind::Parakeet,
-                            dir,
-                            language: None,
-                            threads,
-                        })
-                        .map_err(|e| err(ErrorCode::Internal, format!("{e:#}")))?,
-                    );
+                    // The call's instance when one is loaded (one Parakeet per daemon, D74).
+                    let s = crate::speech::parakeet(dir, threads).map_err(|e| err(ErrorCode::Internal, format!("{e:#}")))?;
                     *g = Some((s.clone(), Instant::now()));
                     s
                 }

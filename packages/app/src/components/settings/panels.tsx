@@ -1,7 +1,7 @@
-// The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The
+// The content of each Settings page (Appearance, Neural, Calls, Advanced, Notifications, About). The
 // shell in SettingsPage.tsx shows them as pushed pages on phones and as the right column on
 // desktop. Choices are iOS check lists, not small segmented controls.
-import type { CallPreviewAudio, CallSettings, DiscordPresence, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
+import type { CallPreviewAudio, CallSettings, KeepAwake, LlmCheck, LlmProvider, LlmSettings, Settings } from "@neuralagent/protocol";
 import { Button, Field, Input, List, Pill, Row, Segmented, Switch, cn, haptic, toast } from "@neuralagent/ui";
 import { Check, ExternalLink, Globe, Play, ScrollText, Shield } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -449,7 +449,7 @@ export function NeuralPanel({ hostName }: { hostName: string | null }) {
   );
 }
 
-/* ── Advanced, Discord ──────────────────────────────────────────────────── */
+/* ── Advanced ───────────────────────────────────────────────────────────── */
 
 const KEEP: { value: KeepAwake; label: string; detail: string }[] = [
   { value: "off", label: "Off", detail: "The computer sleeps as usual" },
@@ -555,25 +555,6 @@ export function NotificationsPanel() {
   );
 }
 
-const PRESENCE: { value: DiscordPresence; label: string; detail: string }[] = [
-  { value: "off", label: "Off", detail: "Nothing is shown" },
-  { value: "general", label: "General", detail: "Shows that you use NeuralAgent" },
-  { value: "detailed", label: "Detailed", detail: "Adds the workspace and how many agents run" },
-];
-
-export function DiscordPanel() {
-  const { settings, set } = useSettings();
-  if (!settings) return null;
-  return (
-    <List label="Rich presence" footer="Shown on your Discord profile while the Discord app runs on this computer.">
-      {PRESENCE.map((p) => (
-        <Choice key={p.value} title={p.label} detail={p.detail} checked={settings.discord_presence === p.value} onSelect={() => set({ discord_presence: p.value })} />
-      ))}
-    </List>
-  );
-}
-
-export const presenceLabel = (v: DiscordPresence | undefined) => PRESENCE.find((p) => p.value === v)?.label;
 export const keepAwakeLabel = (v: KeepAwake | undefined) => (v === "off" ? "Off" : v ? "On" : undefined);
 
 /* ── About ──────────────────────────────────────────────────────────────── */

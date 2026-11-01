@@ -116,6 +116,15 @@ every build was a new app and lost them, with the fixed certificate they survive
   login keychain (service "NeuralAgent code signing p12 password"). Valid until 2046. Losing
   or replacing it makes every user grant the permissions once more.
 - Switching identity (ad hoc → this one, or later to a Developer ID) costs one re-grant.
+- Checked 2026-10-31 (`scripts/macos-permissions.sh check`): the bundle, `MacOS/neuralagent` and
+  `MacOS/neuralagentd` all carry `certificate root = H"ce48dba0…"`; the app's requirement is
+  `identifier "dev.neuralhub.neuralagent" and certificate root = …`. Updates swap the whole
+  bundle; that keeps grants because TCC matches the requirement, not the file.
+- The service binary's identity does not matter for permissions any more: since D59 the service
+  and its agents run under the `neuralagent --service` host, which macOS counts as the app. Before
+  that, the service ran as its own responsible process from `<data>/bin/neuralagentd-<version>`
+  and every update was a new app to TCC (details: `docs/notes/system-integration.md`).
+- Do not change the bundle identifier or the certificate: either resets every user's grants.
 
 ## Testing updates locally
 - UI without a release: `apps/desktop/src/dev-browser.tsx` fakes updates through hash params,

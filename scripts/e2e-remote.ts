@@ -255,6 +255,11 @@ await phone.req("remote_pair").then(
   () => ok(false, "phone may not pair"),
   (e) => ok(e.code === "needs_approval", "phone is not treated as the desktop"),
 );
+// A request this daemon does not know (a newer client) gets an error answer instead of silence.
+await phone.req("e2e_from_the_future", {}).then(
+  () => ok(false, "unknown request answered ok"),
+  (e) => ok(e.code === "bad_request" && /update NeuralAgent/.test(e.message), "unknown remote request gets an error, not silence"),
+);
 await phone.req("session_start", { workspace_id: ws2.id, profile_id: "shell", cols: 80, rows: 24 }).then(
   () => ok(false, "start outside approved workspace"),
   (e) => ok(e.code === "needs_approval", "no agent outside an approved workspace"),

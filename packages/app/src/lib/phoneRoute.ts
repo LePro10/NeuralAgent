@@ -21,7 +21,10 @@ export type Route =
   | { k: "swarm"; id: string }
   | { k: "history"; project?: string }
   | { k: "usage" }
-  | { k: "section"; id: string; detail?: string };
+  | { k: "section"; id: string; detail?: string }
+  /** Files (D68): a folder of a project (`path` absent: the project folder) and one file. */
+  | { k: "files"; ws: string; path?: string }
+  | { k: "file"; ws: string; path: string };
 
 /** Where you are: a tab and the pages pushed in it (empty = the tab's root). */
 export interface Nav {
@@ -51,6 +54,10 @@ export function routeKey(r: Route): string {
       return r.project ? `history:${r.project}` : "history";
     case "section":
       return r.detail ? `section:${r.id}:${r.detail}` : `section:${r.id}`;
+    case "files":
+      return r.path ? `files:${r.ws}:${r.path}` : `files:${r.ws}`;
+    case "file":
+      return `file:${r.ws}:${r.path}`;
     default:
       return r.k;
   }
@@ -78,6 +85,10 @@ export function hashOf(n: Nav): string {
       return "#/usage";
     case "section":
       return `#/settings/${enc(r.id)}${r.detail ? `/${enc(r.detail)}` : ""}`;
+    case "files":
+      return `#/files/${enc(r.ws)}${r.path ? `/${enc(r.path)}` : ""}`;
+    case "file":
+      return `#/file/${enc(r.ws)}/${enc(r.path)}`;
   }
 }
 
@@ -101,7 +112,20 @@ export function parseHash(hash: string): Nav | null {
     case "usage":
       return { tab: "settings", stack: [{ k: "usage" }] };
     case "settings":
-      return b ? { tab: "settings", stack: [{ k: "section", id: b, ...(c ? { detail: c } : {}) }] } : { tab: "settings", stack: [] };
+      // A detail (a profile, an MCP server) sits above its section: back returns to that list.
+      if (!b) return { tab: "settings", stack: [] };
+      return { tab: "settings", stack: c ? [{ k: "section", id: b }, { k: "section", id: b, detail: c }] : [{ k: "section", id: b }] };
+    case "files": {
+      // ws `home` is the home folder, opened from the Projects list, not a project.
+      const up: Route[] = b === "home" ? [] : [{ k: "project", id: b }];
+      return b ? { tab: "projects", stack: [...up, { k: "files", ws: b, ...(c ? { path: c } : {}) }] } : null;
+    }
+    case "file": {
+      if (!b || !c) return null;
+      const dir = c.replace(/\/[^/]*$/, "") || "/";
+      const up: Route[] = b === "home" ? [] : [{ k: "project", id: b }];
+      return { tab: "projects", stack: [...up, { k: "files", ws: b, path: dir }, { k: "file", ws: b, path: c }] };
+    }
   }
   return null;
 }
@@ -114,13 +138,15 @@ export function entriesOf(n: Nav): Nav[] {
   return out;
 }
 
-const KINDS = new Set(["agent", "project", "swarms", "swarm", "history", "usage", "section"]);
+const KINDS = new Set(["agent", "project", "swarms", "swarm", "history", "usage", "section", "files", "file"]);
 function validRoute(r: unknown): r is Route {
   if (!r || typeof r !== "object") return false;
   const x = r as Record<string, unknown>;
   if (!KINDS.has(x.k as string)) return false;
   if (x.k === "agent") return typeof x.sid === "string";
   if (x.k === "project" || x.k === "swarm" || x.k === "section") return typeof x.id === "string";
+  if (x.k === "files") return typeof x.ws === "string" && (x.path === undefined || typeof x.path === "string");
+  if (x.k === "file") return typeof x.ws === "string" && typeof x.path === "string";
   return true;
 }
 /** A route read back from history or storage (anything else is ignored). */
@@ -140,10 +166,21 @@ export interface PhoneNavState {
   stacks: Record<Tab, Route[]>;
   /** Grows when the shown tab is tapped again (pages scroll to the top). */
   retap: number;
+  /**
+   * A subagent a link asked for (`#/agent/<sid>/sub/<agent>`). Subagents are layers of their
+   * agent's screen, not pages: that screen opens it once the history is in place, then clears it.
+   */
+  sub: { sid: string; agent: string } | null;
 }
 
 const EMPTY: Record<Tab, Route[]> = { agents: [], neural: [], projects: [], settings: [] };
-export const usePhoneNav = create<PhoneNavState>()(() => ({ tab: HOME, stack: [], stacks: { ...EMPTY }, retap: 0 }));
+export const usePhoneNav = create<PhoneNavState>()(() => ({ tab: HOME, stack: [], stacks: { ...EMPTY }, retap: 0, sub: null }));
+
+/** `#/agent/<sid>/sub/<agent>` → the subagent it names (the page itself is `parseHash`'s). */
+export function subOfHash(hash: string): { sid: string; agent: string } | null {
+  const [a, sid, s, agent] = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(dec);
+  return a === "agent" && sid && s === "sub" && agent && /^[A-Za-z0-9_-]{1,80}$/.test(agent) ? { sid, agent } : null;
+}
 
 // ───────────── the history mirror ─────────────
 
@@ -180,6 +217,8 @@ export class PhoneRouter {
   /** A move asked for while a traversal is still in flight; made once it has landed. */
   private queued: Nav | null = null;
   private deferred: { target: Nav; timer: ReturnType<typeof setTimeout> } | null = null;
+  /** The subagent of a followed link, handed to the screen once the history is rebuilt. */
+  private linkSub: PhoneNavState["sub"] = null;
 
   constructor(win: RouterWindow, openLayers: () => number = () => 0) {
     this.win = win;
@@ -221,11 +260,13 @@ export class PhoneRouter {
     }
     const restored = this.restoreStacks();
     const target = early ?? parseHash(this.win.location.hash) ?? restored ?? { tab: HOME, stack: [] };
+    const sub = early ? null : subOfHash(this.win.location.hash);
     this.set(target);
     const all = entriesOf(target);
     this.win.history.replaceState(this.entry(all[0]!, 0), "", hashOf(all[0]!));
     this.idx = 0;
     this.pushAll(all.slice(1));
+    if (sub) usePhoneNav.setState({ sub });
   }
 
   stop() {
@@ -368,15 +409,19 @@ export class PhoneRouter {
         this.pending = null;
         this.idx = p.at;
         this.pushAll(p.rest);
+        if (this.linkSub) usePhoneNav.setState({ sub: this.linkSub });
+        this.linkSub = null;
         this.runQueued();
         return;
       }
       this.pending = null;
       this.queued = null;
+      this.linkSub = null;
     }
     if (!nav || typeof st?.navIdx !== "number") {
       // Someone typed or followed a link (`#/agent/…`): rebuild the history for it.
       const target = parseHash(this.win.location.hash) ?? { tab: HOME, stack: [] };
+      this.linkSub = subOfHash(this.win.location.hash);
       const steps = this.idx + 1;
       this.set(target);
       const want = entriesOf(target);

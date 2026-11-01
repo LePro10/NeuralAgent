@@ -20,19 +20,50 @@ import androidx.core.app.NotificationCompat;
 public class CallService extends Service {
     private static final String CHANNEL = "call";
     private static final int ID = 7;
+    /** In the foreground: ending it ends the call audio too. */
+    private boolean running;
+    /**
+     * Started with startForegroundService but onStartCommand has not run yet. Stopping the service
+     * in that window (hang up a few ms after the microphone opened) would crash the app: Android
+     * demands startForeground first. So a stop then only marks `stopWanted`, and onStartCommand
+     * goes to the foreground and straight out again.
+     */
+    private static boolean starting;
+    private static boolean stopWanted;
 
-    static void start(Context c) {
+    static synchronized void start(Context c) {
         Intent i = new Intent(c, CallService.class);
-        if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i);
-        else c.startService(i);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                c.startForegroundService(i);
+                starting = true;
+            } else c.startService(i);
+            stopWanted = false;
+        } catch (RuntimeException e) {
+            // Android 12+: not allowed from the background. The call still runs while the app shows.
+            android.util.Log.w("NeuralAgent", "call service not started: " + e);
+        }
     }
 
-    static void stop(Context c) {
+    static synchronized void stop(Context c) {
+        if (starting) {
+            stopWanted = true;
+            return;
+        }
         c.stopService(new Intent(c, CallService.class));
+    }
+
+    /** onStartCommand ran: whether the call ended meanwhile. */
+    private static synchronized boolean started() {
+        starting = false;
+        boolean stop = stopWanted;
+        stopWanted = false;
+        return stop;
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        boolean endedMeanwhile = started();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
             NotificationChannel ch = new NotificationChannel(CHANNEL, "Calls", NotificationManager.IMPORTANCE_LOW);
@@ -51,15 +82,39 @@ public class CallService extends Service {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .addAction(0, "Hang up", hangUp)
                 .build();
-        if (Build.VERSION.SDK_INT >= 30) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-        else startForeground(ID, n);
+        try {
+            if (Build.VERSION.SDK_INT >= 30) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            else startForeground(ID, n);
+        } catch (RuntimeException e) {
+            // Android 14: a microphone service needs the permission and the app in front. Without
+            // it the call keeps going while the app shows; never crash the app over it.
+            android.util.Log.w("NeuralAgent", "call service refused: " + e);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (endedMeanwhile) {
+            // Hung up before the service was up: foreground was required once, now leave again.
+            if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        running = true;
         CallAudio.start(this, CallAudio.saved(this));
         return START_NOT_STICKY;
     }
 
+    /** Swiped away from recents: the page that ran the call is gone with its task. */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        CallAudio.stop(this);
+        stopSelf();
+        super.onTaskRemoved(rootIntent);
+    }
+
     @Override
     public void onDestroy() {
-        CallAudio.stop(this);
+        if (running) CallAudio.stop(this);
         super.onDestroy();
     }
 

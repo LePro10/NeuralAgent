@@ -30,6 +30,7 @@ export function paneTitle(content: PaneContent | undefined, session: Session | u
       return "Preview";
     }
   }
+  if (content?.kind === "files") return "Files";
   return "New agent";
 }
 

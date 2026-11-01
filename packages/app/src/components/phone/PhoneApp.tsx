@@ -9,6 +9,7 @@ import { cachedAgent, rememberAgents, useOpenAgent } from "../../lib/openAgent";
 import { navKey, phoneRouter, usePhoneNav, type Route, type Tab } from "../../lib/phoneRoute";
 import { takeSettingsSection, useSettingsRoute } from "../../lib/settingsRoute";
 import { useClient, useDaemon, usePlatform } from "../../lib/store";
+import { FilePage, FilesFolderPage } from "../files/PhoneFiles";
 import { HistoryPage } from "../HistoryPage";
 import { NeuralPage } from "../NeuralPage";
 import { PhoneSettingsRoot, PhoneSettingsSection } from "../SettingsPage";
@@ -79,6 +80,8 @@ export function PhoneApp({ disconnected, children }: { disconnected: boolean; ch
     if (r.k === "project") return c.state?.workspaces.find((w) => w.id === r.id)?.name ?? "Project";
     if (r.k === "swarm") return c.state?.swarms.find((w) => w.id === r.id)?.goal || "Swarm";
     if (r.k === "agent") return c.state?.sessions[r.sid]?.title ?? titleOf(r);
+    // With a Neural daemon the swarm page is "Teams" (D64).
+    if (r.k === "swarms" && c.status === "open" && c.has("neural")) return "Teams";
     return titleOf(r);
   });
   const back: NavBack | null = stack.length ? { label: under, onBack: () => phoneRouter().back() } : null;
@@ -111,6 +114,10 @@ function titleOf(r: Route): string {
       return "Usage";
     case "section":
       return "Settings";
+    case "files":
+      return r.path ? (r.path.split("/").pop() ?? "Files") : "Files";
+    case "file":
+      return r.path.split("/").pop() ?? "File";
   }
 }
 
@@ -143,6 +150,10 @@ function RoutePage({ route, backLabel }: { route: Route; backLabel: string }) {
       return <UsagePage />;
     case "section":
       return <PhoneSettingsSection id={route.id} detail={route.detail} />;
+    case "files":
+      return <FilesFolderPage ws={route.ws} path={route.path} />;
+    case "file":
+      return <FilePage ws={route.ws} path={route.path} />;
   }
 }
 

@@ -283,6 +283,22 @@ impl Pty {
             .map(|r| r.chars().take(200).collect())
     }
 
+    /// The visible rows as plain text, and where an app that hides the terminal's cursor draws
+    /// its own (the last inverse-video cell): that row and its text before the cursor.
+    pub fn rows_and_cursor(&self) -> (Vec<String>, Option<(usize, String)>) {
+        let t = self.term.lock();
+        let screen = t.parser.screen();
+        let (rows, cols) = screen.size();
+        let text: Vec<String> = screen.rows(0, cols.get()).collect();
+        let cursor = (0..rows.get()).rev().find_map(|r| {
+            (0..cols.get())
+                .rev()
+                .find(|&c| screen.cell(r, c).is_some_and(|x| x.inverse()))
+                .map(|c| (r as usize, screen.contents_between(r, 0, r, c)))
+        });
+        (text, cursor)
+    }
+
     /// The visible screen as plain text (for the orchestrator and tests).
     #[allow(dead_code)]
     pub fn screen_text(&self) -> String {

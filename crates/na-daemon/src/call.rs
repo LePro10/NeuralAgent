@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use base64::Engine as _;
 use na_protocol::{AttentionKind, CallEvent, CallState, ServerMsg};
-use na_voice::stt::{Stt, SttKind, SttModel};
+use na_voice::stt::Stt;
 use na_voice::tts::{Tts, TtsKind, TtsModel};
 use na_voice::vad::Vad;
 use parking_lot::Mutex;
@@ -34,26 +34,44 @@ const END_OF_TURN: f32 = 0.5;
 const FILLER_AFTER: Duration = Duration::from_millis(80);
 /// Talking over Neural for this long interrupts it.
 const BARGE_IN: Duration = Duration::from_millis(300);
-/// Speech models stay loaded this long after the last call.
+/// Speech models stay loaded this long after the last call or warm-up (`call_warm`), then they
+/// are freed (about 1 GB). Warm-ups come only from a likely call (the Neural page is open), so an
+/// idle computer does not hold the models. Keep this lazy and time-bounded (D69).
 const KEEP_LOADED: Duration = Duration::from_secs(300);
+/// Warm-ups without a call in between keep the models at most this long: a phone left on the
+/// Neural page that reconnects or wakes now and then must not hold 1 GB for good. A call, or a
+/// pause in warm-ups of [`WARM_PAUSE`], starts a new stretch.
+const WARM_MAX: Duration = Duration::from_secs(15 * 60);
+const WARM_PAUSE: Duration = Duration::from_secs(10 * 60);
 
 const FILLERS_DE: [&str; 3] = ["Okay.", "Moment.", "Mhm, okay."];
 const FILLERS_EN: [&str; 3] = ["Okay.", "Sure.", "Mhm, okay."];
 
 /// The loaded speech engines, shared by calls.
 pub struct Engines {
-    stt: Stt,
+    /// Shared with Claude-view dictation while both hold it (`speech.rs`, D74).
+    stt: Arc<Stt>,
     tts: Mutex<Tts>,
     vad: std::path::PathBuf,
-    /// Pre-synthesized acknowledgments per language, at [`OUT_RATE`].
-    fillers: Vec<(&'static str, Vec<i16>)>,
+    /// Pre-synthesized acknowledgments per language, at [`OUT_RATE`]. Made in the background
+    /// after the load ([`Engines::make_fillers`]): a call does not wait for them.
+    fillers: Mutex<Vec<(&'static str, Vec<i16>)>>,
 }
 
 #[derive(Default)]
 pub struct Calls {
+    /// The loaded engines and when they were last used.
     engines: Mutex<Option<(Arc<Engines>, Instant)>>,
-    /// The running call (one per computer).
-    pub(crate) active: Mutex<Option<(u64, CancellationToken)>>,
+    /// Held while the models load, so a call and a warm-up share one load. `engines` itself is
+    /// never held during a load (the daemon's tick reads it).
+    loading: Mutex<()>,
+    /// Bumped when the voice changes: a load that started before is not kept.
+    generation: AtomicU64,
+    warming: std::sync::atomic::AtomicBool,
+    /// The current stretch of warm-ups without a call: its first and its latest warm-up.
+    warm_run: Mutex<Option<(Instant, Instant)>>,
+    /// The running call (one per computer) and the connection it talks to.
+    pub(crate) active: Mutex<Option<(u64, CancellationToken, mpsc::Sender<ServerMsg>)>>,
     /// Where the running call takes news about agents, to say between answers.
     news: Mutex<Option<(u64, Sender<Say>)>>,
     next: AtomicU64,
@@ -81,7 +99,9 @@ impl Drop for CallHandle {
 }
 
 impl Engines {
-    fn load(models: &Path, voice: i32, speed: f32) -> Result<Self> {
+    /// Loads recognition and speech at the same time (each takes a second or more). The
+    /// acknowledgments follow in the background ([`Engines::make_fillers`]).
+    fn load(models: &Path) -> Result<Self> {
         let need = |name: &str| {
             let p = models.join(name);
             p.exists().then_some(p).context("Calls need the voice models: download them in Settings → Voice on the computer.")
@@ -91,17 +111,59 @@ impl Engines {
         let vad = need(na_voice::models::VAD)?;
         let threads = std::thread::available_parallelism().map(|n| n.get().clamp(2, 4) as i32).unwrap_or(2);
         let started = Instant::now();
-        let stt = Stt::load(SttModel { kind: SttKind::Parakeet, dir: stt_dir, language: None, threads })?;
-        let tts = Tts::load(TtsModel { kind: TtsKind::Supertonic, dir: tts_dir, threads })?;
-        let mut fillers = vec![];
-        for (lang, list) in [("de", FILLERS_DE), ("en", FILLERS_EN)] {
-            for text in list {
-                fillers.push((lang, synth(&tts, text, lang, voice, speed)?));
-            }
-        }
+        let (stt, tts) = std::thread::scope(|s| {
+            let stt = s.spawn(|| {
+                let t = Instant::now();
+                let r = crate::speech::parakeet(stt_dir, threads);
+                tracing::info!(ms = t.elapsed().as_millis() as u64, "call: recognition loaded");
+                r
+            });
+            let t = Instant::now();
+            let tts = Tts::load(TtsModel { kind: TtsKind::Supertonic, dir: tts_dir, threads });
+            tracing::info!(ms = t.elapsed().as_millis() as u64, "call: speech loaded");
+            (stt.join().map_err(|_| anyhow::anyhow!("loading speech recognition failed")), tts)
+        });
+        let (stt, tts) = (stt??, tts?);
         tracing::info!(ms = started.elapsed().as_millis() as u64, "call: speech models loaded");
-        Ok(Self { stt, tts: Mutex::new(tts), vad, fillers })
+        Ok(Self { stt, tts: Mutex::new(tts), vad, fillers: Mutex::new(vec![]) })
     }
+
+    /// Synthesizes the acknowledgments in a background thread, one at a time (the first of each
+    /// language first), so an answer that is being spoken waits for at most one short phrase.
+    /// Until they are there, a slow answer simply comes without one.
+    fn make_fillers(self: &Arc<Self>, voice: i32, speed: f32) {
+        let e = self.clone();
+        let _ = std::thread::Builder::new().name("call-fillers".into()).spawn(move || {
+            let t = Instant::now();
+            for i in 0..FILLERS_DE.len() {
+                for (lang, list) in [("de", FILLERS_DE), ("en", FILLERS_EN)] {
+                    let pcm = synth(&e.tts.lock(), list[i], lang, voice, speed);
+                    match pcm {
+                        Ok(pcm) => e.fillers.lock().push((lang, pcm)),
+                        Err(err) => tracing::warn!("call: acknowledgment failed: {err:#}"),
+                    }
+                }
+            }
+            tracing::info!(ms = t.elapsed().as_millis() as u64, "call: acknowledgments made");
+        });
+    }
+
+    /// The `n`th acknowledgment in a language, if they are made yet.
+    fn filler(&self, lang: &str, n: usize) -> Option<Vec<i16>> {
+        let f = self.fillers.lock();
+        let options: Vec<&Vec<i16>> = f.iter().filter(|(l, _)| *l == lang).map(|(_, p)| p).collect();
+        options.get(n % options.len().max(1)).map(|p| (*p).clone())
+    }
+}
+
+/// One warm-up in a stretch of warm-ups (`run`: its first and latest): may it load or keep the models?
+fn warm_step(run: &mut Option<(Instant, Instant)>, now: Instant) -> bool {
+    let (first, last) = run.get_or_insert((now, now));
+    if now.duration_since(*last) > WARM_PAUSE {
+        *first = now;
+    }
+    *last = now;
+    now.duration_since(*first) <= WARM_MAX
 }
 
 fn synth(tts: &Tts, text: &str, lang: &str, voice: i32, speed: f32) -> Result<Vec<i16>> {
@@ -153,20 +215,67 @@ fn b64(pcm: &[i16]) -> String {
 }
 
 impl Core {
-    /// The speech engines, loading them on first use.
+    /// The speech engines, loading them on first use (or waiting for a warm-up that loads them).
     fn call_engines(&self) -> Result<Arc<Engines>> {
-        let mut g = self.calls.engines.lock();
-        if let Some((e, used)) = g.as_mut() {
-            *used = Instant::now();
-            return Ok(e.clone());
+        if let Some(e) = self.loaded_engines() {
+            return Ok(e);
         }
+        let _one_load = self.calls.loading.lock();
+        if let Some(e) = self.loaded_engines() {
+            return Ok(e);
+        }
+        let generation = self.calls.generation.load(Ordering::SeqCst);
         let (voice, speed) = self.read(|s| (s.settings.call.voice as i32, s.settings.call.speed));
-        let e = Arc::new(Engines::load(&self.paths.root.join("models"), voice, speed)?);
-        *g = Some((e.clone(), Instant::now()));
+        let e = Arc::new(Engines::load(&self.paths.root.join("models"))?);
+        e.make_fillers(voice, speed);
+        if self.calls.generation.load(Ordering::SeqCst) == generation {
+            *self.calls.engines.lock() = Some((e.clone(), Instant::now()));
+        }
         Ok(e)
     }
 
-    /// Frees the speech models some minutes after the last call (they take about 1 GB).
+    fn loaded_engines(&self) -> Option<Arc<Engines>> {
+        let mut g = self.calls.engines.lock();
+        g.as_mut().map(|(e, used)| {
+            *used = Instant::now();
+            e.clone()
+        })
+    }
+
+    /// A call is likely soon: load the speech models in the background (or keep loaded ones for
+    /// another [`KEEP_LOADED`]). Nothing happens when Neural has no model or the voice models are
+    /// missing: the call itself then says why.
+    pub fn call_warm(self: &Arc<Self>) {
+        if !self.read(|s| s.orchestrator.ready) || !self.warm_allowed() {
+            return;
+        }
+        if self.loaded_engines().is_some() {
+            return;
+        }
+        if self.calls.warming.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let core = self.clone();
+        let spawned = std::thread::Builder::new().name("call-warm".into()).spawn(move || {
+            let started = Instant::now();
+            match core.call_engines() {
+                Ok(_) => tracing::info!(ms = started.elapsed().as_millis() as u64, "call: warmed up"),
+                Err(e) => tracing::debug!("call: no warm-up: {e:#}"),
+            }
+            core.calls.warming.store(false, Ordering::SeqCst);
+        });
+        if spawned.is_err() {
+            self.calls.warming.store(false, Ordering::SeqCst);
+        }
+    }
+
+    /// Bounds warm-ups (see [`WARM_MAX`]): false once warm-ups alone have kept the models for
+    /// that long, until a call or a pause.
+    fn warm_allowed(&self) -> bool {
+        warm_step(&mut self.calls.warm_run.lock(), Instant::now())
+    }
+
+    /// Frees the speech models some minutes after the last call or warm-up (they take about 1 GB).
     pub fn call_tick(&self) {
         let busy = self.calls.active.lock().is_some();
         let mut g = self.calls.engines.lock();
@@ -183,6 +292,7 @@ impl Core {
     /// Forgets the loaded engines (after the voice changed).
     pub fn call_reload(&self) {
         if self.calls.active.lock().is_none() {
+            self.calls.generation.fetch_add(1, Ordering::SeqCst);
             *self.calls.engines.lock() = None;
         }
     }
@@ -209,9 +319,10 @@ impl Core {
         let (audio, rx) = channel::<Vec<f32>>();
         let stop = CancellationToken::new();
         let id = self.calls.next.fetch_add(1, Ordering::Relaxed);
-        if let Some((_, old)) = self.calls.active.lock().replace((id, stop.clone())) {
+        if let Some((_, old, _)) = self.calls.active.lock().replace((id, stop.clone(), out.clone())) {
             old.cancel();
         }
+        *self.calls.warm_run.lock() = None;
         let core = self.clone();
         let rt = tokio::runtime::Handle::current();
         let token = stop.clone();
@@ -227,14 +338,32 @@ impl Core {
                     tracing::warn!("call: {e}");
                 }
                 token.cancel();
-                send(CallEvent::State { state: CallState::Ended, error });
-                let mut a = core.calls.active.lock();
-                if a.as_ref().is_some_and(|(x, _)| *x == id) {
-                    *a = None;
+                // Replaced by a newer call: on this same connection that call's events follow
+                // (an `ended` from this one would end it on the client); elsewhere, say where it went.
+                let newer = {
+                    let mut a = core.calls.active.lock();
+                    match a.as_ref() {
+                        Some((x, ..)) if *x == id => {
+                            *a = None;
+                            None
+                        }
+                        Some((_, _, o)) => Some(o.same_channel(&out)),
+                        None => None,
+                    }
+                };
+                {
+                    let mut n = core.calls.news.lock();
+                    if n.as_ref().is_some_and(|(x, _)| *x == id) {
+                        *n = None;
+                    }
                 }
-                let mut n = core.calls.news.lock();
-                if n.as_ref().is_some_and(|(x, _)| *x == id) {
-                    *n = None;
+                match newer {
+                    Some(true) => {}
+                    Some(false) => send(CallEvent::State {
+                        state: CallState::Ended,
+                        error: error.or_else(|| Some("The call continues on another device.".into())),
+                    }),
+                    None => send(CallEvent::State { state: CallState::Ended, error }),
                 }
             })
             .expect("call thread");
@@ -311,6 +440,8 @@ fn news_text(kind: AttentionKind, workspace: &str, agent: &str, lang: &str) -> S
 /// Shared between the listener and the speaker.
 struct Line {
     out: mpsc::Sender<ServerMsg>,
+    /// Once the call is over nothing more is sent (a newer call may use the same connection).
+    stop: CancellationToken,
     /// Bumped by every new caller sentence and by barge-in: older speech is dropped.
     turn: AtomicU64,
     /// When the audio sent so far finishes playing on the client.
@@ -319,6 +450,9 @@ struct Line {
 
 impl Line {
     fn send(&self, ev: CallEvent) {
+        if self.stop.is_cancelled() {
+            return;
+        }
         let _ = self.out.blocking_send(ServerMsg::Call { ev });
     }
     fn playing(&self) -> bool {
@@ -343,10 +477,14 @@ fn run(
     out: &mpsc::Sender<ServerMsg>,
     id: u64,
 ) -> Result<()> {
-    let line = Arc::new(Line { out: out.clone(), turn: AtomicU64::new(0), playing_until: Mutex::new(Instant::now()) });
+    let line = Arc::new(Line { out: out.clone(), stop: stop.clone(), turn: AtomicU64::new(0), playing_until: Mutex::new(Instant::now()) });
     line.send(CallEvent::State { state: CallState::Connecting, error: None });
     anyhow::ensure!(core.read(|s| s.orchestrator.ready), "Neural has no model yet: add a key in Settings → Neural on the computer");
     let engines = core.call_engines()?;
+    // Hung up (or replaced) while the models loaded.
+    if stop.is_cancelled() {
+        return Ok(());
+    }
     let mut vad = Vad::load(&engines.vad, END_OF_TURN)?;
     // Recent microphone audio: the detector notices speech a little late, so each sentence is
     // cut from here with some lead-in.
@@ -528,15 +666,13 @@ fn speak(line: &Line, engines: &Engines, said: Receiver<Say>, stop: &Cancellatio
             && c.turn == line.turn.load(Ordering::SeqCst)
             && c.first.is_none()
             && c.understood.elapsed() >= FILLER_AFTER
+            && let Some(pcm) = engines.filler(c.lang, filler_n)
         {
-            let options: Vec<&Vec<i16>> = engines.fillers.iter().filter(|(l, _)| *l == c.lang).map(|(_, p)| p).collect();
-            if let Some(pcm) = options.get(filler_n % options.len().max(1)) {
-                filler_n += 1;
-                line.send(CallEvent::State { state: CallState::Speaking, error: None });
-                line.play(pcm);
-                let first_ms = c.ended.elapsed().as_millis() as u64;
-                c.first = Some((first_ms, true));
-            }
+            filler_n += 1;
+            line.send(CallEvent::State { state: CallState::Speaking, error: None });
+            line.play(&pcm);
+            let first_ms = c.ended.elapsed().as_millis() as u64;
+            c.first = Some((first_ms, true));
         }
     }
 }
@@ -567,6 +703,19 @@ mod tests {
         assert_eq!(cut.len(), 1_000 + Recent::LEAD_IN);
         assert_eq!(cut[0], (8_000 - Recent::LEAD_IN) as f32);
         assert!(r.cut(15_500, 1_000).is_none(), "not heard yet");
+    }
+
+    #[test]
+    fn warm_ups_alone_hold_the_models_only_so_long() {
+        let t0 = Instant::now();
+        let mut run = None;
+        let at = |min: u64| t0 + Duration::from_secs(min * 60);
+        // A phone on the Neural page that wakes every 3 minutes: warm for 15 minutes, then not.
+        assert!((0..=5).all(|i| warm_step(&mut run, at(i * 3))));
+        assert!(!warm_step(&mut run, at(18)));
+        assert!(!warm_step(&mut run, at(21)), "still the same stretch");
+        // A pause in warm-ups starts a new stretch (as does a call: `warm_run = None`).
+        assert!(warm_step(&mut run, at(32)));
     }
 
     #[test]

@@ -36,6 +36,9 @@ export type Connect = () => Promise<Transport>;
 
 export type ConnStatus = "connecting" | "open" | "offline";
 
+/** Outgoing bytes above which call microphone frames are dropped (about a second of audio). */
+const CALL_BACKLOG = 64 * 1024;
+
 /** Heartbeat: a ping this often while open (and nothing else arrived meanwhile)… */
 export const PING_EVERY = 10_000;
 /** …and a connection that stays silent this long after a ping is dead. */
@@ -104,6 +107,8 @@ export class DaemonClient {
   private helloListeners = new Set<(daemonVersion: string) => void>();
   /** Version of the daemon we are talking to. */
   daemonVersion = "";
+  /** What the daemon understands beyond the base protocol (`HelloOk.features`; empty for old daemons). */
+  features: readonly string[] = [];
   /** A call is on: started again after a reconnect (the conversation lives in the daemon). */
   private calling = false;
   private terms = new Map<string, Attached>();
@@ -162,13 +167,28 @@ export class DaemonClient {
     this.t?.send(JSON.stringify({ t: "host_ui_register", on: !!handler }));
   }
 
+  /** The daemon understands `feature` (see `na_protocol::DAEMON_FEATURES`). Ask before sending
+   * newer messages: over the relay an older daemon drops the connection on one it cannot read. */
+  has(feature: string) {
+    return this.features.includes(feature);
+  }
+
   // ── calls with Neural: microphone audio in, speech out (PCM16 base64) ──
+  /** Sent once the connection is live (again after every reconnect). */
   callStart() {
     this.calling = true;
-    this.t?.send(JSON.stringify({ t: "call_start" }));
+    if (this.live) this.t?.send(JSON.stringify({ t: "call_start" }));
   }
+  /** A call is likely soon: the daemon loads its speech models now. No-op on older daemons. */
+  callWarm() {
+    if (this.live && this.has("call_warm")) this.t?.send(JSON.stringify({ t: "call_warm" }));
+  }
+  /** One microphone frame. Dropped while the uplink is backed up: a late frame is worth less in a
+   * call than a lost one (the caller's words would arrive seconds late). */
   callAudio(d: string) {
-    if (this.calling) this.t?.send(JSON.stringify({ t: "call_audio", d }));
+    if (!this.calling || !this.live || !this.t) return;
+    if ((this.t.sending?.() ?? 0) > CALL_BACKLOG) return;
+    this.t.send(JSON.stringify({ t: "call_audio", d }));
   }
   callEnd() {
     this.calling = false;
@@ -340,6 +360,7 @@ export class DaemonClient {
         this.liveAt = Date.now();
         this.host = m.host;
         this.daemonVersion = m.daemon_version;
+        this.features = m.features ?? [];
         if (this.hostUi) t.send(JSON.stringify({ t: "host_ui_register", on: true }));
         for (const l of this.helloListeners) l(m.daemon_version);
         // Resume where we were; the daemon answers with replayed events or a snapshot.

@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./hud": "./src/hud.ts",
     "./styles.css": "./src/styles/app.css"
   },
   "scripts": {

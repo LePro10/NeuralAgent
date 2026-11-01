@@ -5,7 +5,7 @@ import type { CvAnswer } from "./CvAnswer";
  * Something the UI wants the CLI to do. The daemon owns the key sequences (and checks the
  * screen between steps where it can), so every client behaves the same. `cv_action` → `null`.
  */
-export type CvAction = { "k": "interrupt" } | { "k": "set_mode", mode: string, } | { "k": "model", model: string, } | { "k": "effort", level: string, } | { "k": "fast", on: boolean, } | { "k": "background" } | { "k": "stop_agents" } | { "k": "send_queued_now" } | { "k": "answer", n: string, nav?: number, text?: string, 
+export type CvAction = { "k": "interrupt" } | { "k": "set_mode", mode: string, } | { "k": "model", model: string, } | { "k": "effort", level: string, } | { "k": "fast", on: boolean, } | { "k": "background" } | { "k": "stop_agents" } | { "k": "stop_task", id: string, } | { "k": "send_queued_now" } | { "k": "answer", n: string, nav?: number, text?: string, 
 /**
  * `CvPrompt.id` of the prompt this answers: refused when the terminal shows another one.
  */

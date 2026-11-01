@@ -1,7 +1,7 @@
-import type { Event, State } from "./gen/index.ts";
+import type { Event, NeuralState, State } from "./gen/index.ts";
 
 /** Messages kept in the conversation with Neural (`KEEP` in crates/na-daemon/src/orch.rs). */
-const ORCH_KEEP = 60;
+const ORCH_KEEP = 100;
 // Same as the daemon (`swarm::KEEP`).
 const SWARM_KEEP = 300;
 
@@ -69,8 +69,11 @@ export function apply(s: State, ev: Event): State {
       }
       return { ...s, swarm_messages: msgs };
     }
-    case "attention":
     case "host_notice":
+      // Neural's own state (tasks, memory, observations) travels as a host notice (D64).
+      if (ev.topic === "neural" && ev.data && typeof ev.data === "object") return { ...s, neural: ev.data as NeuralState };
+      return s;
+    case "attention":
       return s;
   }
 }

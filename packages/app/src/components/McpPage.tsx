@@ -1,9 +1,11 @@
 import type { McpServer } from "@neuralagent/protocol";
-import { Button, ConfirmSheet, Empty, Field, IconButton, Input, List, Row, Segmented, Sheet, Spinner, Switch, toast } from "@neuralagent/ui";
+import { Button, ConfirmSheet, Empty, Field, IconButton, Input, List, Row, Segmented, Spinner, Switch, toast } from "@neuralagent/ui";
 import { Download, Plug, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useSettingsNav } from "./settings/nav";
 import { joinArgs, splitArgs } from "../lib/profiles";
 import { useClient, useDaemon } from "../lib/store";
+import { useTypeFirst } from "../lib/typeFirst";
 
 const NAME = /^[A-Za-z0-9_-]{1,48}$/;
 
@@ -21,9 +23,11 @@ interface Secret {
 export function McpPanel() {
   const client = useClient();
   const servers = useDaemon((c) => c.state?.mcp ?? []);
-  const [editing, setEditing] = useState<McpServer | "new" | null>(null);
+  const nav = useSettingsNav();
   const [importing, setImporting] = useState(false);
-  const [save, setSave] = useState<Submit>(IDLE);
+  // The editor is a detail page of Settings (D71), not a sheet.
+  const setEditing = (s: McpServer | "new") =>
+    nav.push(s === "new" ? "new" : `s-${s.id}`, s === "new" ? "Add server" : s.id, <McpEditorPage key={s === "new" ? "new" : s.id} server={s === "new" ? null : s} onDone={nav.back} />);
 
   const toggle = async (s: McpServer, enabled: boolean) => {
     try {
@@ -96,24 +100,40 @@ export function McpPanel() {
             </>
           )}
         </div>
-      <Sheet
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={editing === "new" ? "Add server" : (editing?.id ?? "")}
-        size="lg"
-        action={
-          <Button size="sm" variant="accent" busy={save.busy} disabled={!save.valid} onClick={save.run} className="rounded-full">
-            Save
-          </Button>
-        }
-      >
-        {editing && <McpEditor key={editing === "new" ? "new" : editing.id} server={editing === "new" ? null : editing} onDone={() => setEditing(null)} expose={setSave} />}
-      </Sheet>
     </>
   );
 }
 
-/** The editor's save state, shown by the sheet's Save button. */
+/** A server's editor page by its key ("new" or "s-<id>"): phone links and reloads rebuild it. */
+export function mcpDetail(servers: McpServer[] | undefined, key: string, back: () => void) {
+  if (key === "new") return { title: "Add server", node: <McpEditorPage key="new" server={null} onDone={back} /> };
+  const s = servers?.find((x) => `s-${x.id}` === key);
+  return s ? { title: s.id, node: <McpEditorPage key={s.id} server={s} onDone={back} /> } : undefined;
+}
+
+/** The editor with Cancel and Save under it, as a Settings detail page. */
+function McpEditorPage({ server, onDone }: { server: McpServer | null; onDone: () => void }) {
+  const [save, setSave] = useState<Submit>(IDLE);
+  return (
+    <McpEditor
+      server={server}
+      onDone={onDone}
+      expose={setSave}
+      actions={
+        <div className="flex gap-2 pt-2">
+          <Button size="lg" variant="quiet" onClick={onDone} className="flex-1">
+            Cancel
+          </Button>
+          <Button size="lg" variant="primary" busy={save.busy} disabled={!save.valid} onClick={save.run} className="flex-1">
+            Save
+          </Button>
+        </div>
+      }
+    />
+  );
+}
+
+/** The editor's save state, shown by the page's Save button. */
 interface Submit {
   run: () => void;
   valid: boolean;
@@ -121,7 +141,7 @@ interface Submit {
 }
 const IDLE: Submit = { run: () => {}, valid: false, busy: false };
 
-function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDone: () => void; expose: (s: Submit) => void }) {
+function McpEditor({ server, onDone, expose, actions }: { server: McpServer | null; onDone: () => void; expose: (s: Submit) => void; actions?: ReactNode }) {
   const client = useClient();
   const all = useDaemon((c) => c.state?.mcp);
   const existing = server !== null;
@@ -164,6 +184,7 @@ function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDon
   run.current = save;
   useEffect(() => expose({ run: () => void run.current(), valid: valid && !busy, busy }), [valid, busy, expose]);
   const [confirm, setConfirm] = useState(false);
+  const typeFirst = useTypeFirst();
 
   const remove = async () => {
     try {
@@ -177,7 +198,7 @@ function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDon
   return (
     <div className="flex flex-col gap-5 pt-1 pb-4">
       <Field label="Name" error={clash ? "A server with this name exists." : id !== "" && !nameOk ? "Letters, digits, - and _ only, up to 48." : undefined}>
-        <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="github" readOnly={existing} autoFocus={!existing} invalid={id !== "" && !nameOk} />
+        <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="github" readOnly={existing} autoFocus={!existing && typeFirst} invalid={id !== "" && !nameOk} />
       </Field>
       <Field label="Type">
         <Segmented
@@ -222,10 +243,11 @@ function McpEditor({ server, onDone, expose }: { server: McpServer | null; onDon
           </div>
         </div>
       </Field>
+      {actions}
       {existing && (
-        <List className="mt-2">
-          <Row Icon={Trash2} danger title="Delete server" onClick={() => setConfirm(true)} chevron={false} />
-        </List>
+        <Button size="lg" variant="danger" Icon={Trash2} onClick={() => setConfirm(true)} className="w-full">
+          Delete server
+        </Button>
       )}
       <ConfirmSheet
         open={confirm}

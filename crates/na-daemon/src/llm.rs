@@ -74,23 +74,30 @@ pub fn needs_key(p: LlmProvider) -> bool {
 pub struct Ask<'a> {
     pub model: &'a str,
     pub key: Option<&'a str>,
+    /// Static instructions (the same every turn: cacheable).
     pub system: &'a str,
+    /// Fresh context for this step (Neural's world state), after the instructions.
+    pub context: &'a str,
     pub msgs: &'a [Msg],
     pub tools: &'a [Tool],
     /// No extended thinking: for calls, where the first word counts.
     pub quick: bool,
 }
 
+/// Waiting for the response headers, and for the next piece of a streamed answer.
+const SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(90);
+const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
 impl Llm {
     /// Runs one model turn; `on_text` gets each piece of text as it streams in.
     pub async fn turn(&self, cfg: &LlmSettings, ask: Ask<'_>, mut on_text: impl FnMut(&str)) -> Result<Turn> {
-        let Ask { model, key, system, msgs, tools, quick } = ask;
+        let Ask { model, key, system, context, msgs, tools, quick } = ask;
         let base = if cfg.base_url.trim().is_empty() { default_url(cfg.provider) } else { cfg.base_url.trim() }.trim_end_matches('/');
         let anthropic = cfg.provider == LlmProvider::Anthropic;
         let (url, body) = if anthropic {
-            (format!("{base}/messages"), anthropic_body(model, system, msgs, tools))
+            (format!("{base}/messages"), anthropic_body(model, system, context, msgs, tools))
         } else {
-            (format!("{base}/chat/completions"), openai_body(model, system, msgs, tools))
+            (format!("{base}/chat/completions"), openai_body(model, system, context, msgs, tools))
         };
         let mut body = body;
         // Claude models may think before answering; in a call that costs seconds.
@@ -102,7 +109,11 @@ impl Llm {
             req = if anthropic { req.header("x-api-key", k).header("anthropic-version", "2023-06-01") } else { req.bearer_auth(k) };
         }
         let started = Instant::now();
-        let res = req.send().await.with_context(|| format!("cannot reach {base}"))?;
+        // A provider that stops answering must not hold Neural's turn forever (wake-ups wait for it).
+        let res = tokio::time::timeout(SEND_TIMEOUT, req.send())
+            .await
+            .map_err(|_| anyhow::anyhow!("{base} did not answer within {} s", SEND_TIMEOUT.as_secs()))?
+            .with_context(|| format!("cannot reach {base}"))?;
         if !res.status().is_success() {
             let status = res.status();
             let text = res.text().await.unwrap_or_default();
@@ -112,7 +123,12 @@ impl Llm {
         let mut parts = Parts::default();
         let mut stream = res.bytes_stream();
         let mut buf = String::new();
-        while let Some(chunk) = stream.next().await {
+        loop {
+            let chunk = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
+                Ok(Some(c)) => c,
+                Ok(None) => break,
+                Err(_) => bail!("the model stopped sending for {} s", IDLE_TIMEOUT.as_secs()),
+            };
             buf.push_str(&String::from_utf8_lossy(&chunk?));
             while let Some(i) = buf.find('\n') {
                 let line = buf[..i].trim().to_string();
@@ -227,7 +243,8 @@ impl Parts {
     }
 }
 
-fn openai_body(model: &str, system: &str, msgs: &[Msg], tools: &[Tool]) -> Value {
+fn openai_body(model: &str, system: &str, context: &str, msgs: &[Msg], tools: &[Tool]) -> Value {
+    let system = if context.is_empty() { system.to_string() } else { format!("{system}\n\n{context}") };
     let mut m = vec![json!({ "role": "system", "content": system })];
     for x in msgs {
         m.push(match x {
@@ -252,7 +269,7 @@ fn openai_body(model: &str, system: &str, msgs: &[Msg], tools: &[Tool]) -> Value
     body
 }
 
-fn anthropic_body(model: &str, system: &str, msgs: &[Msg], tools: &[Tool]) -> Value {
+fn anthropic_body(model: &str, system: &str, context: &str, msgs: &[Msg], tools: &[Tool]) -> Value {
     // Anthropic wants tool results as user turns and consecutive roles merged.
     let mut m: Vec<Value> = vec![];
     let mut push = |role: &str, block: Value| match m.last_mut() {
@@ -273,6 +290,12 @@ fn anthropic_body(model: &str, system: &str, msgs: &[Msg], tools: &[Tool]) -> Va
             Msg::Tool { id, content } => push("user", json!({ "type": "tool_result", "tool_use_id": id, "content": content })),
         }
     }
+    // The instructions stay the same between turns: cache them; the world state changes.
+    let system = if context.is_empty() {
+        json!(system)
+    } else {
+        json!([{ "type": "text", "text": system, "cache_control": { "type": "ephemeral" } }, { "type": "text", "text": context }])
+    };
     let mut body = json!({ "model": model, "stream": true, "max_tokens": 1024, "system": system, "messages": m });
     if !tools.is_empty() {
         body["tools"] = tools.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.params })).collect();
@@ -334,7 +357,7 @@ mod tests {
             Msg::Tool { id: "a".into(), content: "1".into() },
             Msg::Tool { id: "b".into(), content: "2".into() },
         ];
-        let b = anthropic_body("m", "s", &msgs, &[]);
+        let b = anthropic_body("m", "s", "", &msgs, &[]);
         let m = b["messages"].as_array().unwrap();
         assert_eq!(m.len(), 3);
         assert_eq!(m[2]["content"].as_array().unwrap().len(), 2);

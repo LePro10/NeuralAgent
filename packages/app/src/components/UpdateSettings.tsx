@@ -7,7 +7,7 @@ import { usePlatform } from "../lib/store";
 import { applyUpdate, checkNow, openUpdateDialog, useUpdates } from "../lib/updates";
 import { CHANGELOG_URL } from "./ReleaseNotes";
 
-const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 function CheckRow() {
   const u = useUpdates();

@@ -45,3 +45,14 @@ base64 = "0.22"
 [target.'cfg(target_os = "macos")'.dependencies]
 flate2 = "1.1.10"
 libc = "0.2.191"
+
+# Lowering other apps' audio while the user talks (src/duck/win.rs). Same version as cpal/tauri.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Variant",
+] }

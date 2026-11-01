@@ -6,11 +6,12 @@ import { useClient } from "../../lib/store";
 /**
  * The conversation of a Claude session, live from the daemon (reconnects included). With
  * `agent`, one subagent's own transcript instead (`CvTask.id`); an older daemon simply answers
- * with nothing for it.
+ * with nothing for it. `skip`: attach nothing yet (a subagent whose id is not known yet).
  */
-export function useConversation(sid: string, startedAt: number, opts?: { agent?: string }) {
+export function useConversation(sid: string, startedAt: number, opts?: { agent?: string; skip?: boolean }) {
   const client = useClient();
   const agent = opts?.agent;
+  const skip = !!opts?.skip;
   const [conv, setConv] = useState<Conversation>(emptyConversation);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const convRef = useRef(conv);
@@ -18,6 +19,7 @@ export function useConversation(sid: string, startedAt: number, opts?: { agent?:
 
   useEffect(() => {
     setConv(emptyConversation());
+    if (skip) return;
     return client.attachCv(
       sid,
       {
@@ -26,7 +28,7 @@ export function useConversation(sid: string, startedAt: number, opts?: { agent?:
       },
       agent ? { agent } : undefined,
     );
-  }, [client, sid, startedAt, agent]);
+  }, [client, sid, startedAt, agent, skip]);
 
   const loadOlder = useCallback(async () => {
     const c = convRef.current;

@@ -4,15 +4,16 @@
  * Menus that only exist in the terminal UI open the live terminal on top, so every CLI function
  * stays reachable.
  */
-import type { Session } from "@neuralagent/protocol";
+import type { CvTask, Session } from "@neuralagent/protocol";
 import { cn, toast, useKeyboard, useLayoutMode } from "@neuralagent/ui";
 import { Check, SquareTerminal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePhoneNav } from "../../lib/phoneRoute";
 import { useClient } from "../../lib/store";
 import { KeyBar } from "../KeyBar";
 import { TerminalView } from "../TerminalView";
 import { TasksContext } from "./AgentCard";
-import { requestRewind } from "./actions";
+import { requestRewind, serverActions } from "./actions";
 import { ChatScroll, type ChatScrollHandle } from "./ChatScroll";
 import { Composer } from "./Composer";
 import { lastTurn, openTools, pendingUse } from "./entries";
@@ -26,6 +27,8 @@ import { CwdContext } from "./tools";
 import { useEntries } from "./Transcript";
 import { useConversation, useTaskList } from "./useConversation";
 import { usePublishTasks, useTasksOpener } from "./useTasks";
+import { agentIdOf, titleOf, trailOf } from "./work";
+import { WorkStrip } from "./WorkStrip";
 
 /** Sizes the CLI draws at while the view is shown (menus stay readable, nothing wraps oddly). */
 const VIEW_COLS = 110;
@@ -60,6 +63,24 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
   const [trail, setTrail] = useState<AgentRef[]>([]);
   useEffect(() => setTrail([]), [sid]);
   const tasksApi = useMemo(() => ({ tasks: conv.tasks, open: (a: AgentRef) => setTrail((t) => (t.some((x) => x.id === a.id) ? t : [...t, a])) }), [conv.tasks]);
+  // From the strip or the sheet: a nested subagent opens with its parents under it, so Back walks up.
+  const openTask = useCallback(
+    (task: CvTask) => {
+      const ref = (t: CvTask): AgentRef => ({ id: agentIdOf(t) ?? t.id, title: titleOf(t), toolUseId: t.tool_use_id ?? undefined });
+      const chain = trailOf(conv.tasks, task.id).filter((t) => t.kind === "agent");
+      setTrail((chain.length ? chain : [task]).map(ref));
+    },
+    [conv.tasks],
+  );
+  // A phone link to one subagent (`#/agent/<sid>/sub/<agent>`) opens it once the transcript is in.
+  const linkSub = usePhoneNav((s) => (s.sub?.sid === sid ? s.sub.agent : null));
+  useEffect(() => {
+    if (!linkSub || !conv.ready) return;
+    usePhoneNav.setState({ sub: null });
+    const task = conv.tasks.find((t) => t.kind === "agent" && (agentIdOf(t) === linkSub || t.id === linkSub));
+    if (task) openTask(task);
+    else setTrail([{ id: linkSub, title: "Subagent" }]);
+  }, [linkSub, conv.ready, conv.tasks, openTask]);
 
   // The CLI draws at a size that reads well while this view is the one in use.
   useEffect(() => {
@@ -116,6 +137,9 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
 
         {/* Composer region (I4): the composer sits in normal flow under the transcript. */}
         <div className={cn("relative mx-auto w-full max-w-3xl shrink-0 px-3 [[data-mode=desktop]_&]:px-5", centred && "flex-1")} style={{ paddingBottom: phone ? (keyboard.open ? 8 : "max(10px, var(--safe-bottom))") : 16 }}>
+          {!(phone && conv.prompt && session.alive) && (
+            <WorkStrip sid={sid} tasks={tasks.list} actions={serverActions(conv.meta)} alive={session.alive} onAgent={openTask} onAll={() => setTasksOpen(true)} />
+          )}
           {conv.prompt && session.alive && <PromptCard sid={sid} prompt={conv.prompt} pending={open} cwd={session.cwd} phone={phone} meta={conv.meta} onTerminal={() => setTerminal("menu")} />}
           <Composer
             sid={sid}
@@ -143,7 +167,7 @@ export function ClaudeView({ session, webgl, onFocus }: { session: Session; webg
             onCopied={onCopied}
           />
         )}
-        <TasksSheet sid={sid} open={tasksOpen} tasks={tasks.list} onClose={() => setTasksOpen(false)} onAgent={tasksApi.open} />
+        <TasksSheet sid={sid} open={tasksOpen} tasks={tasks.list} actions={serverActions(conv.meta)} alive={session.alive} onClose={() => setTasksOpen(false)} onAgent={openTask} />
 
         {terminal && (
           <div className="absolute inset-0 z-40 flex flex-col bg-cv-bg animate-cv-rise" style={{ paddingTop: "var(--island-space, 0px)" }}>

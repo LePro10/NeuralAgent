@@ -1,7 +1,12 @@
+mod autostart;
 mod daemon;
+mod duck;
 mod hud;
 mod mic;
 mod models;
+mod permissions;
+mod service;
+mod system;
 mod tray;
 mod update;
 mod voice;
@@ -39,7 +44,7 @@ async fn daemon_upgrade() -> Result<String, String> {
             return Ok(info.version);
         }
         tracing::info!(from = %info.version, to = env!("CARGO_PKG_VERSION"), "upgrading the service");
-        daemon::stop().map_err(|e| format!("{e:#}"))?;
+        daemon::restart_newest().map_err(|e| format!("{e:#}"))?;
         daemon::wait_gone(&info);
         daemon::ensure().map(|i| i.version).map_err(|e| format!("{e:#}"))
     })
@@ -118,6 +123,11 @@ fn init_logging() {
     }
 }
 
+/// `neuralagent --service …` runs the host without a window (service.rs); returns its exit code.
+pub fn run_service(args: &[String]) -> i32 {
+    service::main(args)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -145,6 +155,8 @@ pub fn run() {
                 });
             }
             let data = daemon::data_dir()?;
+            // Before voice: it puts back volumes a crashed run left lowered, then takes reports.
+            app.manage(duck::Ducking::start(&data));
             let voice = Voice::new(app.handle().clone(), data);
             app.manage(voice.clone());
             if let Err(e) = hud::create(app.handle()) {
@@ -154,6 +166,7 @@ pub fn run() {
             if let Err(e) = tray::create(app.handle()) {
                 tracing::warn!("menu bar icon: {e}");
             }
+            system::self_check(app.handle());
             Ok(())
         })
         // Closing the window keeps NeuralAgent in the menu bar (dictation and wake word stay on).
@@ -178,17 +191,29 @@ pub fn run() {
             voice_status,
             voice_set,
             voice_download,
-            voice_learn
+            voice_learn,
+            duck::duck_call,
+            duck::duck_apps,
+            duck::duck_allow_apps,
+            system::system_status,
+            system::system_request,
+            system::system_open,
+            system::system_repair,
+            system::system_autostart
         ])
         .build(tauri::generate_context!())
         .expect("error while starting NeuralAgent")
         .run(|app, event| {
+            // Quitting never leaves other apps' audio lowered.
+            if let tauri::RunEvent::Exit = event
+                && let Some(d) = app.try_state::<duck::Ducking>()
+            {
+                d.shutdown();
+            }
             // macOS: clicking the Dock icon brings the hidden window back.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 tray::show_main(app);
             }
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
         });
 }

@@ -424,6 +424,7 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
       openExternal: (url) => void window.open(url, "_blank", "noopener"),
       readClipboardImage: native ? () => native!.clipboardImage() : undefined,
       copyText: native ? (text) => native!.copyText(text) : undefined,
+      shareFile: native ? (f) => native!.shareFile(f) : undefined,
       focused: () => document.visibilityState === "visible" && document.hasFocus(),
       // Notifications come as pushes from the relay (also while the page is closed).
       push: { state: pushState, enable: enablePush, disable: disablePush, silent: setPushSilent },
@@ -437,6 +438,15 @@ function Connected({ host, onSwitch }: { host: RelayDevice; onSwitch: () => void
               const h = native!.plugin.addListener("dial", (o) => cb(o.start));
               return () => void h.then((x) => x.remove());
             },
+            onHold: (cb) => {
+              const h = native!.plugin.addListener("callHold", (o) => cb(o.held ? (o.phone ? "phone" : "other") : null));
+              return () => void h.then((x) => x.remove());
+            },
+            resume: () =>
+              native!.plugin
+                .callResume()
+                .then((r) => r.resumed)
+                .catch(() => false),
           }
         : undefined,
       account: { label: "This device", render: () => <DevicePage host={host} onSwitch={onSwitch} /> },

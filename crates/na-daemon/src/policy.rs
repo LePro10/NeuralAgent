@@ -77,6 +77,8 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         | Request::HostModelDownload { .. }
         | Request::HostModelDelete { .. }
         | Request::HostUpdateCheck
+        | Request::HostSystem
+        | Request::HostRestart
         | Request::HostUi { .. }
             if remote =>
         {
@@ -86,6 +88,8 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         | Request::HostModelDownload { .. }
         | Request::HostModelDelete { .. }
         | Request::HostUpdateCheck
+        | Request::HostSystem
+        | Request::HostRestart
         | Request::HostUi { .. }
         | Request::HostNotice { .. } => Err(err(ErrorCode::Forbidden, "only the owner's devices can change the host")),
         Request::WorkspaceUpdate { approved: Some(_), .. }
@@ -98,6 +102,12 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         // Neural does not talk to itself.
         Request::OrchSend { .. } | Request::OrchClear | Request::LlmTest if client.kind == ClientKind::Orchestrator => {
             Err(err(ErrorCode::BadRequest, "not available to the orchestrator"))
+        }
+        // Only a person answers Neural's confirmations or changes how it works (D63).
+        Request::NeuralConfirm { .. } | Request::NeuralMode { .. } | Request::NeuralTeamPick { .. } | Request::NeuralTeamCleanup { .. }
+            if client.kind == ClientKind::Orchestrator =>
+        {
+            Err(err(ErrorCode::Forbidden, "only the user can do this"))
         }
         Request::CatalogRefresh => Ok(()),
         _ => Ok(()),

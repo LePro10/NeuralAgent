@@ -317,6 +317,11 @@ pub struct CvTask {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub output_file: Option<String>,
+    /// Last sign of life (ms since epoch): the subagent's transcript was last written then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[ts(type = "number")]
+    pub active: Option<i64>,
 }
 
 /// A todo item (TodoWrite / TaskCreate / TaskUpdate).
@@ -694,6 +699,9 @@ pub enum CvAction {
     Background,
     /// Ctrl+X Ctrl+K twice: stop all background agents.
     StopAgents,
+    /// `/tasks`, select the task `id` (a `CvTask.id`) by its description, `x`: stop one
+    /// background agent or shell. Feature "cv_stop_task".
+    StopTask { id: String },
     /// Ctrl+X Ctrl+S: send the queued messages now (interrupts the turn).
     SendQueuedNow,
     /// Pick option `n` of the prompt on the screen (or walk `nav` steps for menus without

@@ -29,11 +29,22 @@ pub struct VoiceConfig {
     pub wake_word: bool,
     /// Pronunciations learned from the user's own recordings (keyword lines).
     pub learned: Vec<String>,
+    /// Lower other audio (music) while dictating, after "Hey Neural" and in calls (`duck.rs`).
+    pub duck: bool,
+    /// Down to this many percent of where it was.
+    pub duck_level: u8,
 }
 
 impl Default for VoiceConfig {
     fn default() -> Self {
-        Self { dictation: true, hotkey: "Alt+Space".into(), wake_word: false, learned: Vec::new() }
+        Self {
+            dictation: true,
+            hotkey: "Alt+Space".into(),
+            wake_word: false,
+            learned: Vec::new(),
+            duck: true,
+            duck_level: crate::duck::DEFAULT_LEVEL,
+        }
     }
 }
 
@@ -66,11 +77,17 @@ const WAKE_LAG: usize = na_voice::SAMPLE_RATE as usize * 2 / 5;
 /// Shortest press that counts as dictation (shorter is an accidental tap).
 const MIN_SPEECH: usize = na_voice::SAMPLE_RATE as usize / 4;
 
+/// The dictation model (about 0.6-1 GB) is freed this long after its last use, like the
+/// service's speech models (D74). The hotkey and the wake word load it again while the user
+/// speaks, so only a very short first word after a pause may wait a moment longer.
+const STT_KEEP: Duration = Duration::from_secs(300);
+
 pub struct Voice {
     app: AppHandle,
     root: PathBuf,
     config: Mutex<VoiceConfig>,
-    stt: Mutex<Option<Arc<Stt>>>,
+    /// The dictation model and when it was last used ([`STT_KEEP`]).
+    stt: Mutex<Option<(Arc<Stt>, Instant)>>,
     recording: Mutex<Option<Mic>>,
     activity: Mutex<Activity>,
     last_text: Mutex<Option<String>>,
@@ -82,7 +99,7 @@ pub struct Voice {
 impl Voice {
     pub fn new(app: AppHandle, data: PathBuf) -> Arc<Self> {
         let config = std::fs::read(data.join("voice.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Arc::new(Self {
+        let voice = Arc::new(Self {
             app,
             root: data.join("models"),
             config: Mutex::new(config),
@@ -93,7 +110,33 @@ impl Voice {
             error: Mutex::new(None),
             downloads: Mutex::new(HashMap::new()),
             wake: Mutex::new(None),
-        })
+        });
+        let weak = Arc::downgrade(&voice);
+        let _ = std::thread::Builder::new().name("voice-unload".into()).spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(15));
+                let Some(voice) = weak.upgrade() else { return };
+                voice.unload_idle();
+            }
+        });
+        voice
+    }
+
+    /// Frees the dictation model once it has not been used for [`STT_KEEP`]; never while
+    /// listening, transcribing or awake.
+    fn unload_idle(&self) {
+        let busy = *self.activity.lock() != Activity::Idle || self.recording.lock().is_some();
+        // A load in progress holds the slot: skip this round.
+        let Some(mut slot) = self.stt.try_lock() else { return };
+        let Some((_, used)) = slot.as_mut() else { return };
+        if busy {
+            *used = Instant::now();
+        } else if used.elapsed() > STT_KEEP {
+            let model = slot.take();
+            drop(slot);
+            drop(model); // freeing takes a moment: outside the lock
+            dev_log(format_args!("dictation model unloaded"));
+        }
     }
 
     fn config_path(&self) -> PathBuf {
@@ -134,6 +177,7 @@ impl Voice {
         dev_log(format_args!("activity {a:?}"));
         *self.activity.lock() = a;
         crate::hud::update(&self.app, a);
+        crate::duck::voice(&self.app, a);
         self.emit();
     }
 
@@ -142,12 +186,14 @@ impl Voice {
         *self.error.lock() = Some(e.to_string());
         *self.activity.lock() = Activity::Idle;
         crate::hud::update(&self.app, Activity::Idle);
+        crate::duck::voice(&self.app, Activity::Idle);
         self.emit();
     }
 
     /// Applies settings at startup or after a change: hotkey and wake word.
     pub fn apply(self: &Arc<Self>) {
         let config = self.config.lock().clone();
+        crate::duck::configure(&self.app, config.duck, config.duck_level);
         let shortcuts = self.app.global_shortcut();
         let _ = shortcuts.unregister_all();
         if config.dictation
@@ -203,15 +249,16 @@ impl Voice {
         Ok(())
     }
 
-    /// The dictation model, loaded on first use and then kept.
+    /// The dictation model, loaded on first use and kept until [`STT_KEEP`] without use.
     fn stt(&self) -> Result<Arc<Stt>> {
         let mut slot = self.stt.lock();
-        if let Some(s) = slot.as_ref() {
+        if let Some((s, used)) = slot.as_mut() {
+            *used = Instant::now();
             return Ok(s.clone());
         }
         let dir = models::path(&self.root, PARAKEET).context("Download the dictation model in Settings → Voice first.")?;
         let s = Arc::new(Stt::load(SttModel { kind: SttKind::Parakeet, dir, language: None, threads: 4 })?);
-        *slot = Some(s.clone());
+        *slot = Some((s.clone(), Instant::now()));
         Ok(s)
     }
 
@@ -350,7 +397,7 @@ fn type_text(app: &AppHandle, text: &str) -> Result<()> {
     // Input events go through the main thread: macOS keyboard APIs require it.
     app.run_on_main_thread(move || {
         let r = Enigo::new(&Settings::default())
-            .map_err(|e| anyhow!("Allow NeuralAgent under Privacy & Security → Accessibility to type for you ({e})."))
+            .map_err(|e| anyhow!("Allow NeuralAgent under Privacy & Security → Accessibility to type for you (NeuralAgent → Settings → System; if it is on already, use Repair there) ({e})."))
             .and_then(|mut e| {
                 if pasting {
                     e.key(Key::Meta, Direction::Press)
@@ -430,6 +477,11 @@ impl WakeLoop {
                     woke_at = heard_total;
                     let _ = voice.app.emit("voice-wake", ());
                     voice.set_activity(Activity::Awake);
+                    // Load the model while the command is spoken (it may have been freed).
+                    let v = voice.clone();
+                    std::thread::spawn(move || {
+                        let _ = v.stt();
+                    });
                 }
                 let Some(since) = awake else { continue };
                 for seg in segments.into_iter().filter(|s| s.start + s.samples.len() > woke_at) {

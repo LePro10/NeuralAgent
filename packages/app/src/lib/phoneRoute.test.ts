@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { PhoneRouter, canGoBackInPage, entriesOf, hashOf, parseHash, usePhoneNav, type Nav, type RouterWindow } from "./phoneRoute.ts";
+import { PhoneRouter, canGoBackInPage, entriesOf, hashOf, parseHash, subOfHash, usePhoneNav, type Nav, type RouterWindow } from "./phoneRoute.ts";
 
 /** A browser history in memory: pushState/replaceState are instant, go/back land later (as in browsers). */
 class FakeWindow implements RouterWindow {
@@ -61,13 +61,17 @@ const nav = (): Nav => ({ tab: usePhoneNav.getState().tab, stack: usePhoneNav.ge
 const hashes = (w: FakeWindow) => w.entries.slice(0, w.at + 1).map((e) => e.hash);
 
 beforeEach(() => {
-  usePhoneNav.setState({ tab: "agents", stack: [], stacks: { agents: [], neural: [], projects: [], settings: [] }, retap: 0 });
+  usePhoneNav.setState({ tab: "agents", stack: [], stacks: { agents: [], neural: [], projects: [], settings: [] }, retap: 0, sub: null });
 });
 
 test("links parse to their tab and print back", () => {
   assert.deepEqual(parseHash("#/agent/abc"), { tab: "agents", stack: [{ k: "agent", sid: "abc" }] });
   assert.deepEqual(parseHash("#/project/p1"), { tab: "projects", stack: [{ k: "project", id: "p1" }] });
   assert.deepEqual(parseHash("#/settings/remote"), { tab: "settings", stack: [{ k: "section", id: "remote" }] });
+  assert.deepEqual(parseHash("#/settings/profiles/p-1"), {
+    tab: "settings",
+    stack: [{ k: "section", id: "profiles" }, { k: "section", id: "profiles", detail: "p-1" }],
+  });
   assert.deepEqual(parseHash("#/neural"), { tab: "neural", stack: [] });
   assert.equal(parseHash("#/nonsense/x"), null);
   assert.equal(parseHash(""), null);
@@ -107,6 +111,28 @@ test("a deep link builds the history under it, so back reaches the inbox", () =>
   r.back();
   w.flush();
   assert.deepEqual(nav().stack, []);
+});
+
+test("a link to a subagent opens its agent and hands the subagent over", () => {
+  assert.deepEqual(subOfHash("#/agent/s9/sub/a91"), { sid: "s9", agent: "a91" });
+  assert.equal(subOfHash("#/agent/s9"), null);
+  assert.equal(subOfHash("#/agent/s9/sub/a b"), null);
+  const w = new FakeWindow("#/agent/s9/sub/a91");
+  const r = new PhoneRouter(w);
+  r.start();
+  assert.deepEqual(hashes(w), ["#/agents", "#/agent/s9"]);
+  assert.deepEqual(usePhoneNav.getState().sub, { sid: "s9", agent: "a91" });
+});
+
+test("a followed subagent link waits for the rebuilt history", () => {
+  const w = new FakeWindow();
+  const r = new PhoneRouter(w);
+  r.start();
+  w.navigateHash("#/agent/s2/sub/a7");
+  assert.equal(usePhoneNav.getState().sub, null);
+  w.flush();
+  assert.deepEqual(hashes(w), ["#/agents", "#/agent/s2"]);
+  assert.deepEqual(usePhoneNav.getState().sub, { sid: "s2", agent: "a7" });
 });
 
 test("tab switches rewrite the history; each tab remembers its page", () => {

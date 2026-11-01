@@ -2,7 +2,9 @@
 //!
 //! The daemon runs from a versioned copy in the data dir, detached from the app, so quitting or
 //! updating the app never stops running agents. A newer app keeps talking to an older daemon as
-//! long as the protocol matches.
+//! long as the protocol matches. The app does not start it directly but through its host
+//! (`neuralagent --service`, service.rs), which keeps it running and is what macOS sees as
+//! NeuralAgent for permissions (D59). `NEURALAGENT_NO_HOST=1` starts it directly as before.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -47,9 +49,16 @@ fn healthy(port: u16) -> bool {
     buf.starts_with("HTTP/1.1 200") && buf.contains("\"ok\":true")
 }
 
+/// The daemon of this data dir if it answers.
+pub fn running_daemon(dir: &Path) -> Option<DaemonInfo> {
+    read_info(dir).filter(|i| healthy(i.port))
+}
+
 /// Returns connection info for a running daemon, starting one if needed.
 pub fn ensure() -> Result<DaemonInfo> {
     let dir = data_dir()?;
+    // The app wants the service: a stop from "Quit and stop agents" is over.
+    let _ = std::fs::remove_file(dir.join(crate::service::STOP));
     if let Some(info) = read_info(&dir)
         && healthy(info.port)
     {
@@ -59,11 +68,18 @@ pub fn ensure() -> Result<DaemonInfo> {
                 info.protocol
             );
         }
+        // It runs without a host (an older app started it, or its host died): start one that
+        // watches it and takes over when it ends, so it comes back and counts as NeuralAgent.
+        if std::env::var("NEURALAGENT_NO_HOST").as_deref() != Ok("1")
+            && !crate::service::running(&dir)
+            && let Err(e) = crate::service::start_from_app()
+        {
+            tracing::warn!("starting the host failed: {e}");
+        }
         return Ok(info);
     }
-    let bin = install_binary(&dir)?;
     let before = read_info(&dir).map(|i| i.pid);
-    spawn_detached(&bin)?;
+    start(&dir)?;
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(15) {
         std::thread::sleep(Duration::from_millis(100));
@@ -80,22 +96,31 @@ pub fn ensure() -> Result<DaemonInfo> {
 /// The daemon binary shipped next to the app executable (Tauri sidecar, or the cargo target dir in
 /// development), copied to `<data>/bin/neuralagentd-<version>` so app updates can replace the
 /// bundle while it runs.
-fn install_binary(dir: &Path) -> Result<PathBuf> {
+pub fn install_binary(dir: &Path) -> Result<PathBuf> {
     let exe_name = if cfg!(windows) { "neuralagentd.exe" } else { "neuralagentd" };
+    // Next to the installed app, also when the host runs from its copy in <data>/bin (Windows).
+    let app = match crate::service::installed_app() {
+        Some(p) => p,
+        None => std::env::current_exe()?,
+    };
     let src = match std::env::var_os("NEURALAGENT_DAEMON_BIN") {
         Some(p) => PathBuf::from(p),
-        None => std::env::current_exe()?.parent().context("exe dir")?.join(exe_name),
+        None => app.parent().context("exe dir")?.join(exe_name),
     };
-    if !src.exists() {
-        bail!("service binary missing at {}", src.display());
-    }
-    if cfg!(debug_assertions) {
+    if cfg!(debug_assertions) && src.exists() {
         return Ok(src); // dev: run the freshly built binary in place
     }
     let version = env!("CARGO_PKG_VERSION");
     let bin_dir = dir.join("bin");
-    std::fs::create_dir_all(&bin_dir)?;
     let dst = bin_dir.join(if cfg!(windows) { format!("neuralagentd-{version}.exe") } else { format!("neuralagentd-{version}") });
+    if !src.exists() {
+        // The app was deleted or moved while its host runs: this version's copy still starts.
+        if !cfg!(debug_assertions) && dst.exists() {
+            return Ok(dst);
+        }
+        bail!("service binary missing at {}", src.display());
+    }
+    std::fs::create_dir_all(&bin_dir)?;
     let same = std::fs::metadata(&dst).ok().zip(std::fs::metadata(&src).ok()).is_some_and(|(a, b)| a.len() == b.len());
     if !same {
         let tmp = dst.with_extension("partial");
@@ -120,8 +145,35 @@ fn prune_old(bin_dir: &Path, keep: usize) {
     }
 }
 
-fn spawn_detached(bin: &Path) -> Result<()> {
-    let mut cmd = Command::new(bin);
+/// Starts the host, which starts the daemon (unless one already runs and will do so).
+fn start(dir: &Path) -> Result<()> {
+    if std::env::var("NEURALAGENT_NO_HOST").as_deref() != Ok("1") {
+        if crate::service::running(dir) {
+            return Ok(());
+        }
+        match crate::service::start_from_app() {
+            Ok(()) => return Ok(()),
+            Err(e) => tracing::warn!("starting the host failed ({e}); starting the service directly"),
+        }
+    }
+    let mut cmd = Command::new(install_binary(dir)?);
+    detach(&mut cmd);
+    lean(&mut cmd);
+    cmd.spawn().with_context(|| "start the service")?;
+    Ok(())
+}
+
+/// macOS: the service's allocator hands freed memory back at once (speech models free about
+/// 1 GB when they unload; without this macOS keeps much of it until memory runs low). The service
+/// removes the variable at start, so agents never see it (D75).
+pub fn lean(cmd: &mut Command) {
+    if cfg!(target_os = "macos") {
+        cmd.env("MallocSpaceEfficient", "1");
+    }
+}
+
+/// No stdio, own process group (survives its parent), no console window on Windows.
+pub fn detach(cmd: &mut Command) {
     cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
     {
@@ -136,8 +188,6 @@ fn spawn_detached(bin: &Path) -> Result<()> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
-    cmd.spawn().with_context(|| format!("start {}", bin.display()))?;
-    Ok(())
 }
 
 /// Waits up to 5 s until a stopped daemon no longer answers.
@@ -148,10 +198,23 @@ pub fn wait_gone(info: &DaemonInfo) {
     }
 }
 
-/// Stops the daemon (and with it every agent). Used by "Quit NeuralAgent and stop agents".
+/// Stops the daemon (and with it every agent). Used by "Quit NeuralAgent and stop agents": the
+/// host then waits until the app wants the service again (or the next login or boot).
 pub fn stop() -> Result<()> {
     let dir = data_dir()?;
-    let Some(info) = read_info(&dir) else { return Ok(()) };
+    let _ = std::fs::write(dir.join(crate::service::STOP), b"");
+    kill(&dir)
+}
+
+/// Stops the daemon so that its host starts the newest installed version (after an update).
+pub fn restart_newest() -> Result<()> {
+    let dir = data_dir()?;
+    let _ = std::fs::write(dir.join(crate::service::RESTART), b"");
+    kill(&dir)
+}
+
+fn kill(dir: &Path) -> Result<()> {
+    let Some(info) = read_info(dir) else { return Ok(()) };
     #[cfg(unix)]
     {
         Command::new("kill").arg("-TERM").arg(info.pid.to_string()).status()?;

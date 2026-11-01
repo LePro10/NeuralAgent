@@ -1,7 +1,8 @@
 /**
- * Subagents in the transcript (A3 §2.7): one card per Agent/Task call with its type, what it was
- * asked to do, live status and last step, a short excerpt of its report and its counts. Tapping
- * a card opens the subagent's own transcript (`onOpen`) when the daemon has one.
+ * Subagents in the transcript (A3 §2.7, D65): one card per Agent/Task call with its type, what it
+ * was asked to do, live status, last step, time and tokens, and a short excerpt of its report.
+ * The whole card is one button that opens the subagent's own transcript: at once when the daemon
+ * knows the agent's id, and otherwise as soon as it does (the view waits for it).
  *
  * The parent's tool result of a background launch ("Async agent launched successfully…") is
  * internal metadata and never shown; the real outcome comes from the task (`CvTask`) or a
@@ -9,33 +10,27 @@
  */
 import type { CvTask } from "@neuralagent/protocol";
 import { cn } from "@neuralagent/ui";
-import { Bot, Check, ChevronRight, LoaderCircle, OctagonX } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { createContext, memo, useContext } from "react";
 import { plainText } from "./Markdown";
-import { agentTypeName, duration, inputOf, isAsyncLaunch, metaOf, str, type Res, type Use } from "./toolText";
+import { inputOf, isAsyncLaunch, metaOf, str, type Res, type Use } from "./toolText";
+import { useNow } from "./useWork";
+import { agentIdOf, detailOf, isLive, statusOf, typeOf, type WorkStatus } from "./work";
+import { WorkGlyph, WorkStatusLine } from "./WorkRow";
 
-/** The conversation's background tasks and how to open one (provided by the view). */
-export const TasksContext = createContext<{ tasks: CvTask[]; open?: (task: { id: string; title: string }) => void }>({ tasks: [] });
-
-type Status = "running" | "background" | "done" | "failed" | "stopped";
-
-export function tokens(n?: number): string {
-  if (!n) return "";
-  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k tokens` : `${n} tokens`;
+/** What opening a subagent needs: its id (or, before the daemon linked it, its tool call's). */
+export interface AgentRef {
+  id: string;
+  title: string;
+  /** The Agent call that started it: finds the task while `id` is still the call's id. */
+  toolUseId?: string;
 }
 
-/** "3 tools · 12.4k tokens · 1m 20s" */
-export function counts(t: { tool_count?: number; tokens?: number; duration_ms?: number }): string {
-  return [t.tool_count ? `${t.tool_count} ${t.tool_count === 1 ? "tool" : "tools"}` : "", tokens(t.tokens), t.duration_ms ? duration(t.duration_ms) : ""].filter(Boolean).join(" · ");
-}
+/** The conversation's background tasks and how to open a subagent (provided by the view). */
+export const TasksContext = createContext<{ tasks: CvTask[]; open?: (a: AgentRef) => void }>({ tasks: [] });
 
-function statusOf(res: Res | undefined, task: CvTask | undefined, open: boolean): Status {
-  if (task) {
-    if (task.status === "running") return task.background ? "background" : "running";
-    if (task.status === "failed") return "failed";
-    if (task.status === "killed" || task.status === "stopped") return "stopped";
-    return "done";
-  }
+function statusFor(res: Res | undefined, task: CvTask | undefined, open: boolean): WorkStatus {
+  if (task) return statusOf(task);
   if (!res) return open ? "running" : "stopped";
   if (isAsyncLaunch(res)) return "background";
   return res.is_error ? "failed" : "done";
@@ -51,47 +46,52 @@ export const AgentCard = memo(function AgentCard({ use, res, running }: { use: U
   const task = tasks.find((t) => t.tool_use_id === use.id);
   const meta = metaOf(res);
   const input = inputOf(use);
-  const type = agentTypeName(task?.agent_type ?? meta?.agent_type ?? (str(input.subagent_type) || null));
   const desc = task?.description || str(input.description) || "Subagent";
-  const status = statusOf(res, task, running);
-  const live = status === "running" || status === "background";
+  const status = statusFor(res, task, running);
+  const live = isLive(status);
+  const now = useNow(live && !!task?.started);
+  // A task the daemon knows, or the parts the transcript gives (older daemon, sync result).
+  const shown: CvTask = task ?? {
+    id: use.id,
+    kind: "agent",
+    description: desc,
+    status: live ? "running" : status === "failed" ? "failed" : status === "stopped" ? "stopped" : "completed",
+    background: status === "background",
+    has_transcript: false,
+    agent_type: meta?.agent_type ?? (str(input.subagent_type) || undefined),
+    tokens: meta?.tokens ?? undefined,
+    tool_count: meta?.tool_count ?? undefined,
+    duration_ms: meta?.duration_ms ?? undefined,
+  };
   const report = task?.result ?? (res && !isAsyncLaunch(res) ? res.text : "");
-  const line = live ? task?.label : task?.summary && !report ? task.summary : "";
-  const info = counts({ tool_count: task?.tool_count ?? meta?.tool_count, tokens: task?.tokens ?? meta?.tokens, duration_ms: task?.duration_ms ?? meta?.duration_ms });
-  const agentId = task?.has_transcript ? task.id : meta?.agent_id;
-  const canOpen = !!agentId && !!open;
+  const detail = live ? detailOf(shown, now) : (task?.summary && !report ? task.summary : "") || detailOf(shown, now);
+  const agentId = agentIdOf(task, meta?.agent_id);
+  // Still running without an id: open anyway, the view picks the id up when it arrives.
+  const canOpen = !!open && (!!agentId || live);
 
   const body = (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        <span className={cn("grid size-6 shrink-0 place-items-center rounded-cv-sm", live ? "bg-cv-clay-soft text-cv-clay" : "bg-cv-chip text-cv-text-2")}>
-          <Bot size={14} strokeWidth={1.8} />
-        </span>
-        <span className="shrink-0 text-cv-meta text-cv-muted">{type}</span>
+        <WorkGlyph kind="agent" status={status} />
+        <span className="shrink-0 text-cv-meta text-cv-muted">{typeOf(shown)}</span>
         <span className="min-w-0 flex-1 truncate text-cv-ui text-cv-text">{desc}</span>
         {canOpen && <ChevronRight size={15} strokeWidth={1.8} className="shrink-0 text-cv-muted" />}
       </div>
-      <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-8 text-cv-meta">
-        {live ? (
-          <LoaderCircle size={13} className="shrink-0 animate-spin text-cv-clay [animation-duration:1.2s]" />
-        ) : status === "failed" || status === "stopped" ? (
-          <OctagonX size={13} className="shrink-0 text-cv-danger" />
-        ) : (
-          <Check size={13} strokeWidth={2.2} className="shrink-0 text-cv-success" />
-        )}
-        <span className={cn("shrink-0", status === "failed" ? "text-cv-danger" : live ? "text-cv-clay" : "text-cv-text-2")}>
-          {status === "running" ? "Working" : status === "background" ? "In the background" : status === "failed" ? "Failed" : status === "stopped" ? "Stopped" : "Done"}
-        </span>
-        {line && <span className="min-w-0 truncate text-cv-muted">· {line}</span>}
-        {!line && info && <span className="min-w-0 truncate text-cv-muted tabular-nums">· {info}</span>}
-      </div>
+      <WorkStatusLine status={status} detail={detail} className="mt-1.5 pl-8" />
       {!live && report && <p className="mt-1.5 line-clamp-3 pl-8 text-cv-meta text-cv-text-2 [overflow-wrap:anywhere]">{excerpt(report)}</p>}
     </>
   );
 
-  const cls = "my-1.5 block w-full rounded-cv-md border border-cv-line-soft bg-cv-surface px-3 py-2.5 text-left font-cv-sans";
+  const cls = "my-1.5 block min-h-14 w-full rounded-cv-md border border-cv-line-soft bg-cv-surface px-3 py-2.5 text-left font-cv-sans";
   return canOpen ? (
-    <button type="button" onClick={() => open!({ id: agentId!, title: desc })} className={cn(cls, "transition-colors hover:border-cv-line active:bg-cv-press")}>
+    <button
+      type="button"
+      // data-no-tap: the turn's tap-for-actions never takes a tap meant for the card.
+      data-no-tap
+      onClick={() => open!({ id: agentId ?? use.id, title: desc, toolUseId: use.id })}
+      aria-label={`Open subagent: ${desc}`}
+      className={cn(cls, "touch-manipulation transition-colors hover:border-cv-line active:bg-cv-press")}
+    >
       {body}
     </button>
   ) : (

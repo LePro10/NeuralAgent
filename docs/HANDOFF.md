@@ -5,59 +5,74 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
 (module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
 
-## Where we are (2026-10-31)
-- **Mobile overhaul committed on branch `mobile-overhaul` (not merged into main, not released).
-  Web remote + relay deployed from it on 2026-10-31 (build `0.3.4+mvwk87yh`): phones and the Android
-  app load the new UI now; subagents, tasks, real context and daemon actions need the new daemon
-  (next release).** Phone IA (4 tabs,
-  hash router), agent screen with Island, new transcript, composer and controls, subagents/tasks,
-  daemon `cv_action` (D52-D57, [notes/mobile-overhaul.md](notes/mobile-overhaul.md)). Owner tests it
-  on real devices; then merge into main and release (0.4.0).
-- M0–M9 done; **M10 (own ideas, polish, final report) is current**.
-- Released: 0.2.0 (design + remote round, D40–D42), installed and deployed.
-- 0.2.1 (fix, D43: remote access died after start): tag `v0.2.1` pushed, never built.
-- **0.3.0** (mobile-first polish round: design system D45, light mode, Claude view rebuilt,
-  update UX + changelog D44, connection fixes): **released and published** 2026-10-30 (all
-  platforms, `/api/releases/latest` = 0.3.0, the Mac updater offers it to 0.2.1). Relay + website
-  deployed with 0.3.0. GitHub Actions minutes for the private repo were used up (macOS = 10×);
-  workaround used: repo made public for the release run, then private again (gitleaks scan of
-  the full history was clean). The owner's Mac still runs 0.2.1 and tests the auto-update.
-- **0.3.1** released, published and deployed 2026-10-30 (same public-for-the-run workaround,
-  repo private again): sidebar collapses vertically again, update pill above the account,
-  avatar opens Settings, Remote + MCP inside Settings (D47), quiet agent tiles and one global
-  Chat/Terminal switch (D46), accent/theme "ground" gradients behind every page, terminal
-  repaint after resize, collapsible website changelog.
-- **0.3.2** and **0.3.3** released, published and deployed 2026-10-30 (public-for-the-run
-  workaround, repo private again). 0.3.2: images in the Claude view (D50), one launch motion on
-  all platforms (D49, new APK), Swarm redesign (D48), Settings like the other pages, quicker
-  sidebar peek, desktop interface size, calls fixed (mic worklet was inlined as data: URL and
-  blocked by the CSP), "Hey Neural" sends to Neural. 0.3.3: dictation pastes on macOS (synthetic
-  typing dropped characters in terminals), voice pill follows the mic level.
-- macOS signing: from the next release the app is signed with a stable self-signed identity
-  (docs/RELEASING.md "macOS signing"), so Accessibility/microphone survive updates. The first
-  update onto it still needs one re-grant. Updates now swap `Contents` in place, so the Dock pin
-  survives (from the update after the one that ships it). Released in 0.3.4 (relay/web deployed)
-  with the update pill, sidebar workspace menu/rename/drag and per-device notifications.
-- Docs/workflow round done: test tools in `scripts/dev/`, `docs/CODEMAP.md` + `pnpm codemap`,
-  `pnpm check:docs`, skills `release`, `deploy-web`, `ui-check`, history in `docs/archive/`.
+## Where we are (2026-10-31, evening)
+- **Branch `mobile-overhaul`, big team round UNCOMMITTED in the working tree (~175 files).** On top
+  of the committed mobile overhaul (D52-D57; web remote + relay deployed from it as
+  `0.3.4+mvwk87yh`) these areas landed, each reviewed and fixed once more (reports and the summary:
+  `research-local/team/FINAL.md`, `*-report.md`):
+  - **System** (D58-D60, [notes/system-integration.md](notes/system-integration.md)): service host
+    that keeps the daemon alive and makes it "NeuralAgent" for macOS (TCC), autostart at login or
+    boot, Settings → System (permissions, restart). Folder guard: remote/background work never
+    triggers a macOS privacy prompt (fixB).
+  - **Neural v2 + Teams** (D61-D64, D77, [notes/neural-v2.md](notes/neural-v2.md)): tasks,
+    observations instead of chat notices, proactive reports, guard with Allow/Deny, Teams (race,
+    build + review) replace Swarm (old swarms still readable), restart reconcile, race clean-up.
+  - **Subagents** (D65-D66, [notes/subagents.md](notes/subagents.md)): work strip, stop one task
+    (`cv_stop_task`), nested/grouped subagents, deep link `#/agent/<sid>/sub/<agent>`.
+  - **Files** (D67-D68, [notes/files.md](notes/files.md)): explorer pane (desktop) and pages (phone).
+  - **Calls** (D69-D70, D78, [notes/calls.md](notes/calls.md)): lazy warm-up, honest states,
+    Android hold/ducking. **Ducking** (D73, [notes/ducking.md](notes/ducking.md)).
+  - **Settings + Discord** (D71-D72, [notes/settings-discord.md](notes/settings-discord.md)).
+  - **Memory** (D74-D75, [notes/performance.md](notes/performance.md)): Parakeet unloads after 5 min.
+- Protocol features (additive, `na_protocol::DAEMON_FEATURES`): `call_warm`, `files`, `neural`,
+  `host_system`, `cv_stop_task`, `neural_cleanup`. Every new request in the UI is gated by
+  `client.has(...)`, so the new web remote may be deployed before the 0.3.4 daemon on the owner's
+  Mac is updated (0.3.4 drops unknown requests silently). New daemons answer an unknown request
+  with an error (local and remote).
+- Integration pass done: all checks green (cargo fmt/clippy/test, pnpm typecheck/test/lint:tokens/
+  check:docs, web build, e2e-remote, e2e-swarm, neural-e2e 25/25, daemon-smoke, screenshots).
+  D-numbers: D58-D75, D77, D78 (D76 unused).
+- Outside this round: an unrelated "site-overhaul" session writes `apps/web/src/demo/` and
+  `apps/web/src/site/{base.css,content.ts,foundation.css,fonts}` (untracked, WIP); it breaks
+  `pnpm typecheck` (apps/web) and `pnpm lint:tokens` until finished. Do not commit it with this round.
+- Earlier: 0.3.4 is the last release (installed on the owner's Mac, relay/web deployed). History of
+  0.2.x-0.3.4: [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md) and CHANGELOG.
 
 ## Next
-1. Owner tests the overhaul on a real phone and Android device; fix findings; merge the branch into main.
-2. Release when the owner says so (new APK needed for the APK-only items in the overhaul note).
-3. Small leftovers: leading zero in the "checked at" time, folder-browser chip fade, iOS PWA status
-   text stays white in light mode, "done, not seen" is not persisted by the daemon.
+1. Lead commits this round on `mobile-overhaul` (leave the site-overhaul WIP out).
+2. Owner: hand checks in STATUS "Your checklist" (power round block): permissions, ducking,
+   Discord, memory, new APK on a real phone.
+3. Release 0.4.0 (desktop + APK) when the owner says so; then deploy the web remote/relay.
+4. Owner decision: remote-added projects (D42) are approved at once, so a paired phone can open
+   any folder (review5). Option: such projects stay unapproved until confirmed on the computer.
 
 ## Open issues
-- Overhaul, not run against a live CLI: `answer_question`, rewind, `set_mode`, `stop_agents`,
-  `send_queued_now`, inbox Allow/Deny with a real prompt. Real Android device checks and APK-only
-  items: see the note. https image blocks have no tap-to-load; dictation starting with "!" can arm
-  shell mode; swarm page header on a phone opens at the end of the log.
-- "Last seen" for a device that never connected shows its creation date.
-- Agents page says "No agents running" while only a plain shell runs.
-- Design-system gaps listed at the end of `docs/notes/design-system.md`.
-- Relay on .96 is deployed by hand until the GHCR read token exists (STATUS checklist).
-- Only one daemon may use a copy of `remote-credentials.json` (D43): a second one rotates the
-  refresh token away. Test daemons use their own `/tmp` home and the relay test login.
+- Not run on real systems: LaunchAgent/LaunchDaemon install, `tccutil`, osascript admin,
+  Windows S4U, systemd/linger; Windows code not compiled here. `LSEnvironment` (memory) not
+  checked with a signed release build.
+- Without Full Disk Access a fresh install cannot start agents in ~/Documents from the phone until
+  the Mac answered once (fixB trade-off). `CLAUDE_CONFIG_DIR` inside Documents is not guarded.
+- Ducking: Mac calls lower only Music/Spotify (browsers stay loud); two NeuralAgent apps ducking at
+  once can leave the inner original.
+- Subagents: stopping shells/monitors not tried live; a task scrolled out of a very long `/tasks`
+  list is refused; `MAX_TASKS` 200; fan-out grouping is a time heuristic. `notes/claude-view.md`
+  and `notes/mobile-overhaul.md` still describe the older Tasks sheet.
+- Neural: "While you were away" card not screenshotted; proactive reports are not spoken during a
+  call; on phones the team sheet opens over the panel sheet.
+- Discord: "lines changed", "turns finished today", a second button not built; Night theme preview
+  banner looks grey.
+- Memory plan items not done: P4 (cut long dictations), P5 (app dictation via the daemon), P7
+  (PTY scrollback compaction), P8 (WebKit).
+- review4: boot LaunchDaemon log may be root-owned; a logout leaves the daemon without its host
+  until it restarts; an old host restarting a crashed daemon copies the new binary under the old
+  name (fixed by the next upgrade).
+- Screenshot scene `subagents` needs `CLAUDE_CONFIG_DIR` (see its header); `files` needs
+  `scenes/files.mjs --make <home>` first.
+- From before: overhaul actions not run against a live CLI (`answer_question`, rewind, `set_mode`,
+  `stop_agents`, `send_queued_now`); https image blocks have no tap-to-load; "Last seen" of a
+  never-connected device shows its creation date; design-system gaps at the end of
+  `notes/design-system.md`; relay on .96 deployed by hand until the GHCR read token exists; only one
+  daemon may use a copy of `remote-credentials.json` (D43).
 
 ## How to run
 - Everything for interactive checks (test daemon + UI in a browser, screenshots, web remote,
@@ -65,7 +80,8 @@ plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer pr
   [../scripts/dev/README.md](../scripts/dev/README.md).
 - Tests: `cargo test --workspace`; `pnpm typecheck && pnpm test && pnpm lint:tokens && pnpm check:docs`.
   Remote E2E: `cargo build -p na-daemon && cargo build -p na-relay --features test-login &&
-  node --experimental-strip-types scripts/e2e-remote.ts`.
+  node --experimental-strip-types scripts/e2e-remote.ts`; classic swarm: `scripts/e2e-swarm.ts`;
+  Neural v2 (fake model): `scripts/dev/neural-e2e.mjs` (header).
 - `pnpm dev` (Tauri dev; set `NEURALAGENT_HOME=/tmp/na-dev` to keep test state separate).
 - Android emulator: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21
   ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`; start AVD `na36` headless

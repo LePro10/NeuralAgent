@@ -1,6 +1,6 @@
 import type { PaneContent } from "@neuralagent/protocol";
 import { Button, Menu, Pill, cn, useLayoutMode } from "@neuralagent/ui";
-import { Columns2, Ellipsis, GitBranch, Globe, Maximize2, Minimize2, RotateCw, Rows2, X } from "lucide-react";
+import { Columns2, Ellipsis, FolderOpen, GitBranch, Globe, Maximize2, Minimize2, RotateCw, Rows2, X } from "lucide-react";
 import { useState, type DragEvent, type ReactNode } from "react";
 import { isNoiseLine } from "../lib/agentReason";
 import { STATUS } from "../lib/status";
@@ -8,6 +8,7 @@ import { useChanges, useClient } from "../lib/store";
 import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { BrowserPane } from "./BrowserPane";
 import { EmptyPane } from "./EmptyPane";
+import { FilesPane } from "./files/FilesPane";
 import { ClaudeView } from "./claude/ClaudeView";
 import { KeyBar } from "./KeyBar";
 import { TerminalView } from "./TerminalView";
@@ -112,6 +113,8 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
             <EngineTile engine={profile.engine} size="sm" selected={focused} activity={session?.status === "working" ? "working" : undefined} edge="ring-chrome" />
           ) : content.kind === "browser" ? (
             <QuietTile size="sm" selected={focused}><Globe size={tileGlyph("sm")} strokeWidth={1.6} /></QuietTile>
+          ) : content.kind === "files" ? (
+            <QuietTile size="sm" selected={focused}><FolderOpen size={tileGlyph("sm")} strokeWidth={1.6} /></QuietTile>
           ) : (
             <span className="size-6 shrink-0" />
           )}
@@ -175,6 +178,14 @@ export function Pane({ workspaceId, paneId, content, focused, zoomed, webgl, act
           <TerminalView sid={sid} focused={focused} startedAt={session.started_at} webgl={webgl} touch={phone} onFocus={actions.focus} />
         ) : content.kind === "browser" ? (
           <BrowserPane url={content.url} onFocus={actions.focus} onNavigate={(url) => actions.setContent({ kind: "browser", url })} />
+        ) : content.kind === "files" ? (
+          <FilesPane
+            workspaceId={workspaceId}
+            path={content.path}
+            file={content.file}
+            onFocus={actions.focus}
+            onNavigate={(to) => actions.setContent({ kind: "files", path: to.path, ...(to.file ? { file: to.file } : {}) })}
+          />
         ) : (
           <EmptyPane workspaceId={workspaceId} paneId={paneId} onFocus={actions.focus} onBrowser={(url) => actions.setContent({ kind: "browser", url })} />
         )}

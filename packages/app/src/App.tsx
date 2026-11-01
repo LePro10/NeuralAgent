@@ -20,7 +20,7 @@ import { NeuralPage } from "./components/NeuralPage";
 import { SwarmPage } from "./components/SwarmPage";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { ZoomControl } from "./components/ZoomControl";
-import { endCall, startCall, useCall } from "./lib/call";
+import { endCall, holdCall, startCall, useCall } from "./lib/call";
 import { activityOf } from "./lib/status";
 import { openAgentOnDesktop } from "./lib/openAgent";
 import { phoneRouter, usePhoneNav } from "./lib/phoneRoute";
@@ -150,15 +150,19 @@ export function App() {
   // Phones: the quick tile starts a call (on the Neural page); the native side keeps it alive.
   const live = useCall((c) => c.live);
   const on = useCall((c) => c.on);
-  // Told the native side about this call; or it was dialled from there and waits for the end.
-  const told = useRef(false);
+  // Told the native side about this call (at the tap: audio mode, ducking, route; again once the
+  // microphone is open: the foreground service needs the permission); or it was dialled from
+  // there and waits for the end.
+  const told = useRef<"" | "on" | "live">("");
   const dialled = useRef(false);
   useEffect(() => {
-    if (live && !told.current) {
-      told.current = true;
+    const want = !on ? "" : live ? "live" : "on";
+    if (want && want !== told.current) {
+      told.current = want;
       platform.call?.active(true);
-    } else if (!on && (told.current || dialled.current)) {
-      told.current = dialled.current = false;
+    } else if (!want && (told.current || dialled.current)) {
+      told.current = "";
+      dialled.current = false;
       platform.call?.active(false);
     }
   }, [platform, live, on]);
@@ -172,6 +176,8 @@ export function App() {
       }),
     [platform, client],
   );
+  // Android: a phone call took the sound; the call holds until it comes back.
+  useEffect(() => platform.call?.onHold?.(holdCall), [platform]);
 
   // A tapped notification (web push, Android) opens its agent. Phones: at once, over the Agents
   // inbox (the screen shows the remembered name until the state arrives). Desktop: once the state
@@ -259,7 +265,9 @@ export function App() {
 
   const allStatuses = Object.values(state?.sessions ?? {}).map((s) => s.status);
   const waiting = allStatuses.filter((s) => s === "waiting").length;
-  const running = (state?.swarms ?? []).filter((w) => !w.ended).length;
+  // With a Neural daemon the swarm page is "Teams" (D64) and also counts working teams.
+  const teams = status === "open" && client.has("neural");
+  const running = (state?.swarms ?? []).filter((w) => !w.ended).length + (state?.neural?.tasks ?? []).filter((t) => t.team && t.status === "working").length;
   // Remote sign-in waits for approval: shown on Settings → Remote access, the account and the More tab.
   const remoteWaiting = platform.kind === "desktop" && state?.remote.status === "pending" ? ("waiting" as const) : undefined;
   // Workspaces in the sidebar: right-click to rename (the folder stays), pin, copy the path or
@@ -290,7 +298,7 @@ export function App() {
   const items: NavItem[] = [
     { id: NEURAL, label: "Neural", Icon: Sparkles, activity: state?.orchestrator.busy ? "working" : undefined },
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, activity: waiting > 0 ? "waiting" : undefined },
-    { id: SWARM, label: "Swarm", Icon: Users, activity: running > 0 ? "working" : undefined },
+    { id: SWARM, label: teams ? "Teams" : "Swarm", Icon: Users, activity: running > 0 ? "working" : undefined },
     { id: HISTORY, label: "History", Icon: History },
     { id: USAGE, label: "Usage", Icon: Gauge },
     ...workspaces.map((w) => {
@@ -336,7 +344,7 @@ export function App() {
       label: "Actions",
       items: [
         { id: "add-workspace", label: "Add workspace…", Icon: FolderPlus, keywords: "folder project open", onSelect: () => void addWorkspace() },
-        { id: "new-swarm", label: "New swarm…", Icon: Users, keywords: "team agents", onSelect: () => setWorkspace(SWARM) },
+        { id: "new-swarm", label: teams ? "New team…" : "New swarm…", Icon: Users, keywords: "team agents", onSelect: () => setWorkspace(SWARM) },
       ],
     },
   ];

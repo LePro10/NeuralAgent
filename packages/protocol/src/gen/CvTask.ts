@@ -53,4 +53,8 @@ command?: string,
 /**
  * Shell/monitor output (read-only tail with `cv_task_output`).
  */
-output_file?: string, };
+output_file?: string, 
+/**
+ * Last sign of life (ms since epoch): the subagent's transcript was last written then.
+ */
+active?: number, };

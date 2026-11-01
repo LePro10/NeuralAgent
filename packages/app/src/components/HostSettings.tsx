@@ -1,11 +1,11 @@
 import type { DaemonClient, ModelInfo } from "@neuralagent/protocol";
 import { Button, Callout, ConfirmSheet, Empty, Input, List, Meter, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
-import { AudioLines, Check, Download, Ear, Folder, FolderGit2, GitBranch, Keyboard, Mic, ShieldCheck, Trash2 } from "lucide-react";
+import { AudioLines, Check, Download, Ear, Folder, FolderGit2, GitBranch, Keyboard, Mic, Music, ShieldCheck, Trash2, Volume, Volume1 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { checkHostUpdate, installHostUpdate, useHostModels, useHostUpdate, useHostVoice, watchHostUpdate } from "../lib/host";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
 import { useSettingsNav } from "./settings/nav";
-import { HOTKEYS, megabytes, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
+import { DUCK_LEVELS, HOTKEYS, megabytes, type DuckApp, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
 
 const fail = (e: unknown) => toast((e as Error).message ?? String(e), { tone: "danger" });
 
@@ -114,7 +114,93 @@ function VoiceControls({ api, status, models, mac, hostName }: { api: VoiceApi; 
           }
         />
       </List>
+      <OtherAudio api={api} config={config} set={set} mac={mac} />
     </>
+  );
+}
+
+/**
+ * "Lower other audio while I talk" (desktop `duck.rs`). Music keeps playing quietly while the user
+ * dictates, after "Hey Neural" and in calls. The Music/Spotify row exists only on the Mac itself
+ * (`duckApps`): its Allow button shows a macOS prompt, which must never pop up from a remote.
+ */
+function OtherAudio({ api, config, set, mac }: { api: VoiceApi; config: VoiceConfig; set: (p: Partial<VoiceConfig>) => void; mac: boolean }) {
+  // Hosts before this setting do not send it: hide the block instead of a switch that does nothing.
+  if (config.duck === undefined) return null;
+  const on = config.duck;
+  const level = String(config.duck_level ?? 20);
+  return (
+    <List
+      label="Other audio"
+      footer={
+        mac
+          ? "Music and videos keep playing quietly while you dictate or say “Hey Neural”, and come back when you are done. In calls Neural’s voice stays loud, so only Music and Spotify are lowered, once you allow it."
+          : "Music, videos and other apps keep playing quietly while you dictate, say “Hey Neural” or are in a call, and come back when you are done."
+      }
+    >
+      <Row Icon={Volume1} title="Lower other audio while I talk" trailing={<Switch label="Lower other audio while I talk" checked={on} onChange={(duck) => set({ duck })} />} />
+      {on && (
+        <Row
+          Icon={Volume}
+          title="Down to"
+          trailing={
+            <Segmented
+              size="sm"
+              label="Down to"
+              value={level}
+              options={DUCK_LEVELS.map((l) => ({ value: String(l), label: `${l} %` }))}
+              onChange={(v) => set({ duck_level: Number(v) })}
+            />
+          }
+        />
+      )}
+      {on && mac && api.duckApps && <CallPlayers api={api} />}
+    </List>
+  );
+}
+
+function CallPlayers({ api }: { api: VoiceApi }) {
+  const [apps, setApps] = useState<DuckApp[] | null>(null);
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    api.duckApps?.().then(setApps, () => {});
+  }, [api]);
+  if (!apps) return null;
+  const named = (access: DuckApp["access"]) => apps.filter((a) => a.access === access).map((a) => a.name);
+  const [allowed, denied, closed] = [named("allowed"), named("denied"), named("closed")];
+  const open = apps.some((a) => a.access === "ask" || a.access === "closed");
+  const detail = [
+    allowed.length > 0 && `Allowed for ${allowed.join(" and ")}.`,
+    denied.length > 0 && `Turned off for ${denied.join(" and ")} in System Settings → Privacy & Security → Automation.`,
+    apps.some((a) => a.access === "ask") ? "Press Allow and confirm in the macOS prompt." : open && `Open ${closed.join(" or ")}, then press Allow (macOS asks once per app).`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  // Also re-checks: a player opened since this page loaded can be asked now.
+  const allow = async () => {
+    setAsking(true);
+    try {
+      setApps((await api.allowDuckApps?.()) ?? apps);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setAsking(false);
+    }
+  };
+  return (
+    <Row
+      Icon={Music}
+      title="Music and Spotify in calls"
+      detail={detail}
+      wrap
+      trailing={
+        open ? (
+          <Button size="xs" variant="ghost" busy={asking} onClick={allow}>
+            Allow
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -260,8 +346,9 @@ export function WorkspaceSettings({ hostName }: { hostName: string | null }) {
 }
 
 /** One workspace: name, approval, and removing it (the folder and its files stay). */
-function WorkspaceDetail({ id }: { id: string }) {
+export function WorkspaceDetail({ id }: { id: string }) {
   const client = useClient();
+  const nav = useSettingsNav();
   const w = useDaemon((c) => c.state?.workspaces.find((x) => x.id === id));
   const [name, setName] = useState(w?.name ?? "");
   const [asking, setAsking] = useState(false);
@@ -293,7 +380,12 @@ function WorkspaceDetail({ id }: { id: string }) {
         open={asking}
         onClose={() => setAsking(false)}
         onConfirm={async () => {
-          await client.req({ m: "workspace_remove", p: { id: w.id } }).catch(fail);
+          try {
+            await client.req({ m: "workspace_remove", p: { id: w.id } });
+            nav.back();
+          } catch (e) {
+            fail(e);
+          }
         }}
         title={`Remove ${w.name}?`}
         message="It leaves NeuralAgent; the folder and its files stay on the computer."

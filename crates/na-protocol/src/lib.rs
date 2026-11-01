@@ -13,9 +13,22 @@ use serde_json::Value;
 use ts_rs::TS;
 
 mod claude;
+mod neural;
 pub use claude::*;
+pub use neural::*;
 
 pub const PROTOCOL_VERSION: u32 = 1;
+
+/// What this daemon understands beyond the base protocol, sent in `HelloOk.features`. Clients send
+/// newer messages and requests only to daemons that list them: over the relay an older daemon
+/// closes the session on a message it cannot parse. Add a name with every new client message or
+/// request a new web remote might send to an older computer.
+pub const DAEMON_FEATURES: &[&str] = &["call_warm", "files", "neural", "host_system", "cv_stop_task", "neural_cleanup"];
+
+/// [`DAEMON_FEATURES`] as sent in `HelloOk`.
+pub fn daemon_features() -> Vec<String> {
+    DAEMON_FEATURES.iter().map(|f| f.to_string()).collect()
+}
 
 pub type Id = String;
 /// Milliseconds since the Unix epoch.
@@ -52,6 +65,9 @@ pub enum ClientMsg {
     /// Starts a voice call with Neural on this connection (one call per computer: a new one
     /// ends the previous).
     CallStart,
+    /// A call is likely soon (the Neural page is open): load the speech models now so the call
+    /// starts at once. They unload again after some idle minutes. Feature `"call_warm"`.
+    CallWarm,
     /// Microphone audio: base64 of 16-bit little-endian mono PCM at 16 kHz, captured with echo
     /// cancellation.
     CallAudio {
@@ -86,6 +102,10 @@ pub enum ServerMsg {
         v: u32,
         daemon_version: String,
         host: HostInfo,
+        /// [`DAEMON_FEATURES`]; absent from older daemons.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(as = "Option<Vec<String>>", optional)]
+        features: Vec<String>,
     },
     Res {
         #[ts(type = "number")]
@@ -275,6 +295,10 @@ pub struct State {
     /// Their messages, oldest first (the most recent ones of each swarm only).
     #[serde(default)]
     pub swarm_messages: Vec<SwarmMessage>,
+    /// Neural's tasks, memory, observations and confirmations (absent from older daemons).
+    #[serde(default)]
+    #[ts(as = "Option<NeuralState>", optional)]
+    pub neural: NeuralState,
 }
 
 /// A team of agents working on one goal. They talk through the `send_message` tool the daemon
@@ -353,6 +377,10 @@ pub struct OrchMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub session_id: Option<Id>,
+    /// Neural said this on its own (a report, not an answer).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub proactive: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -671,8 +699,19 @@ pub enum SplitDir {
 #[ts(export)]
 pub enum PaneContent {
     Empty,
-    Terminal { session: Id },
-    Browser { url: String },
+    Terminal {
+        session: Id,
+    },
+    Browser {
+        url: String,
+    },
+    /// The files explorer (D67) at folder `path`, with `file` open in its viewer.
+    Files {
+        path: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file: Option<String>,
+    },
 }
 
 /// A process in a PTY: an agent CLI or a plain shell.
@@ -815,6 +854,14 @@ pub struct Settings {
     pub llm: LlmSettings,
     #[serde(default)]
     pub call: CallSettings,
+    /// Phones and browsers may open files anywhere in the home folder, not only in workspaces (D67).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub remote_files_home: Option<bool>,
+    /// What the Discord card shows when `discord_presence` is `custom` (D72). Missing from old daemons.
+    #[serde(default)]
+    #[ts(as = "Option<DiscordOptions>", optional)]
+    pub discord: DiscordOptions,
 }
 
 /// How Neural sounds in calls.
@@ -882,6 +929,8 @@ impl Default for Settings {
             default_profile: "claude".into(),
             llm: LlmSettings::default(),
             call: CallSettings::default(),
+            remote_files_home: None,
+            discord: DiscordOptions::default(),
         }
     }
 }
@@ -902,6 +951,122 @@ pub enum DiscordPresence {
     Off,
     General,
     Detailed,
+    /// Numbers only (agents, tokens today, streak), never a name.
+    Stats,
+    /// `Settings.discord` decides.
+    Custom,
+}
+
+/// One line of the Discord card (Settings → Discord, D72).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DiscordStat {
+    /// The line is left out.
+    None,
+    /// "Working with AI agents" / "An agent needs input".
+    Activity,
+    /// "3 agents · 2 working".
+    Agents,
+    /// "4 subagents running" (Claude Code).
+    Subagents,
+    /// "In website": only with `project_names`, else "In a project".
+    Project,
+    /// "Opus 5.5" (the model of the most recently active agent).
+    Model,
+    /// "Claude Code + Codex".
+    Engine,
+    /// Tokens of the running agents' conversations.
+    TokensSession,
+    /// Tokens of every Claude Code / Codex conversation today.
+    TokensToday,
+    /// Today's use at API prices.
+    CostToday,
+    /// Time agents spent working today.
+    AgentTime,
+    /// Days in a row with agents at work.
+    Streak,
+    /// Files changed in the workspace of the most recent agent.
+    Files,
+}
+
+/// The parts of the Discord card (D72). Discord shows two text lines (`details`, `state`), a tooltip
+/// on the big image (`hover`), an elapsed timer, a party size after the second line and a button.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export)]
+pub struct DiscordOptions {
+    pub details: DiscordStat,
+    pub state: DiscordStat,
+    pub hover: DiscordStat,
+    /// "(2 of 5)": agents working of agents running.
+    pub party: bool,
+    pub timer: bool,
+    pub button: bool,
+    /// Workspace names may appear at all (off: "a project").
+    pub project_names: bool,
+}
+
+impl Default for DiscordOptions {
+    fn default() -> Self {
+        Self {
+            details: DiscordStat::Agents,
+            state: DiscordStat::TokensToday,
+            hover: DiscordStat::Model,
+            party: false,
+            timer: true,
+            button: true,
+            project_names: false,
+        }
+    }
+}
+
+/// A Discord activity as the card shows it (`discord_preview`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DiscordCard {
+    pub details: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub state: Option<String>,
+    /// Tooltip of the big image.
+    pub large_text: String,
+    /// The small badge: `working`, `waiting` or `idle`, and its tooltip.
+    pub badge: String,
+    pub small_text: String,
+    /// Unix seconds the elapsed timer counts from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub start: Option<i64>,
+    /// `[working, running]`, shown as "(2 of 5)".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub party: Option<[u32; 2]>,
+    /// Button labels.
+    #[serde(default)]
+    pub buttons: Vec<String>,
+}
+
+/// Answer of `discord_preview`: what Discord shows and would show.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DiscordPreview {
+    /// The card for the asked (or saved) settings; `None` when presence is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub card: Option<DiscordCard>,
+    /// No agent runs: `card` is an example with two made-up agents (Discord shows nothing now).
+    pub sample: bool,
+    /// The Discord app on the computer is connected.
+    pub connected: bool,
+    /// What Discord shows right now (last update sent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub shown: Option<DiscordCard>,
+    /// When the next update may go out (ms from now; Discord allows one every 15 s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub next_in_ms: Option<u64>,
 }
 
 // ───────────────────────────── events ─────────────────────────────
@@ -1172,6 +1337,56 @@ pub enum Request {
         path: String,
         name: String,
     },
+    // files explorer (D67): only inside workspace folders (and the home folder where allowed)
+    /// One folder's entries with git badges → `FileListing`.
+    FileList {
+        path: String,
+        /// Also names that start with a dot.
+        #[serde(default)]
+        hidden: bool,
+    },
+    /// Up to `len` bytes (default 512 KiB, at most 1 MiB) of a file from `offset` → `FileChunk`.
+    /// Larger files are read in several requests (a relay frame must stay small).
+    FileRead {
+        path: String,
+        #[serde(default)]
+        #[ts(type = "number")]
+        offset: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        len: Option<u32>,
+    },
+    /// Replaces a text file (at most 4 MiB). `mtime` from the read: refused with `conflict` when the
+    /// file changed since → `FileEntry`.
+    FileSave {
+        path: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        mtime: Option<u64>,
+    },
+    /// One piece (base64, at most 1 MiB) of a file uploaded into the folder `dir`. Pieces of one
+    /// upload share `id` and arrive in order; the last one makes the file → `FileUploadResult`.
+    FileUpload {
+        dir: String,
+        name: String,
+        id: String,
+        #[ts(type = "number")]
+        offset: u64,
+        data: String,
+        last: bool,
+        /// The whole file's size, so a full disk is refused before the first piece lands.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        size: Option<u64>,
+    },
+    /// Files and folders under `path` whose name contains `query` (at most 200) → `Vec<FileEntry>`.
+    FileSearch {
+        path: String,
+        query: String,
+        #[serde(default)]
+        hidden: bool,
+    },
     // git: a workspace, or with `session_id` that agent's worktree
     GitChanges {
         workspace_id: Id,
@@ -1215,6 +1430,15 @@ pub enum Request {
     /// (1 = today). Returns `UsageReport`.
     UsageReport {
         days: u32,
+    },
+    /// The Discord card for these settings (the saved ones when left out) → `DiscordPreview`.
+    DiscordPreview {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        presence: Option<DiscordPresence>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        options: Option<DiscordOptions>,
     },
     // remote access (desktop only)
     /// Starts a sign-in in the system browser; returns the URL to open. `message` is the
@@ -1273,6 +1497,12 @@ pub enum Request {
     },
     /// Is a newer app version available? Works without the desktop app → `HostUpdate`.
     HostUpdateCheck,
+    /// How the host runs (uptime, who keeps the service alive, permissions the service sees)
+    /// → `HostSystem`. Feature `host_system`.
+    HostSystem,
+    /// Restart the service with the newest installed version; running agents stop and resume
+    /// if `resume_on_start` is on. Only when `HostSystem.can_restart`. Feature `host_system`.
+    HostRestart,
     /// Asks the desktop app on the host to do something (`voice.status`, `voice.set`,
     /// `voice.learn`, `update.install`); fails when the app is closed.
     HostUi {
@@ -1311,6 +1541,53 @@ pub enum Request {
     /// Forget the swarm and its messages (the agents' panes stay).
     SwarmRemove {
         swarm_id: Id,
+    },
+    // Neural's own state (D61-D64)
+    /// How much Neural speaks on its own.
+    NeuralMode {
+        mode: NeuralMode,
+    },
+    /// The user changes a task: a new status, or `remove` to drop it.
+    NeuralTaskEdit {
+        id: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        status: Option<NeuralTaskStatus>,
+        #[serde(default)]
+        remove: bool,
+    },
+    NeuralNoteAdd {
+        text: String,
+    },
+    NeuralNoteRemove {
+        id: Id,
+    },
+    /// Allow or deny an action Neural asked about (`NeuralPending`).
+    NeuralConfirm {
+        id: Id,
+        allow: bool,
+    },
+    /// A team run by Neural on `goal`: a race of `profiles` (2-4, each in its own worktree) or a
+    /// build + review (`profiles[0]` builds, `profiles[1]` reviews). Returns the `NeuralTask`.
+    NeuralTeamStart {
+        workspace_id: Id,
+        goal: String,
+        pattern: TeamPattern,
+        profiles: Vec<Id>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        check: Option<String>,
+    },
+    /// Race: keep this attempt (merge its worktree) and throw the others away.
+    NeuralTeamPick {
+        task_id: Id,
+        session_id: Id,
+    },
+    /// A race that ended without a pick (dropped, failed, cut off by a restart): throw away the
+    /// worktrees its attempts made (never a kept one). Only on the user's explicit OK. Returns how
+    /// many were removed. Feature "neural_cleanup".
+    NeuralTeamCleanup {
+        task_id: Id,
     },
     /// What phones, browsers and the orchestrator did here, newest first.
     AuditList {
@@ -1484,6 +1761,87 @@ pub struct FsEntry {
     pub path: String,
     pub dir: bool,
     pub git: bool,
+    /// macOS would first ask on the computer's screen before this folder can be read (no Full
+    /// Disk Access yet): shown locked, never opened from here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub needs_fda: Option<bool>,
+}
+
+/// One file or folder in the files explorer.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub dir: bool,
+    #[ts(type = "number")]
+    pub size: u64,
+    /// Last change, ms since the epoch (0 when unknown).
+    #[ts(type = "number")]
+    pub mtime: u64,
+    /// A symbolic link (`path` is the link; opening it follows it, if it stays inside).
+    #[serde(default)]
+    pub link: bool,
+    /// Git state of the file, or for a folder the most important one inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub git: Option<GitFileStatus>,
+    /// macOS asks for permission before an app reads this folder (Desktop, Documents, Downloads).
+    #[serde(default)]
+    pub protected: bool,
+}
+
+/// Answer of `FileList`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FileListing {
+    pub path: String,
+    /// The allowed folder this one is in (a workspace or the home folder) and its name.
+    pub root: String,
+    pub root_name: String,
+    pub entries: Vec<FileEntry>,
+    /// This client may save and upload here.
+    pub writable: bool,
+    /// Only the first entries (a huge folder).
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+/// Answer of `FileRead`: one piece of a file.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FileChunk {
+    pub path: String,
+    pub name: String,
+    #[ts(type = "number")]
+    pub size: u64,
+    #[ts(type = "number")]
+    pub mtime: u64,
+    #[ts(type = "number")]
+    pub offset: u64,
+    /// Base64.
+    pub data: String,
+    /// The piece reaches the end of the file.
+    pub eof: bool,
+    /// Guessed from the name and the first bytes (`text/plain`, `image/png`, `application/pdf`, …).
+    pub mime: String,
+    /// The start of the file looks like text (no NUL bytes, valid UTF-8).
+    pub text: bool,
+    pub writable: bool,
+}
+
+/// Answer of `FileUpload`.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct FileUploadResult {
+    /// Bytes stored so far.
+    #[ts(type = "number")]
+    pub received: u64,
+    /// The finished file (after the last piece; its name may differ when one existed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub entry: Option<FileEntry>,
 }
 
 #[cfg(test)]
@@ -1505,4 +1863,42 @@ mod tests {
         let s = serde_json::to_string(&m).unwrap();
         assert_eq!(s, r#"{"t":"req","id":3,"req":{"m":"catalog_refresh"}}"#);
     }
+}
+
+/// Answer of `HostSystem` (Settings → System, D58-D60): how the service runs on this computer.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct HostSystem {
+    /// When this service process started.
+    #[ts(type = "number")]
+    pub started_at: Millis,
+    /// When the computer booted, where the OS says so.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub booted_at: Option<Millis>,
+    /// What keeps the service running: `boot` (starts with the computer), `login` (starts when
+    /// you log in) or `app` (started by the app). None: started without the host (older app).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub host_mode: Option<String>,
+    /// When that host started; it starts the service again if it stops.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub host_since: Option<Millis>,
+    /// How often the host had to start the service again after it stopped unexpectedly.
+    #[serde(default)]
+    pub restarts: u32,
+    /// Runs before anyone logged in on the computer (no keychain, no microphone yet).
+    #[serde(default)]
+    pub before_login: bool,
+    /// `HostRestart` works (the host starts the service again).
+    #[serde(default)]
+    pub can_restart: bool,
+    /// macOS: agents may read every folder without a dialog. None: not macOS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub full_disk_access: Option<bool>,
+    /// Problems in plain words, most important first.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }

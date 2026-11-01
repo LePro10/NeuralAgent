@@ -25,3 +25,10 @@ export function takeSettingsSection(): string | null {
   if (section) useSettingsRoute.setState({ section: null });
   return section;
 }
+
+/** Settings search: every word of `query` appears in `text` (title and keywords), any case. */
+export function matchesQuery(query: string, text: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = text.toLowerCase();
+  return words.every((w) => hay.includes(w));
+}

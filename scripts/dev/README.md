@@ -45,6 +45,8 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
   `swarm` (every swarm state, stop confirm, a member, sending, the new-swarm form, narrow windows;
   seed `swarms` first), `claude-images` (pictures in the Claude view and the viewer; daemon and
   shot need `CLAUDE_CONFIG_DIR=/tmp/<dir>`, see the scene's header).
+  `subagents` (cards, the running-work strip, nested agents, Tasks sheet; data from
+  `subagent-fixture.mjs`, same `CLAUDE_CONFIG_DIR` rule; arg `live` adds a finish and the fade).
   A scene is `export default async ({ p, shot, tap, go, more, sleep, phone, light, args, req }) => …`
   where `go("Agents")` uses the phone tab bar or the desktop sidebar and `more("Usage")` the phone
   Settings/Agents rows or the desktop sidebar / account menu. Write a new scene for a new screen instead of a one-off script.
@@ -73,6 +75,24 @@ All use a fresh `/tmp/na-web-*` / `$TMPDIR/na-repro-*` folder, the relay's test 
 (status + attention events, e.g. a permission prompt), `tick <dir>` (session that proves it
 survives updates), `orch "<text>"`, `orch-clear`, `orch-last`, `usage [days]`.
 For a real Claude session use a folder Claude already trusts and `--model haiku` profiles.
+
+## Neural v2 (fake model, then one real smoke)
+```
+node scripts/dev/env.mjs up --home /tmp/na-neural --port 1462 --no-vite
+NEURALAGENT_HOME=/tmp/na-neural node scripts/dev/neural-e2e.mjs      # scripted fake LLM, PASS/FAIL per step
+node scripts/dev/env.mjs down --home /tmp/na-neural
+```
+- `neural-e2e.mjs`: no model quota. Starts `fake-llm.mjs` in scripted mode (rules → text or tool
+  calls, request log in `<home>/neural-e2e/llm.jsonl`; port `FAKE_LLM_PORT`, default 11562) and
+  checks tasks, observations instead of chat notices, the proactive report, no wake without news,
+  mode off, confirm-once for a destructive instruction, memory, `<world>` and "(did:" lines,
+  the audit entries. Exit code 1 on any failure.
+- `neural-smoke.mjs [model]`: the same story against a REAL model (a few cents): start the env
+  with `NEURALAGENT_LLM_KEY="$(security find-generic-password -s neuralagent-llm -w)"` in front
+  (never echo the key); prints what Neural did and said for a human to judge, plus hard checks.
+- `fake-llm.mjs`: header lists the scripted-mode rule format (`user`, `tool`, `world`, `once`,
+  `say`/`call`, `{{agent}}`). Screens: `shot.mjs neural` (`scenes/neural.mjs`: chat with a
+  pending card, the panel, the team sheet, the Teams page).
 
 ## Neural, calls, swarm (real models)
 - Real Neural: start a test daemon with the key from the keychain (never echo it):

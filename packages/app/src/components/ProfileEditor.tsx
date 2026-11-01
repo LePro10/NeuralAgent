@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { joinArgs, splitArgs } from "../lib/profiles";
 import { useClient, useDaemon } from "../lib/store";
+import { useTypeFirst } from "../lib/typeFirst";
 
 const CUSTOM = "custom";
 
@@ -18,6 +19,7 @@ export function ProfileEditor({ profile, onDone }: { profile: Profile | null; on
   const [command, setCommand] = useState(profile?.engine === CUSTOM ? profile.command : "");
   const [args, setArgs] = useState(joinArgs(profile?.args ?? []));
   const [busy, setBusy] = useState(false);
+  const typeFirst = useTypeFirst();
 
   const entry = catalog?.find((c) => c.id === engine);
   const valid = name.trim() !== "" && (engine !== CUSTOM || command.trim() !== "");
@@ -57,7 +59,7 @@ export function ProfileEditor({ profile, onDone }: { profile: Profile | null; on
   return (
     <div className="flex flex-col gap-5 pb-4">
       <Field label="Name">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Claude (Haiku)" autoFocus />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Claude (Haiku)" autoFocus={!profile && typeFirst} />
       </Field>
       <InlinePicker
         title="Runs"

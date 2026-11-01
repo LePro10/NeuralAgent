@@ -1,6 +1,6 @@
 import type { FsEntry, FsRoots } from "@neuralagent/protocol";
 import { Button, Empty, Input, List, Row, SearchField, Sheet, Spinner, cn, toast } from "@neuralagent/ui";
-import { ArrowUp, ChevronRight, Clock, Folder, FolderGit2, FolderPlus, Home } from "lucide-react";
+import { ArrowUp, ChevronRight, Clock, Folder, FolderGit2, FolderLock, FolderPlus, Home } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
@@ -11,6 +11,11 @@ interface Listing {
   git: boolean;
   entries: FsEntry[];
 }
+
+/** What the daemon says where macOS would first ask on the computer (permissions.rs NEEDS_FDA). */
+const NEEDS_FDA = "Needs Full Disk Access on the Mac";
+const FDA_HINT = "macOS would first ask on the Mac's screen, and nobody can answer that from here. Turn on Full Disk Access once at the Mac (Settings → System), or open the folder once on the Mac.";
+const locked = () => toast(`${NEEDS_FDA}. Turn it on once at the Mac: Settings → System.`, { tone: "neutral" });
 
 /** Opens the host folder browser; resolves with the chosen path, or null when closed. */
 const useBrowser = create<{ resolve: ((p: string | null) => void) | null }>(() => ({ resolve: null }));
@@ -32,6 +37,8 @@ export function FolderBrowserSheet() {
   const [roots, setRoots] = useState<FsRoots | null>(null);
   const [dir, setDir] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(false);
+  /** The folder asked for needs Full Disk Access on the Mac (it was not read). */
+  const [shut, setShut] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -41,8 +48,15 @@ export function FolderBrowserSheet() {
     setLoading(true);
     setFilter("");
     client.req<Listing>({ m: "fs_list", p: { path } }).then(
-      (l) => setDir(l),
-      (e) => toast((e as Error).message, { tone: "danger" }),
+      (l) => {
+        setShut(null);
+        setDir(l);
+      },
+      (e) => {
+        const msg = (e as Error).message;
+        if (msg.startsWith(NEEDS_FDA)) setShut(path);
+        else toast(msg, { tone: "danger" });
+      },
     ).finally(() => setLoading(false));
   };
 
@@ -50,6 +64,7 @@ export function FolderBrowserSheet() {
     if (!open) return;
     setCreating(false);
     setDir(null);
+    setShut(null);
     client.req<FsRoots>({ m: "fs_roots" }).then(
       (r) => {
         setRoots(r);
@@ -129,8 +144,14 @@ export function FolderBrowserSheet() {
               </button>
             ))}
             {roots.projects.map((p) => (
-              <button key={p.path} type="button" className={chip} onClick={() => go(p.path)}>
-                {p.git ? <FolderGit2 className="size-4 text-dim" strokeWidth={1.8} aria-hidden /> : <Folder className="size-4 text-dim" strokeWidth={1.8} aria-hidden />}
+              <button key={p.path} type="button" className={cn(chip, p.needs_fda && "text-dim")} onClick={() => (p.needs_fda ? locked() : go(p.path))} title={p.needs_fda ? NEEDS_FDA : undefined}>
+                {p.needs_fda ? (
+                  <FolderLock className="size-4 text-faint" strokeWidth={1.8} aria-hidden />
+                ) : p.git ? (
+                  <FolderGit2 className="size-4 text-dim" strokeWidth={1.8} aria-hidden />
+                ) : (
+                  <Folder className="size-4 text-dim" strokeWidth={1.8} aria-hidden />
+                )}
                 {p.name}
               </button>
             ))}
@@ -175,12 +196,18 @@ export function FolderBrowserSheet() {
             </div>
           )}
           {dir?.parent && (platform.kind === "desktop" || dir.path !== roots?.home) && <Row Icon={ArrowUp} tile="gray" title="Up one level" onClick={() => go(dir.parent!)} />}
-          {shown.map((e) => (
-            <Row key={e.path} Icon={e.git ? FolderGit2 : Folder} tile={e.git ? "orange" : "blue"} title={e.name} value={e.git ? "git" : undefined} onClick={() => go(e.path)} />
-          ))}
+          {!shut &&
+            shown.map((e) =>
+              e.needs_fda ? (
+                <Row key={e.path} Icon={FolderLock} tile="gray" title={e.name} detail={NEEDS_FDA} chevron={false} onClick={locked} />
+              ) : (
+                <Row key={e.path} Icon={e.git ? FolderGit2 : Folder} tile={e.git ? "orange" : "blue"} title={e.name} value={e.git ? "git" : undefined} onClick={() => go(e.path)} />
+              ),
+            )}
         </List>
         {loading && <Spinner label="Loading" />}
-        {!loading && dir && shown.length === 0 && <Empty Icon={Folder} title={filter ? "No match" : "No subfolders"} detail="Use this folder, or create a new one." />}
+        {!loading && shut && <Empty Icon={FolderLock} title={NEEDS_FDA} detail={FDA_HINT} />}
+        {!loading && !shut && dir && shown.length === 0 && <Empty Icon={Folder} title={filter ? "No match" : "No subfolders"} detail="Use this folder, or create a new one." />}
       </div>
     </Sheet>
   );

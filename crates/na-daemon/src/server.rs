@@ -84,7 +84,7 @@ async fn serve_socket(core: Arc<Core>, socket: WebSocket) {
     });
 
     // Hello first.
-    let client = match tokio::time::timeout(Duration::from_secs(10), next_msg(&mut stream)).await {
+    let client = match tokio::time::timeout(Duration::from_secs(10), next_msg(&mut stream, &out)).await {
         Ok(Some(ClientMsg::Hello { v, client })) if v == PROTOCOL_VERSION => client,
         _ => {
             writer.abort();
@@ -93,18 +93,34 @@ async fn serve_socket(core: Arc<Core>, socket: WebSocket) {
     };
     tracing::info!(kind = ?client.kind, name = %client.name, "client connected");
     let _ = out
-        .send(ServerMsg::HelloOk { v: PROTOCOL_VERSION, daemon_version: env!("CARGO_PKG_VERSION").into(), host: core.host.clone() })
+        .send(ServerMsg::HelloOk {
+            v: PROTOCOL_VERSION,
+            daemon_version: env!("CARGO_PKG_VERSION").into(),
+            host: core.host.clone(),
+            features: na_protocol::daemon_features(),
+        })
         .await;
     run_client(core, client, out, &mut stream).await;
     writer.abort();
 }
 
-async fn next_msg(stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin)) -> Option<ClientMsg> {
+async fn next_msg(
+    stream: &mut (impl StreamExt<Item = Result<Message, axum::Error>> + Unpin),
+    out: &mpsc::Sender<ServerMsg>,
+) -> Option<ClientMsg> {
     while let Some(Ok(m)) = stream.next().await {
         match m {
             Message::Text(t) => match serde_json::from_str(&t) {
                 Ok(m) => return Some(m),
-                Err(e) => tracing::warn!("bad client message: {e}"),
+                Err(e) => {
+                    // Log only what kind of message it was: serde's text can quote field values.
+                    let (kind, id) = not_understood(&t);
+                    tracing::warn!(kind = %kind, line = e.line(), col = e.column(), "client message not understood: skipped");
+                    // A request still gets its answer, so the client does not wait forever.
+                    if let Some(id) = id {
+                        let _ = out.send(not_understood_res(&kind, id)).await;
+                    }
+                }
             },
             Message::Close(_) => return None,
             _ => {}
@@ -130,7 +146,7 @@ pub async fn run_client(
         call: None,
         id: next_conn_id(),
     };
-    while let Some(msg) = next_msg(stream).await {
+    while let Some(msg) = next_msg(stream, &conn.out).await {
         conn.on_msg(msg).await;
     }
     conn.close();
@@ -188,6 +204,11 @@ impl Conn {
             ClientMsg::CallAudio { d } => {
                 if let Some(c) = &self.call {
                     c.audio(&d);
+                }
+            }
+            ClientMsg::CallWarm => {
+                if self.client.kind != ClientKind::Orchestrator {
+                    self.core.call_warm();
                 }
             }
             ClientMsg::CallEnd => self.call = None,
@@ -420,5 +441,39 @@ async fn forward_cv(
                 return;
             }
         }
+    }
+}
+
+/// The kind of a message that did not parse (`t`, plus the request method for `req`) and, for a
+/// request, its id. Only these names are taken (short, plain characters), never field values.
+/// The error answer for a request this daemon cannot parse (a newer client), so it never waits.
+pub(crate) fn not_understood_res(kind: &str, id: u64) -> ServerMsg {
+    let message = format!("This NeuralAgent does not understand the request \"{kind}\" (update NeuralAgent).");
+    ServerMsg::Res { id, ok: false, r: None, err: Some(ApiError { code: ErrorCode::BadRequest, message }) }
+}
+
+pub(crate) fn not_understood(text: &str) -> (String, Option<u64>) {
+    let v: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+    let name = |x: &serde_json::Value| {
+        x.as_str().map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').take(40).collect::<String>())
+    };
+    let t = name(&v["t"]).unwrap_or_else(|| "?".into());
+    match name(&v["req"]["m"]) {
+        Some(m) if t == "req" => (m, v["id"].as_u64()),
+        _ => (t, None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bad_messages_are_named_by_kind_only() {
+        let (kind, id) = not_understood(r#"{"t":"req","id":7,"req":{"m":"session_start","p":{"cwd":"/secret/path"}}}"#);
+        assert_eq!((kind.as_str(), id), ("session_start", Some(7)));
+        assert_eq!(not_understood(r#"{"t":"term_in","sid":"x","data":"hunter2"}"#), ("term_in".into(), None));
+        assert_eq!(not_understood("not json at all"), ("?".into(), None));
+        assert_eq!(not_understood(r#"{"t":"a\"b c<d>"}"#).0, "abcd", "only plain characters");
     }
 }

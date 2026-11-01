@@ -6,4 +6,4 @@ import type { JsonValue } from "./serde_json/JsonValue";
 /**
  * Client → daemon.
  */
-export type ClientMsg = { "t": "hello", v: number, client: ClientInfo, } | { "t": "req", id: number, req: Request, } | { "t": "sub", since?: number, } | { "t": "ping", at: number, } | { "t": "call_start" } | { "t": "call_audio", d: string, } | { "t": "call_end" } | { "t": "host_ui_register", on: boolean, } | { "t": "host_ui_reply", call: number, ok: boolean, r?: JsonValue, error?: string, };
+export type ClientMsg = { "t": "hello", v: number, client: ClientInfo, } | { "t": "req", id: number, req: Request, } | { "t": "sub", since?: number, } | { "t": "ping", at: number, } | { "t": "call_start" } | { "t": "call_warm" } | { "t": "call_audio", d: string, } | { "t": "call_end" } | { "t": "host_ui_register", on: boolean, } | { "t": "host_ui_reply", call: number, ok: boolean, r?: JsonValue, error?: string, };

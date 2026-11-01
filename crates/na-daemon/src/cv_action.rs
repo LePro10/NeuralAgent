@@ -38,6 +38,7 @@ async fn paste_enter(pty: &Pty, text: &str) -> Result<(), ApiError> {
 
 /// A slash command typed key by key (so the CLI's command matching sees it), then Enter.
 async fn slash(pty: &Pty, line: &str) -> Result<(), ApiError> {
+    no_draft(pty)?;
     put(pty, line.as_bytes())?;
     pause(150).await;
     put(pty, b"\r")
@@ -101,6 +102,122 @@ async fn pick_where(pty: &Pty, ms: u64, want: impl Fn(&str) -> bool) -> Result<C
     }
 }
 
+/// A row of the `/tasks` list: the name and whether its state says it runs.
+#[derive(Debug, PartialEq)]
+struct TaskRow {
+    name: String,
+    running: bool,
+}
+
+/// What `/tasks` shows: one task's page (its type and name) or the list (rows, the selected one).
+#[derive(Debug, PartialEq)]
+enum TasksView {
+    Page { kind: String, name: String },
+    List { rows: Vec<TaskRow>, at: Option<usize> },
+}
+
+/// A full-width rule: the top of a dialog ("▔▔▔", or "───" as 2.1.316 draws it) or the text field's border.
+fn is_rule(l: &str) -> bool {
+    let t = l.trim();
+    t.contains("▔▔▔") || (t.chars().count() >= 20 && t.chars().all(|c| c == '─'))
+}
+
+/// The `/tasks` dialog is on the screen (its list or a task's page), even one we cannot read.
+/// Only then may Esc close it: on the main screen Esc would interrupt Claude.
+fn tasks_shown(screen: &str) -> bool {
+    screen
+        .lines()
+        .rev()
+        .take(40)
+        .any(|l| (l.contains("to select") && l.contains("Enter to view")) || (l.contains("← to go back") && l.contains("to close")))
+}
+
+/// Reads the `/tasks` dialog off the screen (Claude Code 2.1: "↑/↓ to select · … · x to stop" under
+/// the list, "← to go back · … · x to stop" under a task's page, whose title is "type › name").
+/// While Claude works the dialog sits above the text field, otherwise in its place.
+fn tasks_dialog(screen: &str) -> Option<TasksView> {
+    let lines: Vec<&str> = screen.lines().collect();
+    let foot = lines.iter().rposition(|l| l.contains("x to stop"))?;
+    // The dialog starts under its top rule; the conversation above it has "⏺" lines too.
+    let top = lines[..foot].iter().rposition(|l| is_rule(l))? + 1;
+    let body = &lines[top..foot];
+    if lines[foot].contains("to select") {
+        let mut rows = Vec::new();
+        let mut at = None;
+        for l in body {
+            let t = l.trim();
+            let sel = t.starts_with('❯');
+            let rest = t.trim_start_matches('❯').trim_start();
+            // A row: a status mark, the name, a gap, its state ("⏺ Wait A   running · Sonnet 5.5").
+            let Some(rest) = rest.strip_prefix(['⏺', '●', '◯', '○', '✓', '✔', '✗', '✘', '⎿']) else { continue };
+            if sel {
+                at = Some(rows.len());
+            }
+            let mut parts = rest.split("  ").map(str::trim).filter(|p| !p.is_empty());
+            let name = parts.next().unwrap_or("").to_string();
+            let running = parts.next().is_some_and(|s| s.to_lowercase().starts_with("running"));
+            rows.push(TaskRow { name, running });
+        }
+        return (!rows.is_empty()).then_some(TasksView::List { rows, at });
+    }
+    let (kind, name) = body.iter().find_map(|l| l.split_once(" › ").map(|(k, n)| (k.trim().to_string(), n.to_string())))?;
+    let name = name.split("  ").next().unwrap_or("").trim().to_string();
+    Some(TasksView::Page { kind, name })
+}
+
+/// The list's or page's name is this task's: the same words, or (cut off with "…") the start of them.
+fn same_name(shown: &str, want: &str) -> bool {
+    let (s, w) = (norm(shown), norm(want));
+    match s.strip_suffix('…') {
+        Some(cut) => cut.trim_end().chars().count() >= 8 && w.starts_with(cut.trim_end()),
+        None => !s.is_empty() && s == w,
+    }
+}
+
+/// "general-purpose" and "General purpose" are the same agent type.
+fn same_type(a: &str, b: &str) -> bool {
+    let n = |s: &str| s.to_lowercase().replace(['-', '_'], " ");
+    n(a) == n(b)
+}
+
+/// The text typed into Claude's text field: the box between two rules whose first row starts with
+/// `❯`. When the cursor the CLI draws (`cursor`: its row and the text before it) is in the box,
+/// only what stands before it counts: a suggestion or a placeholder starts at the cursor.
+/// `None` when no text field shows (a dialog took its place).
+fn typed_text(rows: &[String], cursor: Option<&(usize, String)>) -> Option<String> {
+    let rules: Vec<usize> = rows.iter().enumerate().filter(|(_, l)| is_rule(l) && !l.contains('▔')).map(|(i, _)| i).collect();
+    for w in rules.windows(2).rev() {
+        let (a, b) = (w[0], w[1]);
+        if b - a < 2 || b - a > 20 || !rows[a + 1].trim_start().starts_with('❯') {
+            continue;
+        }
+        let at = cursor.filter(|(r, _)| (a + 1..b).contains(r));
+        let mut text = String::new();
+        for (i, row) in rows.iter().enumerate().take(b).skip(a + 1) {
+            let row = match at {
+                Some((r, before)) if *r == i => before.as_str(),
+                Some((r, _)) if *r < i => break,
+                _ => row.as_str(),
+            };
+            let row = if i == a + 1 { row.trim_start().trim_start_matches('❯') } else { row };
+            text.push_str(row.trim());
+            text.push(' ');
+        }
+        return Some(text.trim().to_string());
+    }
+    None
+}
+
+/// Keys that end with Enter must not land on text someone typed into Claude's text field (it
+/// would be sent with them).
+fn no_draft(pty: &Pty) -> Result<(), ApiError> {
+    let (rows, cursor) = pty.rows_and_cursor();
+    match typed_text(&rows, cursor.as_ref()) {
+        Some(t) if !t.is_empty() => Err(bad("Claude's text field on the computer has unsent text. Send or clear it first")),
+        _ => Ok(()),
+    }
+}
+
 fn norm(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
@@ -118,12 +235,16 @@ impl Core {
         let pty = self.pty(sid)?;
         let lock = self.cv.action_locks.lock().entry(sid.clone()).or_default().clone();
         let _one_at_a_time = lock.lock().await;
-        if !runs_over_menus(&action) && menu_now(&pty.screen_text()).is_some() {
+        let screen = pty.screen_text();
+        // Stopping a task may use a task list that is open already (it reads as a menu).
+        let own_dialog = matches!(action, CvAction::StopTask { .. }) && tasks_shown(&screen);
+        if !runs_over_menus(&action) && !own_dialog && menu_now(&screen).is_some() {
             return Err(bad("Answer the open question in the terminal first"));
         }
         match action {
             CvAction::Interrupt => put(&pty, b"\x1b"),
             CvAction::Background => put(&pty, b"\x02"),
+            CvAction::StopTask { id } => self.cv_stop_task(sid, &pty, &id).await,
             CvAction::StopAgents => {
                 for _ in 0..2 {
                     put(&pty, b"\x18")?;
@@ -170,6 +291,7 @@ impl Core {
                 if command.trim().is_empty() {
                     return Err(bad("Empty command"));
                 }
+                no_draft(&pty)?;
                 put(&pty, b"!")?;
                 pause(200).await;
                 paste_enter(&pty, command.trim()).await
@@ -256,6 +378,105 @@ impl Core {
         Ok(())
     }
 
+    /// `/tasks`, select the task's row, open its page (Enter; one task opens there directly),
+    /// check the page is this task's, `x`, close the list. The page belongs to one task, so a
+    /// list that changes order under the selection cannot make `x` stop another one. Nothing is
+    /// typed over unsent text in the text field. Every key after `/tasks` is checked against
+    /// the screen; on doubt the dialog is closed and nothing is stopped (D65).
+    async fn cv_stop_task(&self, sid: &Id, pty: &Pty, id: &str) -> Result<(), ApiError> {
+        let t = self.cv_task(sid, id).ok_or_else(|| bad("That task is not in this conversation"))?;
+        if t.status != "running" {
+            return Err(bad("That task is not running any more"));
+        }
+        if !t.background || t.parent.is_some() {
+            return Err(bad("Only background tasks of the conversation stop one by one"));
+        }
+        // The names Claude's list may show for it: what it was asked to do, else its command.
+        let names: Vec<String> =
+            [Some(t.description.clone()), t.command.clone()].into_iter().flatten().filter(|n| n.trim().chars().count() >= 3).collect();
+        if names.is_empty() {
+            return Err(bad("This task has no name to find it by"));
+        }
+        let is_it = |n: &str| names.iter().any(|w| same_name(n, w));
+        let twins =
+            self.cv_running_tasks(sid).iter().filter(|o| o.id != t.id && !o.description.is_empty() && is_it(&o.description)).count();
+        if twins > 0 {
+            return Err(bad("Several running tasks have that name. Stop it in the terminal (/tasks)"));
+        }
+        let page_ok = |kind: &str, name: &str| {
+            is_it(name) && (kind.is_empty() || t.agent_type.as_deref().is_none_or(|a| t.kind != "agent" || same_type(kind, a)))
+        };
+        let close = |pty: &Pty, e: ApiError| {
+            // Esc only while the dialog shows: on the main screen it would interrupt Claude.
+            if tasks_shown(&pty.screen_text()) {
+                let _ = put(pty, b"\x1b");
+            }
+            Err(e)
+        };
+        if !tasks_shown(&pty.screen_text()) {
+            slash(pty, "/tasks").await?;
+        }
+        let mut waited = 0;
+        let view = loop {
+            if let Some(v) = tasks_dialog(&pty.screen_text()) {
+                break v;
+            }
+            if waited >= 3000 {
+                return close(pty, bad("The task list did not open"));
+            }
+            pause(150).await;
+            waited += 150;
+        };
+        if let TasksView::List { .. } = view {
+            let mut steps = 0;
+            loop {
+                let Some(TasksView::List { rows, at }) = tasks_dialog(&pty.screen_text()) else {
+                    return close(pty, bad("The task list closed"));
+                };
+                let mut hits: Vec<usize> = rows.iter().enumerate().filter(|(_, r)| is_it(&r.name)).map(|(i, _)| i).collect();
+                if hits.len() > 1 {
+                    hits.retain(|&i| rows[i].running);
+                }
+                let [hit] = hits[..] else {
+                    return close(
+                        pty,
+                        bad(if hits.is_empty() { "That task is not in Claude's list" } else { "Several tasks have that name" }),
+                    );
+                };
+                if at == Some(hit) {
+                    break;
+                }
+                let Some(at) = at else { return close(pty, bad("No row is selected")) };
+                if steps >= 40 {
+                    return close(pty, bad("Could not select that task"));
+                }
+                put(pty, if hit < at { UP } else { DOWN })?;
+                steps += 1;
+                pause(80).await;
+            }
+            put(pty, b"\r")?;
+        }
+        let mut waited = 0;
+        loop {
+            match tasks_dialog(&pty.screen_text()) {
+                Some(TasksView::Page { kind, name }) if page_ok(&kind, &name) => break,
+                Some(TasksView::Page { .. }) => return close(pty, bad("Claude shows a different task")),
+                _ if waited >= 1500 => return close(pty, bad("The task did not open in Claude's list")),
+                _ => {}
+            }
+            pause(100).await;
+            waited += 100;
+        }
+        put(pty, b"x")?;
+        pause(500).await;
+        // `x` on a page goes back to the list (Claude Code 2.1.316); close whatever is left, so
+        // the task's end reaches the conversation ("update waiting while this panel is open").
+        if tasks_shown(&pty.screen_text()) {
+            put(pty, b"\x1b")?;
+        }
+        Ok(())
+    }
+
     /// `/rewind`: opens the list, moves to the row of that prompt, picks what to restore.
     async fn cv_rewind(&self, sid: &Id, pty: &Pty, message_id: &str, what: &str) -> Result<(), ApiError> {
         let text = self.cv_user_text(sid, message_id).ok_or_else(|| bad("That message is not in this conversation"))?;
@@ -316,6 +537,75 @@ mod tests {
         assert!(!shows_item(&p, &item));
         assert!(!runs_over_menus(&CvAction::Model { model: "opus".into() }));
         assert!(runs_over_menus(&CvAction::Interrupt));
+    }
+
+    #[test]
+    fn tasks_dialog_list_and_page() {
+        let row = |n: &str| TaskRow { name: n.into(), running: true };
+        let list = "⏺ ok\n✻ Waiting for 2 background agents to finish\n▔▔▔▔\n  Background\n  2 active agents\n  Local agents (2)\n   ❯ ⏺ Wait B   running · Sonnet 5.5\n     ⏺ Wait A   running · Sonnet 5.5\n  ↑/↓ to select · Enter to view · f to foreground · x to stop · ctrl+x ctrl+k to stop all agents · Esc to close\n";
+        assert_eq!(tasks_dialog(list), Some(TasksView::List { rows: vec![row("Wait B"), row("Wait A")], at: Some(0) }));
+        let page = "  Searched code, read a file › x\n▔▔▔▔\n  general-purpose › Node wait                                    22s · 21.3k tokens · 1 tool\n  Progress\n    › Bash(node -e \"x\")\n  ← to go back · Esc/Enter/Space to close · x to stop · f to foreground\n";
+        assert_eq!(tasks_dialog(page), Some(TasksView::Page { kind: "general-purpose".into(), name: "Node wait".into() }));
+        assert_eq!(tasks_dialog("❯ \n  ⏵⏵ bypass permissions on"), None);
+        assert!(tasks_shown(list) && tasks_shown(page) && !tasks_shown("❯ \n  ⏵⏵ bypass permissions on"));
+
+        // Claude Code 2.1.316 as it really draws: "───" rules; idle, the list replaces the text field.
+        let rule = "─".repeat(60);
+        let idle = format!(
+            "⏺ launched\n✻ Waiting for 2 background agents to finish\n❯ /tasks\n{rule}\n  Background\n  2 active agents\n  Local agents (2)\n  ❯ ⏺ Wait B   running · Haiku 5.5\n    ⏺ Wait A   running · Haiku 5.5\n  ↑/↓ to select · Enter to view · f to foreground · x to stop · ctrl+x ctrl+k to stop all agents · Esc to\n  close\n"
+        );
+        assert_eq!(tasks_dialog(&idle), Some(TasksView::List { rows: vec![row("Wait B"), row("Wait A")], at: Some(0) }));
+        // Busy: the page sits above the text field (which stays empty).
+        let busy = format!(
+            "· Germinating… (36s · ↓ 385 tokens)\n{rule}\n  general-purpose › Wait B\n  7m 7s · 9.9k tokens · 1 tool · Haiku 5.5\n\n  Progress\n  › Bash(until [ -f /tmp/stop-b ]; do sleep 2; done)\n\n  ← to go back · Esc/Enter/Space to close · x to stop · f to foreground\n\n{rule}\n❯  \n{rule}\n  ⏵⏵ auto mode on (shift+tab to cycle)\n"
+        );
+        assert_eq!(tasks_dialog(&busy), Some(TasksView::Page { kind: "general-purpose".into(), name: "Wait B".into() }));
+        assert!(tasks_shown(&busy));
+        // Nothing runs: no "x to stop", nothing to read, but still a dialog to close.
+        let done = format!(
+            "❯ /tasks\n{rule}\nBackground\nCompleted (2)\n❯ ✔ Wait B   done · Haiku 5.5\n  ✔ Wait A   done · Haiku 5.5\n↑/↓ to select · Enter to view · Esc to close\n"
+        );
+        assert_eq!(tasks_dialog(&done), None);
+        assert!(tasks_shown(&done));
+        // Same names: only a running row counts.
+        let mixed = format!(
+            "{rule}\n  ❯ ⏺ Wait A   running · Haiku 5.5\n    ✔ Wait A   done · Haiku 5.5\n  ↑/↓ to select · Enter to view · x to stop · Esc to close\n"
+        );
+        let Some(TasksView::List { rows, .. }) = tasks_dialog(&mixed) else { panic!() };
+        assert_eq!(rows.iter().map(|r| r.running).collect::<Vec<_>>(), [true, false]);
+    }
+
+    #[test]
+    fn task_names_match_exactly_or_by_a_long_cut() {
+        assert!(same_name("Wait A", "wait  a"));
+        assert!(!same_name("Wait", "Wait A"), "a shorter name is another task");
+        assert!(!same_name("Wait A", "Wait"));
+        assert!(same_name("Review the parser and…", "Review the parser and its tests"));
+        assert!(!same_name("Rev…", "Review the parser"), "too short a cut to be sure");
+        assert!(same_type("general-purpose", "General purpose") && !same_type("Explore", "general-purpose"));
+    }
+
+    #[test]
+    fn typed_text_only_counts_what_is_before_the_cursor() {
+        let rule = "─".repeat(60);
+        let rows = |s: &str| s.lines().map(str::to_string).collect::<Vec<_>>();
+        let empty = rows(&format!("⏺ hi\n{rule}\n❯  \n{rule}\n  ⏵⏵ auto mode on"));
+        assert_eq!(typed_text(&empty, Some(&(2, "❯ ".into()))).as_deref(), Some(""));
+        assert_eq!(typed_text(&empty, None).as_deref(), Some(""));
+        let draft = rows(&format!("{rule}\n❯ hello draft\n{rule}\n  ⏵⏵ auto mode on"));
+        assert_eq!(typed_text(&draft, Some(&(1, "❯ hello draf".into()))).as_deref(), Some("hello draf"));
+        assert_eq!(typed_text(&draft, None).as_deref(), Some("hello draft"));
+        // A suggestion (or placeholder) starts at the cursor: nothing typed.
+        let ghost = rows(&format!("{rule}\n❯ run the tests\n{rule}\n"));
+        assert_eq!(typed_text(&ghost, Some(&(1, "❯ ".into()))).as_deref(), Some(""));
+        // Two lines typed, cursor on the second.
+        let two = rows(&format!("{rule}\n❯ first line\n  second\n{rule}\n"));
+        assert_eq!(typed_text(&two, Some(&(2, "  sec".into()))).as_deref(), Some("first line sec"));
+        // A dialog in place of the text field: no text field.
+        let dialog = rows(&format!("{rule}\nx\n✻ Waiting\n❯ /tasks\n{rule}\n  Background\n"));
+        assert_eq!(typed_text(&dialog, None), None);
+        // The cursor elsewhere (a list below) does not hide the draft.
+        assert_eq!(typed_text(&draft, Some(&(3, "  ".into()))).as_deref(), Some("hello draft"));
     }
 
     #[test]
