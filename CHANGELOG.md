@@ -11,10 +11,11 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+The biggest update so far: a redesigned phone app, Neural that thinks along, Teams, Files, a background service that keeps your agents running, and a new website with a live demo.
+
 ### New
-- **New website** at agent.neuralhub.dev: calm, fast, and the real app runs live in the page. Scroll through six chapters (agents side by side, a question answered from the phone, Neural, Teams, files and changes) and try it yourself: type to Claude, tap Allow on the phone and watch the computer continue. Made for phones too.
-- **Live demo** at agent.neuralhub.dev/demo/: the real desktop and phone app against a simulated computer, in your browser, without an account or install. Your browser's data is never touched.
-- The download page picks the right installer for your system and lists every build, first-start steps and requirements; the changelog is a timeline with a version index.
 - NeuralAgent is now open source (AGPL-3.0). Anyone can read the code and suggest changes on GitHub.
 - **Phone redesign**: four tabs (Agents, Neural, Projects, Settings). Every screen has its own address, so back (button, edge swipe, Android back, browser back) always goes one step back, and opening an agent on the phone no longer moves your computer's panes.
 - **Agents inbox** on the phone: Needs you, Working, Done, with teams grouped. Answer a waiting agent (Allow / Deny / Reply) right in the list; the tab shows how many need you. A notification opens that agent's conversation at once.
@@ -34,6 +35,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 - **Settings → System**: see which macOS permissions NeuralAgent has, open the right place in System Settings with one click, or let "Set up all permissions" walk you through them. Choose whether the background service starts when you log in or already when the computer starts, and restart it from your phone.
 - **Discord card you design**: presets (General, Stats, Detailed) or Custom, where you pick both lines and the image tooltip (agents, subagents, tokens today or this session, cost, model, agent CLIs, agent time today, your streak, files changed, project) plus party size "(2 of 5)", timer and button. A live preview in Settings shows exactly what Discord shows, and whether Discord is open. Project names stay private unless you turn them on.
 - Music and other audio now drop to a quiet background level while you dictate, say “Hey Neural” or are in a call with Neural on the desktop, and fade back afterwards, also when the output device (e.g. AirPods) changes meanwhile. Switch and level in Settings → Voice → Other audio; on a Mac, calls lower Music and Spotify once you allow it. On Android, calls lower other audio too.
+- **New website** at agent.neuralhub.dev: calm, fast, and the real app runs live in the page. Scroll through six chapters (agents side by side, a question answered from the phone, Neural, Teams, files and changes) and try it yourself: type to Claude, tap Allow on the phone and watch the computer continue. Made for phones too.
+- **Live demo** at agent.neuralhub.dev/demo/: the real desktop and phone app against a simulated computer, in your browser, without an account or install. Your browser's data is never touched.
+- The download page picks the right installer for your system and lists every build, first-start steps and requirements; the changelog is a timeline with a version index.
 
 ### Improved
 - macOS no longer asks again for access to Documents, Desktop or Downloads after every update: the background service and its agents now count as NeuralAgent itself. Grant Full Disk Access once and remote work never stops at a dialog on the Mac. If the service stops unexpectedly, it starts again by itself.
