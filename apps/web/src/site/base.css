@@ -1,0 +1,72 @@
+/*
+ * Marketing base: the lean sibling of ../styles.css.
+ *
+ * ../styles.css carries the whole app design system (every component's utilities, ~120 KB). The
+ * marketing pages need only the design TOKENS (colour, type, radius, motion), a reset and two fonts,
+ * so they import this file instead. `theme(static)` keeps every token on :root: section CSS files
+ * are plain CSS (not Tailwind roots), so nothing would otherwise mark their var(--color-*) as used.
+ *
+ * No Tailwind utilities here on purpose. Marketing code uses the classes of foundation.css.
+ * Import order on a page:  base.css, foundation.css, then the section CSS files.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/preflight.css" layer(base);
+@import "@neuralagent/ui/styles/tokens.css" layer(theme) theme(static);
+
+/* ── Fonts ──────────────────────────────────────────────────────────────
+   Self-hosted (no third-party request: the privacy page says so). Latin only; the site is English.
+   DM Sans Variable carries the opsz axis (9-40): display sizes get the high-contrast cut through
+   font-optical-sizing, body text the sturdier one. IBM Plex Mono for labels, code and numbers.
+   Not preloaded: see the comment in index.html. */
+@font-face {
+  font-family: "DM Sans Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 1000;
+  src: url("./fonts/dm-sans-latin-opsz-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("./fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Metric-matched fallbacks: while the web font loads, text sits in Arial / Courier scaled to the
+   same advance widths and line box, so the swap moves nothing (measured with fontTools: DM Sans
+   avg advance 0.4714 em vs Arial 0.4415; Plex Mono 0.600 em = Courier New). */
+@font-face {
+  font-family: "DM Sans Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 106.8%;
+  ascent-override: 92.9%;
+  descent-override: 29%;
+  line-gap-override: 0%;
+}
+/* Display sizes: with the optical-size axis DM Sans is about 12% narrower than at body size, so the body fallback runs wide and a
+   headline wraps to one line more before the font arrives (CLS 0.037 at 360 px). A second fallback for .t-display/.t-h1/.t-h2,
+   scaled by the measured ratio (0.883 at 56 to 112 px, 0.91 at 36 px; set between the two, phone headings matter most). Ascent and descent are the real ones divided by the size adjustment. */
+@font-face {
+  font-family: "DM Sans Fallback Display";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 98%;
+  ascent-override: 101.2%;
+  descent-override: 31.6%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "IBM Plex Mono Fallback";
+  src: local("Courier New"), local("Courier"), local("Liberation Mono");
+  size-adjust: 100%;
+  ascent-override: 102.5%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+}
+:root {
+  --font-sans: "DM Sans Variable", "DM Sans Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "DM Sans Variable", "DM Sans Fallback Display", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Mono Fallback", ui-monospace, "SF Mono", monospace;
+}

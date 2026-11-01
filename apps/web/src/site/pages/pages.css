@@ -1,0 +1,41 @@
+/*
+ * Shared by the sub-pages (download, changelog, legal, 404). Tokens only; the foundation (foundation.css) owns the
+ * primitives. Each page brings its own CSS file after this one.
+ */
+
+/* The first section sits under the fixed nav: no top rule of its own, a hairline at the nav's bottom edge
+   (same seam as the landing hero) and the crosshairs of the rails right on it. */
+.pg-first { border-top: 0; padding-top: calc(var(--nav-h) + var(--safe-top)); }
+.pg-first::before { content: ""; position: absolute; z-index: 2; left: 0; right: 0; top: calc(var(--nav-h) + var(--safe-top)); height: var(--hair); background: var(--rule); }
+.pg-head { display: grid; gap: var(--sp-6) var(--sp-7); padding-block: clamp(40px, 6vw, 96px) clamp(40px, 5vw, 80px); }
+.pg-title { display: grid; gap: clamp(16px, 2vw, 28px); align-content: start; min-width: 0; }
+.pg-title .t-h1 { max-width: 12em; }
+.pg-lead { max-width: 34em; }
+
+/* A small mono caption line under controls. */
+.pg-note { margin: 0; color: var(--color-faint); font: 400 var(--fs-label)/1.55 var(--font-mono); max-width: 64ch; }
+.pg-note a { color: var(--color-dim); text-decoration: underline; text-decoration-color: var(--rule-3); text-underline-offset: 0.24em; }
+.pg-note a:hover { color: var(--color-accent); text-decoration-color: currentColor; }
+.pg-note .na-kbd { font-size: 0.68rem; }
+
+/* Cut-off loading text and skeletons: opacity only. */
+@keyframes pg-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.pg-skel { border-radius: var(--radius-tile); background: var(--color-fill-2); animation: pg-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pg-skel { animation: none; opacity: 0.8; } }
+
+/* Hairline link cells row (used by download and legal) */
+.pg-links { --cols: 1; }
+@media (min-width: 720px) { .pg-links { --cols: 3; } }
+.pg-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--sp-4); align-items: center; padding: var(--sp-5) var(--sp-4); color: var(--color-ink); text-decoration: none; min-height: 88px; }
+.pg-link b { display: block; font-weight: 520; font-size: 1.0625rem; letter-spacing: -0.01em; color: var(--color-bright); }
+.pg-link span { display: block; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.45; }
+.pg-link svg { color: var(--color-faint); transition: transform 0.25s var(--ease-out-soft), color 0.2s; }
+.pg-link:hover svg { color: var(--color-accent); transform: translate(2px, -2px); }
+.pg-links .na-cell { padding: 0; }
+
+/* Touch: links inside a sentence keep their line, but the tap area grows to 44 px (padding on an inline box adds no
+   height to the line). The gaps around these notes are wider than the padding, so neighbours are never covered. */
+@media (pointer: coarse) {
+  .pg-note a, .dl-ol a, .dl-need a, .dl-sub a, .lg-prose a { padding-block: 15px; }
+  .lg-sec__h a { display: block; padding-block: 10px; margin-block: -10px; }
+}

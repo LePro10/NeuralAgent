@@ -943,3 +943,14 @@ ignored until a call starts or warm-ups pause for `WARM_PAUSE` (10 min)
 reconnects every few minutes therefore holds the 1 GB for at most about 20 minutes, not for
 good; the cost after that is one cold start (about a second). Alternative: a client-side limit
 (every web remote and app version would need it, and old ones would not have it).
+
+## D79 — The website demo is the real app against a fake daemon in the browser (2026-11-01)
+The site's live demo (`apps/web/src/demo`, [notes/website.md](notes/website.md)) runs the real
+`@neuralagent/app` in iframes against a TypeScript daemon that speaks the real protocol, with a
+virtual clock, seeded data and in-memory files/git. Desk and phone frames share one world on the
+host page, so the cross-device flow (answer on the phone, the computer continues) is real app
+code. The daemon is a lazy chunk and never touches the visitor's storage. Every new protocol
+request the app sends needs an answer there too (`src/demo/daemon/handlers`; the tests check that
+every request is answered). Alternatives: videos/screenshots (cannot be tried), a hosted real
+daemon (cost, abuse, secrets), the old hand-drawn simulation (drifted from the app with every
+release).

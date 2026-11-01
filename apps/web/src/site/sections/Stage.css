@@ -1,0 +1,112 @@
+/* Stage: the sticky live window (>= 900 px, mouse) and the stacked chapters (phones, tablets). Tokens only. */
+
+.stage { overflow: visible; }
+.stage__body { overflow: visible; }
+/* On the sticky layout the window is part of the hero: this section starts one stage-height above where the hero ends,
+   so the window rises into the first screen. Keep the query in step with stage/mode.ts. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .stage--sticky { margin-top: calc((100svh - var(--nav-h) - var(--safe-top) + clamp(20px, 2.4vw, 32px)) * -1); border-top-color: transparent; }
+  .stage--sticky > .na-frame::before, .stage--sticky > .na-frame::after { display: none; }
+}
+
+/* ── sticky stage ────────────────────────────────────────────────────── */
+.stg {
+  --ink-quiet: color-mix(in oklab, var(--color-ink) 34%, var(--color-dim)); /* the small mono lines under the copy: at least 7:1 on the page */
+  --cw: clamp(300px, 23vw, 400px);                 /* copy column */
+  --bleed: calc(max(0px, (100vw - var(--w-frame)) / 2) + var(--pad) - 32px); /* the window may leave the column on the right, like a monitor */
+  --stage-h: calc(100svh - var(--nav-h) - var(--safe-top));
+  position: relative;
+}
+.stg__rig { position: sticky; top: calc(var(--nav-h) + var(--safe-top)); z-index: 2; height: var(--stage-h); pointer-events: none; }
+.stg__area { position: relative; width: calc(100% + var(--bleed)); height: 100%; }
+
+.stg__desk { position: absolute; left: 0; top: 0; width: 960px; transform-origin: 0 0; transform: translate3d(var(--wx, 0px), var(--wy, 8px), 0) scale(var(--ws, 0.9)); pointer-events: auto; will-change: transform; contain: layout style; }
+.stg__phone { position: absolute; left: 0; top: 0; width: 402px; transform-origin: 0 0; transform: translate3d(calc(var(--px, 800px) + (1 - var(--ph, 1)) * 320px), var(--py, 20px), 0) scale(var(--ps, 0.8)); opacity: clamp(0, calc(var(--ph, 1) * 14), 1); pointer-events: auto; will-change: transform, opacity; z-index: 2; } /* It slides in from beyond the right edge at full strength: a half-transparent phone over the window reads as a glitch. */
+.stg__phone[data-on="off"] { visibility: hidden; pointer-events: none; }
+
+/* The bottom bar: live marker · chapter index · tools. It spans the page column (not the bleed). */
+.stg__bar { position: absolute; left: 0; right: var(--bleed); bottom: 0; height: 52px; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-5); border-top: var(--hair) solid var(--rule); pointer-events: auto; background: var(--color-bg); z-index: 3; }
+.stg__live { display: flex; align-items: center; gap: 10px; margin: 0; white-space: nowrap; color: var(--color-faint); flex: none; }
+.stg__live b { font-weight: 400; color: var(--color-dim); }
+.stg__idx { min-width: 0; flex: 1 1 auto; }
+.stg__idx ol { display: flex; align-items: stretch; justify-content: center; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.stg__idx li { position: relative; flex: 0 1 auto; min-width: 0; }
+.stg__idx li::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 6px; height: var(--hair); background: var(--rule-2); }
+.stg__idx li::before { content: ""; position: absolute; left: 8px; right: 8px; bottom: 6px; height: 1.5px; background: var(--color-accent); transform-origin: 0 50%; transform: scaleX(var(--f, 0)); z-index: 1; }
+.stg__idx li[data-state="done"]::before { background: var(--color-ember); transform: scaleX(1); }
+.stg__idx button { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 4px; border: 0; background: transparent; color: var(--color-faint); border-radius: var(--radius-tile); transition: color 0.2s; }
+.stg__idx button .stg__lbl { display: none; white-space: nowrap; }
+.stg__idx li[data-state="now"] button { color: var(--color-bright); }
+.stg__idx li[data-state="now"] .stg__lbl { display: inline; }
+.stg__idx li[data-state="done"] button { color: var(--color-dim); }
+@media (hover: hover) { .stg__idx button:hover { color: var(--color-bright); } }
+.stg__tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.stg__tool { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: var(--radius-tile); background: transparent; color: var(--color-dim); font: 400 var(--fs-label)/1 var(--font-mono); text-decoration: none; white-space: nowrap; transition: color 0.2s, background-color 0.2s; }
+.stg__tool:disabled { opacity: 0.4; }
+.stg__tool[aria-pressed="true"] { color: var(--color-accent); }
+@media (hover: hover) { .stg__tool:not(:disabled):hover { color: var(--color-bright); background: var(--color-fill-2); } }
+@media (max-width: 1179px) {
+  .stg__tool span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .stg__tool { padding: 0 10px; }
+  .stg__live .na-hide-md { display: none; }
+}
+@media (max-width: 1099px) { .stg__idx li:not([data-state="now"]) .stg__no { display: none; } }
+
+/* The chapters: a column of copy beside the window. Each block is one screen tall; the one on the reading line is lit. */
+.stg__chs { position: relative; z-index: 1; width: var(--cw); margin: calc(var(--stage-h) * -1) 0 0; padding: calc(var(--stage-h) * 0.92) 0 0; list-style: none; }
+.ch { display: grid; align-items: center; min-height: var(--stage-h); padding-bottom: 52px; }
+.ch__in { opacity: var(--k, 1); }
+.ch__h { margin: 0 0 var(--sp-4); font-size: clamp(1.75rem, 0.9rem + 1.7vw, 2.75rem); font-weight: 520; line-height: 1.04; letter-spacing: -0.036em; color: var(--color-bright); text-wrap: balance; }
+.ch__stop { display: inline-block; width: 0.17em; height: 0.17em; margin-left: 0.06em; border-radius: 0.03em; background: var(--color-faint); vertical-align: baseline; transition: background-color 0.4s; }
+.ch[aria-current="step"] .ch__stop { background: var(--color-accent); }
+.ch__p { margin: 0 0 var(--sp-3); }
+.ch__try { display: flex; align-items: center; gap: 9px; margin: var(--sp-5) 0 0; color: var(--ink-quiet); }
+.ch__try b { font-weight: 400; color: var(--color-accent); }
+.ch__log { display: grid; gap: 7px; margin: var(--sp-4) 0 0; padding: 0; list-style: none; min-height: 5.6em; align-content: start; }
+.ch__line { display: flex; align-items: baseline; gap: 10px; font: 400 var(--fs-label)/1.45 var(--font-mono); color: var(--ink-quiet); animation: ch-line 0.5s var(--ease-out-soft) backwards; }
+.ch__line .na-mark { transform: translateY(0.1em); }
+@keyframes ch-line { from { opacity: 0; transform: translate3d(0, 6px, 0); } }
+
+/* Phone: the tick on the device says who answered. */
+.pd__tick { position: absolute; left: 50%; top: 46px; z-index: 5; display: inline-flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: var(--radius-tile); background: var(--color-chrome); box-shadow: 0 0 0 var(--hair) var(--rule-3), var(--shadow-float); color: var(--color-bright); font: 400 15px/1 var(--font-mono); white-space: nowrap; opacity: 0; transform: translate3d(-50%, -12px, 0); transition: opacity 0.4s var(--ease-out-soft), transform 0.5s var(--ease-out-soft); pointer-events: none; }
+.pd__tick[data-show] { opacity: 1; transform: translate3d(-50%, 0, 0); }
+
+/* Reduced motion: no scroll-linked transforms and no hero state; window and phone side by side, chapters at full strength. */
+.stg[data-static] .stg__chs { padding-top: 0; }
+.stg[data-static] .stg__phone { visibility: visible; }
+.stg[data-static][data-pre] .stg__phone { visibility: hidden; } /* before chapter 1 the hero owns the screen: no phone peeking in at its foot */
+.stg[data-static] .ch__in { opacity: 1; }
+.stg[data-static] .stg__desk, .stg[data-static] .stg__phone { will-change: auto; }
+
+/* ── stacked chapters (phones and tablets) ───────────────────────────── */
+.stage__head { margin-bottom: clamp(20px, 5vw, 40px); padding-top: clamp(40px, 10vw, 80px); }
+.stk { margin: 0 calc(var(--pad) * -1); }
+.stk .ch__in { opacity: 1; }
+.stk .ch__h { font-size: clamp(1.75rem, 1.2rem + 2.6vw, 2.5rem); }
+
+/* On a phone: one swipeable deck. Each chapter is a pane with a title bar; the next one peeks in at the edge. */
+.stk__track { display: flex; gap: var(--sp-3); margin: 0; padding: 0 var(--pad) 2px; list-style: none; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: var(--pad); scrollbar-width: none; }
+.stk__track::-webkit-scrollbar { display: none; }
+.stk__track:focus-visible { outline-offset: -2px; }
+.stk__ch { flex: 0 0 min(84vw, 360px); scroll-snap-align: start; display: grid; align-content: start; gap: var(--sp-3); padding: 0 0 var(--sp-4); border: var(--hair) solid var(--rule-2); border-radius: var(--radius-list); background: var(--color-chrome); }
+.stk__ch > :not(.stk__bar) { margin-inline: var(--sp-5); }
+.stk__bar { display: flex; align-items: center; gap: 10px; margin: 0; padding: 12px var(--sp-5); border-bottom: var(--hair) solid var(--rule); color: var(--color-dim); }
+.stk__no { margin-left: auto; color: var(--color-faint); }
+.stk .ch__p { margin: 0; }
+.stk__rail { display: flex; justify-content: center; gap: 2px; margin-top: var(--sp-3); }
+.stk__dot { position: relative; display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0; border: 0; border-radius: var(--radius-tile); background: transparent; color: var(--color-faint); -webkit-tap-highlight-color: transparent; }
+.stk__dot::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 8px; height: 1.5px; background: var(--rule-2); transform-origin: 0 50%; transition: background-color 0.2s; }
+.stk__dot[aria-current="step"] { color: var(--color-bright); }
+.stk__dot[aria-current="step"]::after { background: var(--color-accent); }
+
+/* Tablets: no deck, the same panes in a grid. */
+@media (min-width: 720px) {
+  .stk__track { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); overflow: visible; scroll-snap-type: none; }
+  .stk__ch { flex: none; }
+  .stk__rail { display: none; }
+}
+@media (min-width: 960px) { .stk__track { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ch__line, .pd__tick, .ch__stop { animation: none; transition: none; }
+}

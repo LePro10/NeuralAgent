@@ -1,4 +1,4 @@
-// Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
+// Regenerates every web / PWA / Discord icon from one master geometry (OG cards: scripts/dev/site-og.mjs).
 // Usage (from the repo root):
 //   PW=/path/to/node_modules/playwright-core/index.mjs node docs/brand/build-web-icons.mjs
 // Needs playwright-core with a Chromium build installed (npx playwright install chromium).
@@ -126,37 +126,7 @@ const out = [
 ];
 for (const [s, w, f, t] of out) optimise(await shot(s, w, w, f, t));
 
-// ── Open Graph cards (1200×630) ──────────────────────────────────────────
-const fontDir = (pkg) => {
-  const pnpm = join(root, "node_modules/.pnpm");
-  const dir = execFileSync("ls", [pnpm]).toString().split("\n").find((d) => d.startsWith(pkg));
-  return dir ? join(pnpm, dir, "node_modules", pkg.slice(0, -1).replace("+", "/")) : null;
-};
-const dm = fontDir("@fontsource-variable+dm-sans@"), plex = fontDir("@fontsource+ibm-plex-mono@");
-const fonts = {
-  sans: "data:font/woff2;base64," + readFileSync(join(dm, "files/dm-sans-latin-wght-normal.woff2")).toString("base64"),
-  mono: "data:font/woff2;base64," + readFileSync(join(plex, "files/ibm-plex-mono-latin-400-normal.woff2")).toString("base64"),
-};
-const template = readFileSync(join(here, "og-template.html"), "utf8");
-const icon = bleed(512, 0.5).replace(` width="512" height="512"`, "");
-const CARDS = {
-  "og.png": { l1: "Every coding agent.", l2: "One calm place.", sub: "Claude Code, Codex and more in one pane grid. Voice, swarms, your phone as a remote.", path: "" },
-  "og/download.png": { l1: "Download", l2: "NeuralAgent.", sub: "For macOS, Windows, Linux and Android. Local first, end-to-end encrypted.", path: "/download" },
-  "og/app.png": { l1: "Your agents,", l2: "from any screen.", sub: "The NeuralAgent web remote: approve, reply and watch your agents live.", path: "/app" },
-  "og/changelog.png": { l1: "What's new", l2: "in NeuralAgent.", sub: "Release notes for the desktop app, the phone remote and the relay.", path: "/changelog" },
-};
-for (const [name, c] of Object.entries(CARDS)) {
-  const html = template
-    .replaceAll("{{SANS}}", fonts.sans).replaceAll("{{MONO}}", fonts.mono).replace("{{ICON}}", icon)
-    .replace("{{L1}}", c.l1).replace("{{L2}}", c.l2).replace("{{SUB}}", c.sub).replace("{{PATH}}", c.path);
-  const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
-  await page.setContent(html, { waitUntil: "load" });
-  await page.evaluate(() => document.fonts.ready);
-  const f = join(pub, name);
-  mkdirSync(dirname(f), { recursive: true });
-  await page.screenshot({ path: f });
-  await page.close();
-  optimise(f);
-}
+// The Open Graph cards (public/og.png, public/og/*.png) are made by scripts/dev/site-og.mjs from
+// the demo posters, in the website's own look.
 await browser.close();
 console.log("done");

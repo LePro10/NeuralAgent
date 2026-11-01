@@ -12,6 +12,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 ## [Unreleased]
 
 ### New
+- **New website** at agent.neuralhub.dev: calm, fast, and the real app runs live in the page. Scroll through six chapters (agents side by side, a question answered from the phone, Neural, Teams, files and changes) and try it yourself: type to Claude, tap Allow on the phone and watch the computer continue. Made for phones too.
+- **Live demo** at agent.neuralhub.dev/demo/: the real desktop and phone app against a simulated computer, in your browser, without an account or install. Your browser's data is never touched.
+- The download page picks the right installer for your system and lists every build, first-start steps and requirements; the changelog is a timeline with a version index.
 - NeuralAgent is now open source (AGPL-3.0). Anyone can read the code and suggest changes on GitHub.
 - **Phone redesign**: four tabs (Agents, Neural, Projects, Settings). Every screen has its own address, so back (button, edge swipe, Android back, browser back) always goes one step back, and opening an agent on the phone no longer moves your computer's panes.
 - **Agents inbox** on the phone: Needs you, Working, Done, with teams grouped. Answer a waiting agent (Allow / Deny / Reply) right in the list; the tab shows how many need you. A notification opens that agent's conversation at once.

@@ -1,0 +1,55 @@
+/* The live frame, the desktop window and the phone device. Tokens only (pnpm lint:tokens). */
+
+/* ── frame: poster + iframe, scaled from a fixed internal size ───────── */
+.lf { position: relative; width: 100%; aspect-ratio: 960 / 600; overflow: hidden; background: var(--color-bg); } /* the real ratio is set inline from the frame's size */
+.lf__poster { position: absolute; inset: 0; transition: opacity 0.7s var(--ease-out-soft), visibility 0s linear 0.7s; }
+.lf__poster img { display: block; width: 100%; height: 100%; max-width: none; object-fit: cover; object-position: 0 0; -webkit-user-select: none; user-select: none; }
+.lf__blank { position: absolute; inset: 0; background: var(--color-chrome); }
+.lf__frame { position: absolute; left: 0; top: 0; width: var(--iw); height: var(--ih); max-width: none; border: 0; background: var(--color-bg); transform-origin: 0 0; transform: scale(var(--k, 0.5)); opacity: 0; transition: opacity 0.7s var(--ease-out-soft); pointer-events: none; color-scheme: dark; }
+.lf[data-state="live"] .lf__frame { opacity: 1; }
+.lf[data-state="live"] .lf__poster { opacity: 0; visibility: hidden; }
+.lf[data-armed] .lf__frame { pointer-events: auto; }
+/* While the app boots, a thin accent light runs along the top edge: the "working" vocabulary. */
+.lf[data-state="loading"]::after { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 2px; z-index: 3; background: linear-gradient(90deg, transparent, var(--color-accent), transparent); animation: lf-run 1.5s var(--ease-in-out-draw) infinite; pointer-events: none; }
+@keyframes lf-run { from { transform: translateX(-100%) scaleX(0.4); } to { transform: translateX(100%) scaleX(0.4); } }
+
+/* ── desktop window (natural size 960 wide: about the narrowest the desktop app keeps its desktop layout, so the window
+   can dock at a scale near 1 and the app's text stays readable; scaled as a whole by the stage) ── */
+.lw { position: relative; margin: 0; border-radius: var(--radius-dialog); background: var(--color-chrome); box-shadow: var(--glow-window); overflow: clip; isolation: isolate; }
+.lw__bar { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 16px; border-bottom: var(--hair) solid var(--rule); background: color-mix(in oklab, var(--color-bright) 1.8%, transparent); color: var(--color-dim); font: 400 14px/1 var(--font-mono); letter-spacing: 0.01em; white-space: nowrap; }
+.lw__ctl { display: flex; gap: 7px; flex: none; margin-right: 4px; }
+.lw__ctl i { width: 10px; height: 10px; border-radius: 3px; box-shadow: inset 0 0 0 var(--hair) var(--rule-3); }
+.lw__ctl i:last-child { background: color-mix(in oklab, var(--color-accent) 70%, transparent); box-shadow: none; }
+.lw .na-mark { --s: 10px; }
+.lw__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lw__title b { font-weight: 400; color: var(--color-bright); }
+.lw__title .sep { padding-inline: 0.15em; color: var(--color-faint); }
+.lw__live { margin-left: auto; flex: none; color: var(--color-faint); }
+.lw__live b { font-weight: 400; color: var(--color-dim); }
+.lw__live[data-live] b { color: var(--color-accent); }
+.lw__out { margin-left: auto; color: var(--color-faint); }
+.lw__screen { display: block; }
+
+/* ── phone device ────────────────────────────────────────────────────── */
+.pd { position: relative; margin: 0; padding: 6px; border-radius: 42px; background: var(--color-chrome); box-shadow: var(--glow-window); isolation: isolate; }
+.pd .lf { border-radius: 36px; }
+/* Poster devices (phones, tablets): the whole device is one link. The call to action is a caption under it, never on the
+   picture: the poster shows the real screen, unveiled. */
+.pdv { display: grid; justify-items: center; gap: var(--sp-4); color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.pdv:focus-visible { outline-offset: 6px; border-radius: 42px; }
+.pdv:active .pdv__cta { transform: scale(0.975); }
+.pdv .pd, .pdv .lw { width: 100%; }
+.pdv--phone .pd { max-width: 224px; }
+.pdv__cta { pointer-events: none; }
+
+/* The hero's poster loop: stacked posters, each visible for one slot of the period; the cross-fade is 6% of it. */
+.pl .lf__poster { transition: none; }
+.pl__f:not(:first-child) { opacity: 0; }
+.pl[data-run] .pl__f { --P: calc(var(--n) * var(--T)); animation: pl-cycle var(--P) linear infinite; animation-delay: calc(var(--i) * var(--T) - 0.06 * var(--P)); }
+.pl[data-run][data-paused] .pl__f { animation-play-state: paused; }
+@keyframes pl-cycle { 0% { opacity: 0; } 6%, 33.33% { opacity: 1; } 39.33%, 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lf__poster, .lf__frame { transition: none; }
+  .lf[data-state="loading"]::after { animation: none; }
+}

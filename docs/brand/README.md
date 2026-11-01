@@ -31,7 +31,7 @@ Output in `apps/web/public/`:
 - `favicon.svg` (full-bleed tile, reads on light and dark tab bars), `favicon.ico` (16/32/48, PNG entries), `favicon-32.png`
 - `apple-touch-icon.png` 180, opaque (iOS rounds it); `logo.png` 512 tile (notifications, legacy links)
 - `app/icon-192.png`, `app/icon-512.png` (purpose any, tile with transparent corners), `app/icon-maskable-512.png` (full bleed, mark inside the 40 % safe circle)
-- `og.png` + `og/{download,app,changelog}.png` 1200×630 from `og-template.html` (DM Sans + IBM Plex Mono embedded from node_modules). Card copy lives in `CARDS` in the script.
+- `og.png` + `og/{download,app,changelog}.png` 1200×630: made by `scripts/dev/site-og.mjs` from the demo posters in `apps/web/public/demo` (copy in its `CARDS`; rerun after the posters change).
 - `discord/logo-512.png` (Rich Presence large image, opaque, Discord rounds it) and `discord/small-{working,waiting,idle}.png` (128 round status badges: blue play, amber "!", grey moon).
 
 `<head>` conventions (every `apps/web/**/index.html` + `404.html`): `favicon.ico` (sizes 32x32) + `favicon.svg` + `apple-touch-icon.png`, og/twitter tags with the page's card, canonical URL. The first `theme-color` is the ice accent `#b9d3ff` with `id="embed-color"`; Discord uses it for the embed bar, and an inline script removes it so browsers use the dark value after it. `/app/` also links `app/manifest.webmanifest`, uses `black-translucent` on iOS, and a `theme-color` pair (dark/light media) of `#131a3d`, the measured average of the aurora along the top edge.

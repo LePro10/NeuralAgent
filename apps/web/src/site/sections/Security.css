@@ -1,0 +1,184 @@
+/* Security: sealed in transit. Foundation tokens only. `--k` (0 to 1, written by Security.tsx) drives the geometry; the sub-progress
+   values below are plain CSS math on it. Only opacity and transform change with scroll. Default --k: 1 = the complete end state
+   (no JS, reduced motion). */
+.seal {
+  --k: 1;
+  --k1: clamp(0, calc((var(--k) - 0.12) / 0.18), 1);   /* sealing on the computer */
+  --k2: clamp(0, calc((var(--k) - 0.30) / 0.20), 1);   /* computer to relay */
+  --k3: clamp(0, calc((var(--k) - 0.50) / 0.20), 1);   /* relay to phone */
+  --k4: clamp(0, calc((var(--k) - 0.70) / 0.16), 1);   /* opening on the phone */
+  --kc: clamp(0, calc((var(--k) - 0.66) / 0.10), 1);   /* the phone card arrives */
+  --kr: clamp(0, calc((var(--k2) - 0.6) / 0.4), 1);    /* the relay has received it */
+  --seal-h: 324px;                                      /* height of the three scenes on wide screens */
+  position: relative;
+}
+.seal__sticky { display: block; }
+.seal__stage { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
+.seal__node { display: grid; gap: var(--sp-5); align-content: start; min-width: 0; }
+.seal__pane { background: var(--color-chrome); }
+.seal__body { display: grid; gap: var(--sp-3); align-content: start; padding: var(--sp-4); }
+
+/* who row */
+.seal__who { display: flex; align-items: center; gap: 10px; min-height: 24px; color: var(--color-faint); font: 400 13px/1 var(--font-mono); }
+.seal__who b { color: var(--color-bright); font: 520 14.5px/1 var(--font-sans); letter-spacing: -0.01em; }
+.seal__who svg { color: var(--color-dim); }
+.seal__who--sm { font-size: 12px; }
+.seal__id { display: grid; gap: 4px; min-width: 0; }
+.seal__id > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seal__rows dd .seal__arr { display: inline-block; margin: 0 6px; vertical-align: -2px; color: var(--color-faint); }
+.seal__mk--work { display: none; }
+.seal[data-ans] .seal__mk--work { display: inline-block; }
+.seal[data-ans] .seal__mk--wait { display: none; }
+
+/* computer: the permission prompt + the envelope */
+.seal__ask { display: grid; gap: 8px; padding: 12px 14px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-tile); background: var(--color-fill-1); }
+.seal__cmd { display: block; padding: 8px 10px; border: var(--hair) solid var(--rule); border-radius: var(--radius-xs); background: var(--color-bg); color: var(--color-bright); font: 400 14.5px/1.2 var(--font-mono); }
+.seal__q { color: var(--color-ink); font-size: 14px; line-height: 1.3; }
+.seal__env { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; padding: 12px 14px; border: var(--hair) solid color-mix(in oklab, var(--color-accent) calc(var(--k1) * 60%), var(--rule-2)); border-radius: var(--radius-tile); background: color-mix(in oklab, var(--color-accent) calc(var(--k1) * 5%), transparent); }
+.seal__lock { display: grid; width: 18px; height: 18px; }
+.seal__lock > * { grid-area: 1 / 1; }
+.seal__lk0 { color: var(--color-dim); opacity: calc(1 - var(--k1)); }
+.seal__lk1 { color: var(--color-accent); opacity: var(--k1); }
+.seal__msg { min-width: 0; overflow: hidden; white-space: nowrap; font: 400 13.5px/1.3 var(--font-mono); letter-spacing: 0; color: color-mix(in oklab, var(--color-accent) calc(var(--k1) * 100%), var(--color-bright)); }
+.seal__msg > span { display: inline-block; min-height: 1.3em; }
+.seal__tag { grid-column: 1 / -1; display: grid; color: var(--color-faint); }
+.seal__tag > span { grid-area: 1 / 1; }
+.seal__t0 { opacity: calc(1 - var(--k1)); }
+.seal__t1 { opacity: var(--k1); color: var(--color-accent); }
+
+/* relay */
+.seal__rows { margin: 0; display: grid; }
+.seal__rows > div { display: grid; grid-template-columns: 7ch minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: var(--hair) solid var(--rule); font: 400 12.5px/1.5 var(--font-mono); }
+.seal__rows dt { color: var(--color-faint); }
+.seal__rows dd { margin: 0; color: var(--color-ink); min-width: 0; }
+.seal__hex { display: grid; gap: 2px; color: var(--color-accent); opacity: calc(0.14 + 0.86 * var(--kr)); }
+.seal__hex span { white-space: nowrap; overflow: hidden; }
+.seal__blind { display: flex; align-items: center; gap: 10px; padding-top: 4px; color: var(--color-dim); font-size: 14px; line-height: 1.3; }
+.seal__blind b { color: var(--color-bright); font-weight: 520; }
+
+/* wires and the packet. Flow (phones): vertical. */
+.seal__wire { position: relative; width: 100%; height: 60px; container-type: size; }
+.seal__wire--a { --kw: var(--k2); }
+.seal__wire--b { --kw: var(--k3); }
+.seal__wire::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: var(--hair); background: repeating-linear-gradient(to bottom, var(--rule-3) 0 6px, transparent 6px 12px); }
+.seal__lit { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--color-accent); transform-origin: 50% 0; transform: scaleY(var(--kw)); }
+.seal__pkt {
+  position: absolute; left: 50%; top: 0; width: 100px; margin-left: -50px; height: 28px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: var(--hair) solid var(--rule-3); border-radius: var(--radius-tile); background: var(--color-bg);
+  color: var(--color-accent); font: 400 11.5px/1 var(--font-mono); white-space: nowrap;
+  transform: translate3d(0, calc(var(--kw) * (100cqh - 28px)), 0);
+  opacity: min(1, calc(var(--kw) * 16), calc((1 - var(--kw)) * 16));
+}
+
+/* phone */
+.seal__phone { position: relative; width: min(100%, 290px); margin-inline: auto; padding: 10px 10px 0; border: var(--hair) solid var(--rule-3); border-bottom: 0; border-radius: 36px 36px 0 0; background: var(--color-bg); -webkit-mask-image: linear-gradient(to bottom, black 78%, transparent); mask-image: linear-gradient(to bottom, black 78%, transparent); }
+.seal__island { width: 76px; height: 20px; margin: 4px auto 12px; border-radius: 12px; background: var(--color-fill-4); }
+.seal__screen { display: grid; gap: var(--sp-3); align-content: start; min-height: 246px; padding: 16px 14px 32px; border-radius: 24px 24px 0 0; background: var(--color-chrome); box-shadow: var(--shadow-edge); }
+.seal__stack { display: grid; }
+.seal__stack > * { grid-area: 1 / 1; }
+.seal__quiet { margin: 0; padding-top: 6px; color: var(--color-faint); font-size: 14px; opacity: calc(1 - var(--kc)); }
+.seal__card { display: grid; gap: 12px; padding: 12px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-list); background: var(--color-card); box-shadow: var(--shadow-edge); opacity: var(--kc); transform: translate3d(0, calc((1 - var(--kc)) * 14px), 0); }
+.seal__msg--ph { margin: 0; padding: 10px; border-radius: var(--radius-xs); background: var(--color-bg); font-size: 13px; color: color-mix(in oklab, var(--color-bright) calc(var(--k4) * 100%), var(--color-accent)); }
+.seal__btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seal__btn { display: flex; align-items: center; justify-content: center; height: 40px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-tile); color: var(--color-ink); font: 500 14px/1 var(--font-sans); transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+.seal__ck { width: 0; margin-right: 0; opacity: 0; transition: opacity 0.3s; }
+.seal[data-ans] .seal__btn--yes { background: var(--color-bright); border-color: transparent; color: var(--color-on-bright); }
+.seal[data-ans] .seal__ck { width: 14px; margin-right: 6px; opacity: 1; }
+
+/* step captions */
+.seal__steps { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--sp-4); }
+.seal__track { display: none; }
+.seal__step { position: relative; display: grid; gap: 4px; padding-left: 18px; }
+.seal__step::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px; background: var(--rule-2); transition: background-color 0.3s; }
+.seal__sn { color: var(--color-faint); }
+.seal__step h3 { margin: 0; color: var(--color-bright); font: 520 1.0625rem/1.3 var(--font-sans); letter-spacing: -0.014em; }
+.seal__step p { margin: 0; color: var(--color-ink); font-size: var(--fs-small); line-height: 1.55; max-width: 44ch; }
+.seal[data-live] .seal__step h3 { color: var(--color-dim); transition: color 0.3s; }
+.seal[data-live] .seal__step p { color: var(--color-faint); transition: color 0.3s; }
+.seal[data-live][data-step="1"] .seal__step[data-n="1"] h3, .seal[data-live][data-step="2"] .seal__step[data-n="2"] h3,
+.seal[data-live][data-step="3"] .seal__step[data-n="3"] h3, .seal[data-live][data-step="4"] .seal__step[data-n="4"] h3 { color: var(--color-bright); }
+.seal[data-live][data-step="1"] .seal__step[data-n="1"] p, .seal[data-live][data-step="2"] .seal__step[data-n="2"] p,
+.seal[data-live][data-step="3"] .seal__step[data-n="3"] p, .seal[data-live][data-step="4"] .seal__step[data-n="4"] p { color: var(--color-ink); }
+.seal[data-live][data-step="1"] .seal__step[data-n="1"]::before, .seal[data-live][data-step="2"] .seal__step[data-n="2"]::before,
+.seal[data-live][data-step="3"] .seal__step[data-n="3"]::before, .seal[data-live][data-step="4"] .seal__step[data-n="4"]::before { background: var(--color-accent); }
+.seal[data-live][data-step="1"] .seal__step[data-n="1"] .seal__sn, .seal[data-live][data-step="2"] .seal__step[data-n="2"] .seal__sn,
+.seal[data-live][data-step="3"] .seal__step[data-n="3"] .seal__sn, .seal[data-live][data-step="4"] .seal__step[data-n="4"] .seal__sn { color: var(--color-accent); }
+
+.seal__rowwrap { display: none; }
+.seal__note { margin: var(--sp-6) 0 0; max-width: 62ch; color: var(--color-faint); line-height: 1.55; }
+
+/* Tablets (still the vertical flow): keep the column readable instead of stretching panes across 700px. */
+@media (min-width: 600px) and (max-width: 899.98px) {
+  .seal__stage { max-width: 34rem; }
+  .seal__note { max-width: 34rem; }
+}
+
+/* Wide: horizontal stage; pinned on tall enough screens */
+@media (min-width: 900px) {
+  .seal__stage { grid-template-columns: minmax(0, 3.8fr) minmax(64px, 1.3fr) minmax(0, 3fr) minmax(64px, 1.3fr) minmax(0, 2.4fr); align-items: start; }
+  .seal__pane, .seal__phone { height: var(--seal-h); }
+  .seal__phone { width: 100%; }
+  .seal__wire { height: var(--seal-h); container-type: inline-size; }
+  .seal__wire::before { left: 0; right: 0; top: 50%; bottom: auto; width: auto; height: var(--hair); background: repeating-linear-gradient(to right, var(--rule-3) 0 6px, transparent 6px 12px); }
+  .seal__lit { left: 0; right: 0; top: 50%; bottom: auto; width: auto; height: 2px; margin: -1px 0 0; transform-origin: 0 50%; transform: scaleX(var(--kw)); }
+  .seal__pkt { left: 0; top: 50%; margin: -14px 0 0; transform: translate3d(calc(var(--kw) * (100cqw - 100px)), 0, 0); }
+  .seal__node { gap: var(--sp-5); }
+  .seal__stage { column-gap: 0; }
+  .seal__node:first-child { padding-right: 0; }
+  .seal__steps--flow { display: none; }
+  .seal__rowwrap { display: grid; gap: var(--sp-4); margin-top: var(--sp-6); }
+  .seal__steps--row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-5); align-items: start; }
+  .seal__step p { max-width: 34ch; }
+  .seal__note { margin-top: var(--sp-5); }
+  /* A hairline under the scene that fills as the prompt travels (opacity-free, transform only). */
+  .seal__track { display: block; height: 2px; background: var(--rule-2); overflow: hidden; border-radius: 1px; }
+  .seal__fill { display: block; height: 100%; background: var(--color-accent); transform-origin: 0 50%; transform: scaleX(var(--k)); }
+}
+@media (min-width: 900px) and (min-height: 600px) {
+  .seal[data-pinned] { height: calc(100svh - var(--nav-h) + 240vh); }
+  .seal[data-pinned] .seal__sticky { position: sticky; top: var(--nav-h); height: calc(100svh - var(--nav-h)); display: flex; flex-direction: column; justify-content: center; }
+}
+
+/* Narrow desktops and tablets in landscape: the phone is only ~180px wide, so its message wraps (two lines reserved, no jump). */
+@media (min-width: 900px) and (max-width: 1199.98px) {
+  .seal__msg--ph { white-space: normal; overflow-wrap: anywhere; min-height: 2.9em; }
+  .seal__msg--ph > span { min-height: 0; }
+  .seal__screen { padding-inline: 10px; }
+}
+
+/* Big, tall screens: the scene grows with the room instead of floating small in it. */
+@media (min-width: 1280px) and (min-height: 940px) {
+  .seal { --seal-h: 372px; }
+  .seal__body { gap: var(--sp-4); padding: var(--sp-5); }
+  .seal__rows > div { padding: 10px 0; }
+  .seal__steps--row { margin-top: var(--sp-2); }
+  .seal__step h3 { font-size: 1.1875rem; }
+  .seal__step p { font-size: 15.5px; }
+}
+
+/* Below the stage */
+.seal__more { display: grid; gap: var(--sp-8); margin-top: var(--sp-9); }
+.seal__facts > .t-h3, .seal__leaves > .t-h3 { margin-bottom: var(--sp-5); }
+.seal__dl { margin: 0; border-top: var(--hair) solid var(--rule); }
+.seal__fact { display: grid; gap: 4px 24px; padding: 14px 0; border-bottom: var(--hair) solid var(--rule); }
+.seal__fact dt { color: var(--color-faint); font: 400 var(--fs-label)/1.5 var(--font-mono); }
+.seal__fact dd { margin: 0; color: var(--color-ink); font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
+.seal__side { display: grid; gap: var(--sp-7); align-content: start; }
+.seal__lbody { display: grid; gap: var(--sp-5); padding: var(--sp-5); }
+.seal__lbody h3 { margin: 0 0 6px; color: var(--color-bright); font: 520 1.0625rem/1.3 var(--font-sans); letter-spacing: -0.014em; }
+.seal__lbody p { margin: 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.6; max-width: 52ch; }
+.seal__after { margin: var(--sp-4) 0 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.55; }
+
+/* Phones: the honest limits come first; "What leaves your computer" and the long "Exactly how" list fold into closed rows. */
+.seal__facts-wrap { order: 2; }
+.seal__side { order: 1; }
+@media (min-width: 900px) {
+  .seal__more { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: calc(var(--sp-gap) * 2); margin-top: var(--sp-10); }
+  .seal__facts-wrap, .seal__side { order: 0; }
+  .seal__fact { grid-template-columns: 9.5rem minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seal__step::before, .seal__step h3, .seal__step p, .seal__btn, .seal__ck { transition: none; }
+}

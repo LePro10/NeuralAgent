@@ -1,0 +1,28 @@
+/* FAQ accordion. Foundation tokens only. */
+.faq__body { padding-bottom: calc(var(--sp-section) * 0.6); }
+.faq__rule { height: var(--hair); margin-inline: calc(var(--pad) * -1); background: var(--rule); }
+.faq__list { margin: 0 calc(var(--pad) * -1); padding: 0; list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); }
+.faq__item { border-bottom: var(--hair) solid var(--rule); }
+.faq__h { margin: 0; font: inherit; }
+.faq__q { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; align-items: start; gap: var(--sp-3); width: 100%; min-height: 64px; padding: 18px var(--pad); border: 0; background: transparent; text-align: left; color: var(--color-bright); transition: background-color 0.2s; }
+.faq__n { padding-top: 0.5em; color: var(--color-faint); transition: color 0.25s; }
+.faq__text { font: 520 1.1875rem/1.32 var(--font-sans); letter-spacing: -0.018em; text-wrap: balance; }
+.faq__plus { margin-top: 0.2em; color: var(--color-dim); transition: transform 0.35s var(--ease-out-soft), color 0.2s; }
+.faq__item[data-open] .faq__n { color: var(--color-accent); }
+.faq__item[data-open] .faq__plus { transform: rotate(135deg); color: var(--color-bright); }
+.faq__q:focus-visible { outline-offset: -3px; border-radius: 0; }
+.faq__a { padding: 0 var(--pad) 24px calc(var(--pad) + 2.2em + var(--sp-3)); animation: faq-in 0.45s var(--ease-out-soft); }
+.faq__a p { margin: 0; max-width: 58ch; color: var(--color-ink); font-size: var(--fs-body); line-height: 1.6; text-wrap: pretty; }
+.faq__a .na-code { font-size: 0.84em; }
+@keyframes faq-in { from { opacity: 0; transform: translate3d(0, -6px, 0); } }
+@media (hover: hover) { .faq__q:hover { background: color-mix(in oklab, var(--color-bright) 2%, transparent); } .faq__q:hover .faq__plus { color: var(--color-bright); } }
+@media (min-width: 900px) {
+  .faq__list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .faq__item:nth-child(even) { border-left: var(--hair) solid var(--rule); }
+  .faq__q { padding-inline: var(--sp-6); }
+  .faq__item:nth-child(odd) .faq__q { padding-left: var(--pad); }
+  .faq__a { padding-right: var(--sp-6); padding-left: calc(var(--sp-6) + 2.2em + var(--sp-3)); }
+  .faq__item:nth-child(odd) .faq__a { padding-left: calc(var(--pad) + 2.2em + var(--sp-3)); }
+}
+@media (prefers-reduced-motion: reduce) { .faq__a { animation: none; } .faq__plus { transition: none; } }
+@media (pointer: coarse) { .faq__lead a { display: inline-block; padding-block: 10px; margin-block: -10px; } }

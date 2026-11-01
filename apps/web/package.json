@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "test": "node --test --test-timeout=60000 --experimental-strip-types \"src/demo/**/*.test.ts\" \"src/site/**/*.test.ts\""
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",

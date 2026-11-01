@@ -1,0 +1,90 @@
+/* /download. Tokens only (foundation.css owns the primitives). */
+
+.dl-head { align-items: end; }
+@media (min-width: 960px) { .dl-head { grid-template-columns: minmax(0, 1fr) minmax(0, 33rem); gap: var(--sp-7) var(--sp-8); } }
+.dl-aux { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); margin-top: var(--sp-2); }
+
+/* The primary pane: the visitor's own build. */
+.dl-primary-wrap { min-width: 0; }
+.dl-primary { background: var(--color-chrome); box-shadow: var(--glow-window); }
+.dl-primary__body { display: grid; gap: var(--sp-4); padding: var(--sp-5); }
+.dl-cta { width: 100%; }
+.dl-file { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-4); margin-top: calc(var(--sp-2) * -1); }
+.dl-file span:first-child { color: var(--color-dim); overflow-wrap: anywhere; }
+.dl-sub { display: grid; gap: var(--sp-3); padding-top: var(--sp-4); border-top: var(--hair) solid var(--rule); }
+.dl-sub .t-small { color: var(--ink-body); }
+.dl-sub .t-small strong, .dl-sub .t-small b { font-weight: 500; }
+.dl-sub p { margin: 0; }
+.dl-sub code:not(.na-cmd__code) { font-family: var(--font-mono); font-size: 0.86em; color: var(--color-ink); }
+.pg-note code { font-family: var(--font-mono); font-size: 1em; color: var(--color-dim); overflow-wrap: anywhere; }
+.dl-phone > * { flex: 1 1 12rem; }
+.dl-primary .t-h3 { max-width: 20ch; }
+
+/* Skeleton (same geometry as the loaded pane) */
+.dl-skel-btn { height: 52px; }
+.dl-skel-line { height: 14px; width: 70%; }
+.dl-skel-line--short { width: 48%; }
+.dl-skel-cmd { height: 46px; }
+
+/* Offline / empty pane */
+.dl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.dl-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: var(--hair) solid var(--rule-2); border-radius: var(--radius-tile); background: var(--color-fill-1); color: var(--color-bright); font-size: 14px; text-decoration: none; transition: background-color 0.2s, border-color 0.2s; }
+.dl-chip span { color: var(--color-dim); font: 400 12px/1 var(--font-mono); }
+@media (hover: hover) { .dl-chip:hover { background: var(--color-fill-3); border-color: var(--rule-3); } }
+
+/* Every build: a hairline table that bleeds to the rails. Each row is one big link. */
+.dl-rows { list-style: none; margin: 0 calc(var(--pad) * -1) 0; padding: 0; border-top: var(--hair) solid var(--rule); }
+.dl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name go" "detail go" "file file"; gap: 2px var(--sp-4); align-items: center; padding: var(--sp-4) var(--pad); min-height: 72px; border-bottom: var(--hair) solid var(--rule); color: var(--color-ink); text-decoration: none; transition: background-color 0.2s; }
+.dl-row--head { display: none; min-height: 0; padding-block: var(--sp-3); color: var(--color-faint); }
+.dl-row__name { grid-area: name; display: flex; align-items: center; gap: var(--sp-3); font-weight: 520; font-size: 1.0625rem; letter-spacing: -0.01em; color: var(--color-bright); min-width: 0; }
+.dl-row__name svg { color: var(--color-dim); }
+.dl-row__detail { grid-area: detail; color: var(--color-dim); font-size: var(--fs-small); padding-left: calc(18px + var(--sp-3)); }
+.dl-row__file { grid-area: file; font: 400 12px/1.4 var(--font-mono); color: var(--color-faint); padding-left: calc(18px + var(--sp-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-row__go { grid-area: go; color: var(--color-dim); transition: transform 0.25s var(--ease-out-soft), color 0.2s; }
+a.dl-row:hover { background: color-mix(in oklab, var(--color-bright) 3%, transparent); }
+a.dl-row:hover .dl-row__go { color: var(--color-accent); transform: translateY(2px); }
+a.dl-row:hover .dl-row__go.lucide-arrow-up-right { transform: translate(2px, -2px); }
+.dl-row[data-mine] .dl-row__name svg { color: var(--color-accent); }
+.dl-you { margin-left: var(--sp-1); padding: 3px 7px; border: var(--hair) solid color-mix(in oklab, var(--color-accent) 45%, transparent); border-radius: var(--radius-xs); color: var(--color-accent); font: 400 11px/1 var(--font-mono); font-style: normal; letter-spacing: 0.01em; white-space: nowrap; }
+@media (min-width: 760px) {
+  .dl-row { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.5fr) 24px; grid-template-areas: "name detail file go"; gap: var(--sp-5); min-height: 64px; padding-block: 0; }
+  .dl-row--head { display: grid; }
+  .dl-row__detail, .dl-row__file { padding-left: 0; }
+}
+.dl-stable { margin-top: var(--sp-5); max-width: none; }
+
+/* First start: one row per system, mine first. */
+.dl-steps { list-style: none; margin: 0 calc(var(--pad) * -1) 0; padding: 0; display: grid; border-top: var(--hair) solid var(--rule); }
+.dl-step { display: grid; gap: var(--sp-4) var(--sp-6); padding: var(--sp-5) var(--pad); border-bottom: var(--hair) solid var(--rule); }
+.dl-step[data-mine] { order: -1; background: color-mix(in oklab, var(--color-accent) 4%, transparent); }
+.dl-step__head { display: flex; gap: var(--sp-4); align-items: flex-start; }
+.dl-step__head > svg { margin-top: 2px; color: var(--color-dim); }
+.dl-step[data-mine] .dl-step__head > svg { color: var(--color-accent); }
+.dl-step__title { margin: 0; font: 520 1.1875rem/1.2 var(--font-sans); letter-spacing: -0.015em; color: var(--color-bright); display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.dl-step__note { margin: 4px 0 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.45; }
+@media (min-width: 900px) { .dl-step { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); padding-block: var(--sp-6); } }
+
+.dl-ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); counter-reset: s; }
+.dl-ol > li { position: relative; padding-left: 36px; counter-increment: s; font-size: var(--fs-small); line-height: 1.55; color: var(--ink-body); max-width: 60ch; }
+.dl-ol > li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 0.1em; font: 400 12px/1.5 var(--font-mono); color: var(--color-faint); }
+.dl-ol--big { gap: var(--sp-5); }
+.dl-ol b { font-weight: 520; }
+.dl-ol--big > li { font-size: var(--fs-body); line-height: 1.5; padding-left: 44px; }
+.dl-ol--big > li::before { top: 0.3em; }
+.dl-btn { display: inline-block; padding: 1px 8px; border-radius: var(--radius-xs); background: var(--color-fill-3); box-shadow: var(--shadow-key); color: var(--color-bright); font: 500 0.875em/1.5 var(--font-sans); white-space: nowrap; }
+/* lucide icons are display:block by default; this one sits at the end of a sentence and must stay on its line. */
+.dl-nowrap svg.dl-inline-arrow { display: inline-block; vertical-align: -2px; margin-left: 2px; }
+.dl-ol .na-code { white-space: normal; overflow-wrap: anywhere; }
+
+/* What you need: a definition table. */
+.dl-needs { margin: 0 calc(var(--pad) * -1); border-top: var(--hair) solid var(--rule); }
+.dl-need { display: grid; gap: 2px var(--sp-6); padding: var(--sp-4) var(--pad); border-bottom: var(--hair) solid var(--rule); }
+.dl-need dt { padding-top: 0.2em; }
+.dl-need dd { margin: 0; max-width: 62ch; color: var(--ink-body); font-size: var(--fs-small); line-height: 1.55; }
+@media (min-width: 760px) { .dl-need { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+@media (min-width: 900px) { .dl-need { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+
+.dl-phone-split { align-items: start; }
+.dl-nowrap { white-space: nowrap; }
+
+@media (forced-colors: active) { .dl-you, .dl-btn { border: var(--hair) solid CanvasText; } }

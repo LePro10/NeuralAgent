@@ -1,0 +1,70 @@
+/* Platforms and download. Foundation tokens only. */
+.plt__list { margin: 0 calc(var(--pad) * -1); padding: 0; list-style: none; display: flex; flex-direction: column; border-top: var(--hair) solid var(--rule); }
+.plt__list--in { margin-inline: 0; border: 0; }
+.plt__list--in .plt__row { padding-inline: 0; }
+.plt__list--in .plt__row[data-mine] { background: none; }
+.plt__rest { margin-top: var(--sp-5); }
+/* A phone shows its own row first; the order of the data stays the reading order on wide screens. */
+.plt__row[data-mine] { order: -1; }
+.plt__row { position: relative; display: grid; gap: var(--sp-4); padding: var(--sp-5) var(--pad); border-bottom: var(--hair) solid var(--rule); transition: background-color 0.25s; }
+.plt__list--in .plt__row:last-child { border-bottom: 0; }
+.plt__row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--color-accent); transform: scaleY(0); transition: transform 0.4s var(--ease-out-soft); }
+.plt__row[data-mine] { background: color-mix(in oklab, var(--color-accent) 4%, transparent); }
+.plt__row[data-mine]::before { transform: none; }
+.plt__name { display: flex; align-items: center; gap: var(--sp-4); }
+.plt__ico { color: var(--color-dim); }
+.plt__row[data-mine] .plt__ico { color: var(--color-bright); }
+.plt__name h3 { margin: 0; color: var(--color-bright); font: 520 var(--fs-h3)/1.15 var(--font-sans); letter-spacing: -0.025em; }
+.plt__you { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--color-accent); font: 400 var(--fs-label)/1 var(--font-mono); }
+.plt__info { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.plt__detail { margin: 0; color: var(--color-ink); font-size: 1.0625rem; line-height: 1.45; }
+.plt__note { margin: 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.55; max-width: 56ch; text-wrap: pretty; }
+.plt__act { display: flex; flex-wrap: wrap; align-content: start; gap: var(--sp-4) var(--sp-3); min-width: 0; }
+.plt__dl { display: grid; gap: 8px; justify-items: start; min-width: 0; max-width: 100%; }
+.plt__dl .na-btn { min-width: 9.5rem; }
+.plt__file { margin: 0; color: var(--color-faint); line-height: 1.4; overflow-wrap: anywhere; min-height: 1.4em; }
+.plt__cmd { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.plt__how { margin: 0; color: var(--color-faint); line-height: 1.45; text-wrap: pretty; }
+.plt__off { margin: var(--sp-4) 0 0; color: var(--color-faint); }
+/* File names under the buttons are a wide-screen detail. */
+@media (max-width: 899.98px) { .plt__dl .plt__file { display: none; } }
+@media (min-width: 600px) and (max-width: 899.98px) {
+  /* Tablets: name and notes on the left, the buttons beside them. */
+  .plt__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--sp-6); align-items: start; }
+  .plt__act { grid-column: 2; grid-row: 1 / span 2; }
+}
+@media (max-width: 559px) {
+  .plt__act { display: grid; }
+  .plt__dl { justify-items: stretch; }
+  .plt__dl .na-btn { width: 100%; }
+}
+@media (min-width: 900px) {
+  .plt__row { grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 5fr); gap: var(--sp-6); padding-block: var(--sp-6); align-items: start; }
+  .plt__act { flex-direction: column; flex-wrap: nowrap; }
+}
+@media (hover: hover) { .plt__row:hover { background: color-mix(in oklab, var(--color-bright) 1.6%, transparent); } .plt__row[data-mine]:hover { background: color-mix(in oklab, var(--color-accent) 5.5%, transparent); } }
+
+/* Below the table */
+.plt__more { display: grid; gap: var(--sp-7); margin-top: var(--sp-7); }
+.plt__reqs > .t-h3 { margin-bottom: var(--sp-5); }
+.plt__dl2 { margin: 0; border-top: var(--hair) solid var(--rule); }
+.plt__dl2 > div { display: grid; gap: 4px 24px; padding: 14px 0; border-bottom: var(--hair) solid var(--rule); }
+.plt__dl2 dt { color: var(--color-faint); font: 400 var(--fs-label)/1.5 var(--font-mono); }
+.plt__dl2 dd { margin: 0; color: var(--color-ink); font-size: 15.5px; line-height: 1.5; text-wrap: pretty; }
+.plt__links { align-self: start; }
+.plt__lnk { display: flex; align-items: center; gap: var(--sp-4); min-height: 64px; padding: 10px var(--sp-4); border-bottom: var(--hair) solid var(--rule); color: var(--color-dim); text-decoration: none; transition: background-color 0.2s; }
+.plt__lnk:last-child { border-bottom: 0; }
+.plt__lnk > span { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.plt__lnk b { color: var(--color-bright); font: 520 1rem/1.3 var(--font-sans); letter-spacing: -0.012em; }
+.plt__lnk i { font-style: normal; font-size: 14px; line-height: 1.4; color: var(--color-dim); }
+.plt__go { color: var(--color-faint); transition: transform 0.25s var(--ease-out-soft), color 0.2s; }
+.plt__lnk:focus-visible { outline-offset: -3px; border-radius: 0; }
+@media (hover: hover) { .plt__lnk:hover { background: color-mix(in oklab, var(--color-bright) 2.4%, transparent); } .plt__lnk:hover .plt__go { transform: translateX(3px); color: var(--color-accent); } }
+@media (min-width: 900px) {
+  .plt__more { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: calc(var(--sp-gap) * 2); margin-top: var(--sp-10); }
+  .plt__dl2 > div { grid-template-columns: 7rem minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .plt__row::before, .plt__go { transition: none; } }
+
+/* The install command wraps instead of hiding its tail (it is short enough for two lines). */
+.plt__act .na-cmd__code { white-space: normal; overflow-wrap: anywhere; padding-block: 11px; line-height: 1.5; }

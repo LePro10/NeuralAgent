@@ -23,7 +23,7 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/design-overhaul.md`](notes/design-overhaul.md) | Liquid motion, aurora, glass design system (0.2.0, D40). |
 | [`notes/claude-view.md`](notes/claude-view.md) | Chat view over the real Claude Code CLI (D41). |
 | [`notes/remote-host-control.md`](notes/remote-host-control.md) | Host settings, updates, models and calls from remotes (D42). |
-| [`notes/website.md`](notes/website.md) | The agent.neuralhub.dev website. |
+| [`notes/website.md`](notes/website.md) | The agent.neuralhub.dev website and the live demo (real app against a fake daemon in the browser, D79). |
 | [`notes/mobile-polish.md`](notes/mobile-polish.md) | The phone/Android polish round. |
 | [`notes/launch.md`](notes/launch.md) | The launch screen on desktop, web and Android: one frame, one motion (D49). |
 | [`notes/mobile-overhaul.md`](notes/mobile-overhaul.md) | The phone overhaul: 4 tabs + router, agent screen, transcript, composer and controls, subagents, `cv_action` (D52-D57). |

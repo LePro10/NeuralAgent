@@ -1,0 +1,619 @@
+/* The demo page: the app's own styles (tokens, themes, launch screen) plus the slim stage around a frame. */
+@import "@neuralagent/app/styles.css";
+
+@source "./";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* The demo has no microphone: the call and voice buttons stay out of sight. By name, and the one pill
+   button of the Neural page that carries the phone icon (not every control that uses that icon). */
+[aria-label="Call Neural"],
+[aria-label="Voice mode"],
+button.rounded-full:has(svg.lucide-phone) {
+  display: none !important;
+}
+
+/* ── boot: the stage page shows the still of its scene from the first paint (index.html picks it) ── */
+
+.na-boot {
+  display: none;
+}
+html[data-stage] #na-launch {
+  display: none !important;
+}
+html[data-stage] #root:has(> .na-boot) {
+  background: var(--boot-poster, none) center / contain no-repeat var(--color-bg);
+}
+html[data-stage~="full"] #root:has(> .na-boot) {
+  background-position: center top;
+  background-size: cover;
+}
+html[data-stage^="phone"]:not([data-stage~="full"]) #root:has(> .na-boot) {
+  background-size: auto min(844px, 86vh);
+}
+html[data-stage] .na-boot {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  display: block;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-field);
+  background: var(--color-chrome);
+  color: var(--color-dim);
+  font: var(--text-footnote) var(--font-sans);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1px var(--color-line-2);
+}
+
+/* ── frame (the app itself) ── */
+
+/* A Mac window's traffic lights, drawn where the real app leaves room for them. */
+.demo-lights {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  padding: 14px 0 0 16px;
+  pointer-events: none;
+}
+.demo-lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-fill-4);
+  box-shadow: inset 0 0 0 0.5px var(--color-line-2);
+}
+
+/* ── stage (the full-screen /demo/ page) ── */
+
+.stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--stage-h, 100%);
+  transform: translateY(var(--stage-top, 0px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  /* The notch and the sides of a landscape phone; the bottom is handed to the app inside the frame. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+  background: var(--color-chrome);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+@supports (height: 100dvh) {
+  .stage {
+    height: var(--stage-h, 100dvh);
+  }
+}
+.stage-probe {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.stage-bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-chrome);
+}
+.stage-bar > * {
+  flex: 0 0 auto;
+}
+.stage-bar .grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.stage-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-right: 8px;
+  color: var(--color-bright);
+  font-size: var(--text-callout);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+.stage-brand svg {
+  width: 20px;
+  height: 20px;
+}
+
+.stage-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-field);
+  background: var(--color-fill-2);
+}
+.stage-btn,
+.stage-seg button {
+  position: relative;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-item);
+  background: transparent;
+  color: var(--color-dim);
+  font: inherit;
+  font-size: var(--text-footnote);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out-soft),
+    color 160ms var(--ease-out-soft);
+}
+/* 36 px to look at, 44 px to hit. */
+.stage-btn::after,
+.stage-seg button::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+.stage-seg button[aria-pressed="true"] {
+  background: var(--color-surface-hi);
+  color: var(--color-bright);
+  box-shadow: var(--shadow-rim);
+}
+.stage-btn:hover,
+.stage-seg button:hover {
+  color: var(--color-bright);
+}
+.stage-btn.is-primary {
+  background: var(--color-bright);
+  color: var(--color-on-bright);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.stage-btn.is-primary:hover {
+  color: var(--color-on-bright);
+  opacity: 0.9;
+}
+.stage-bar select {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0 28px 0 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--color-fill-2);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-footnote);
+}
+.stage-bar select.stage-scene {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.stage-bar :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Colour, link and download controls: in the bar when it is wide, in a sheet under it otherwise. */
+.stage-inline {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+.stage-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-fill-2);
+}
+.stage-opt svg {
+  width: 18px;
+  height: 18px;
+}
+.stage-panel {
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: var(--radius-sheet);
+  background: var(--color-surface-hi);
+  box-shadow:
+    var(--shadow-float),
+    0 0 0 1px var(--color-line-2);
+}
+.stage-panel[hidden] {
+  display: none;
+}
+.stage-panel > .is-primary {
+  flex: 1 1 100%;
+  justify-content: center;
+  min-height: 44px;
+}
+.stage-panel > select {
+  flex: 1 1 0;
+}
+.stage-panel-note {
+  display: none;
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--color-dim);
+  font-size: var(--text-footnote);
+  line-height: 1.4;
+}
+@media (min-width: 1180px) {
+  .stage-inline {
+    display: flex;
+  }
+  .stage-opt,
+  .stage-panel,
+  .stage-bar .stage-get {
+    display: none;
+  }
+}
+
+/* What this is, in one quiet line (and the computer behind the phone, in the phone view). */
+.stage-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 16px;
+  padding: 6px 16px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-dim);
+  font-size: var(--text-footnote);
+  line-height: 1.4;
+  text-align: center;
+}
+.stage-info p {
+  margin: 0;
+}
+.stage-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink);
+  transition: color 200ms var(--ease-out-soft);
+}
+.stage-host i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-faint);
+}
+.stage-host[data-tone="wait"] i,
+.stage-host[data-tone="flash"] i {
+  background: var(--color-accent);
+  animation: stage-pulse 1.6s ease-in-out infinite;
+}
+.stage-host[data-tone="flash"] {
+  color: var(--color-bright);
+}
+.stage-try {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.stage-try > span {
+  color: var(--color-faint);
+  font-size: var(--text-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stage-try button {
+  position: relative;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-fill-2);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-footnote);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out-soft),
+    color 160ms var(--ease-out-soft);
+}
+.stage-try button::after {
+  content: "";
+  position: absolute;
+  inset: -8px -2px;
+}
+.stage-try button:hover {
+  background: var(--color-fill-3);
+  color: var(--color-bright);
+}
+.stage-try :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+@keyframes stage-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.stage-well {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+.stage-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The window / phone on the stage. Its size and scale come from stage.tsx (--w, --h, --s). */
+.stage-device {
+  position: relative;
+  width: calc(var(--w) * var(--s) * 1px);
+  height: calc(var(--h) * var(--s) * 1px);
+}
+.stage-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--w) * 1px);
+  height: calc(var(--h) * 1px);
+  overflow: hidden;
+  background: var(--color-bg);
+  transform: scale(var(--s));
+  transform-origin: 0 0;
+}
+.stage-screen iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--color-bg);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out-soft);
+}
+.stage-screen[data-live="true"] iframe {
+  opacity: 1;
+}
+/* The still of the scene stays under the app and fades out once the app has its first picture. */
+.stage-poster {
+  position: absolute;
+  inset: 0;
+  background-position: top center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  transition: opacity 260ms var(--ease-out-soft);
+}
+.stage-screen[data-live="true"] .stage-poster {
+  opacity: 0;
+}
+.stage-starting {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-field);
+  background: var(--color-chrome);
+  color: var(--color-dim);
+  font-size: var(--text-footnote);
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 1px var(--color-line-2);
+}
+
+.stage-device[data-view="desk"] {
+  border-radius: var(--radius-sheet);
+  overflow: hidden;
+  box-shadow:
+    var(--shadow-float),
+    0 0 0 1px var(--color-line-2);
+}
+/* A phone: a bezel in the ink colour (so it reads on dark and on light), a hairline at the glass, a deep shadow. */
+.stage-device[data-view="phone"] {
+  border-radius: 48px;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-ink) 38%, transparent),
+    0 0 0 9px color-mix(in oklab, var(--color-ink) 17%, var(--color-bg)),
+    0 0 0 10px color-mix(in oklab, var(--color-ink) 34%, transparent),
+    0 36px 70px -18px color-mix(in oklab, var(--color-ink) 42%, transparent);
+}
+.stage-device[data-view="phone"] .stage-screen {
+  border-radius: 48px;
+}
+.stage[data-full="true"] .stage-well {
+  padding: 0;
+}
+.stage[data-full="true"] .stage-device {
+  border-radius: 0;
+  box-shadow: none;
+}
+.stage[data-full="true"] .stage-screen {
+  border-radius: 0;
+}
+
+/* The phone's status bar, island and home indicator (a picture; the app keeps clear of them). */
+.phone-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  color: var(--color-ink);
+  pointer-events: none;
+}
+.phone-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 47px;
+  padding: 6px 30px 0 34px;
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.01em;
+}
+.phone-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  width: 112px;
+  height: 32px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--color-bg) 12%, black);
+  transform: translateX(-50%);
+}
+.phone-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.phone-icons svg {
+  height: 12px;
+  width: auto;
+}
+.phone-home {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--color-ink);
+  opacity: 0.8;
+  transform: translateX(-50%);
+}
+
+/* A phone held sideways: every pixel of height goes to the app. */
+@media (max-height: 500px) {
+  .stage-note {
+    display: none;
+  }
+  .stage-panel-note {
+    display: block;
+  }
+  .stage-info {
+    display: none;
+  }
+  .stage {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+@media (max-height: 700px) {
+  .stage-host,
+  .stage-try {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .stage-bar {
+    gap: 6px;
+    padding: 4px 12px;
+  }
+  .stage-bar select.stage-scene {
+    flex: 1 1 0;
+  }
+  .stage-bar .grow {
+    display: none;
+  }
+}
+@media (max-width: 479px) {
+  /* One scrolling line of chips instead of a wrapped block. */
+  .stage-try {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    width: 100%;
+    margin: 0 -16px;
+    padding: 2px 16px;
+    box-sizing: border-box;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .stage-try::-webkit-scrollbar {
+    display: none;
+  }
+  .stage-try > * {
+    flex: 0 0 auto;
+  }
+  .stage-opt span {
+    display: none;
+  }
+  .stage-opt {
+    padding: 0;
+    min-width: 44px;
+    justify-content: center;
+  }
+}
+
+/* Touch: 44 px targets, and 16 px text in selects so iOS does not zoom on focus. */
+@media (pointer: coarse), (max-width: 599px) {
+  .stage-btn,
+  .stage-seg button,
+  .stage-bar select {
+    min-height: 44px;
+  }
+  .stage-bar select {
+    font-size: 16px;
+  }
+  .stage-btn::after,
+  .stage-seg button::after {
+    inset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-btn,
+  .stage-seg button,
+  .stage-host,
+  .stage-screen iframe,
+  .stage-poster {
+    transition: none;
+  }
+  .stage-host i {
+    animation: none;
+  }
+}

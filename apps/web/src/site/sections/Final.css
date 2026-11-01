@@ -1,0 +1,42 @@
+/* Final call to action: the mark assembling from panes. Foundation tokens only.
+   --p (0 to 1) comes from the shared scroll loop (it is 1 under reduced motion). Only transform and opacity move. */
+.fin__body { --fin-top: clamp(64px, 3rem + 6vw, 144px); padding-block: var(--fin-top) clamp(72px, 4rem + 7vw, 168px);
+  /* The loose panes live inside the section: clipped at the title bar they come out from under it, never over it or over the FAQ above. */
+  overflow: clip; }
+.fin__stage {
+  --A: clamp(0, calc((var(--p, 1) - 0.1) / 0.24), 1); /* complete once the mark is mid-screen, not after it has left */
+  --a0: clamp(0, calc((var(--A) - 0.00) / 0.56), 1);
+  --a4: clamp(0, calc((var(--A) - 0.06) / 0.56), 1);
+  --a1: clamp(0, calc((var(--A) - 0.14) / 0.56), 1);
+  --a3: clamp(0, calc((var(--A) - 0.22) / 0.56), 1);
+  --a2: clamp(0, calc((var(--A) - 0.34) / 0.56), 1);
+  --done: clamp(0, calc((var(--A) - 0.97) * 40), 1);
+  display: grid; justify-items: center; text-align: center; gap: clamp(20px, 2.6vw, 32px);
+}
+.fin__mark { position: relative; width: clamp(132px, 20vw, 200px); aspect-ratio: 1; margin-bottom: clamp(8px, 2vw, 24px); color: var(--color-bright); }
+.fin__mark > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fin__slots rect { fill: none; stroke: var(--rule-2); stroke-width: 0.5; }
+
+/* Each pane flies from its own offset and tilt into its slot. Eased in CSS: 1 - (1 - a)^2. */
+.fin__svg .bm-pane { transform-box: fill-box; transform-origin: center; transform: translate3d(calc(var(--dx) * (1 - var(--e)) * 1px), calc(var(--dy) * (1 - var(--e)) * 1px), 0) rotate(calc(var(--r) * (1 - var(--e)) * 1deg)); opacity: calc(0.1 + 0.9 * var(--e)); }
+.fin__svg .bm-pane[data-pane="0"] { --dx: -78; --dy: 8; --r: -14; --e: calc(1 - (1 - var(--a0)) * (1 - var(--a0))); }
+.fin__svg .bm-pane[data-pane="4"] { --dx: 82; --dy: -46; --r: 12; --e: calc(1 - (1 - var(--a4)) * (1 - var(--a4))); }
+.fin__svg .bm-pane[data-pane="1"] { --dx: -40; --dy: -70; --r: 18; --e: calc(1 - (1 - var(--a1)) * (1 - var(--a1))); }
+.fin__svg .bm-pane[data-pane="3"] { --dx: 70; --dy: 10; --r: -16; --e: calc(1 - (1 - var(--a3)) * (1 - var(--a3))); }
+.fin__svg .bm-pane[data-pane="2"] { --dx: 0; --dy: -90; --r: 0; --e: calc(1 - (1 - var(--a2)) * (1 - var(--a2))); }
+
+/* A cable from the grid above into the mark. */
+.fin__stem { position: absolute; left: 50%; bottom: 100%; width: var(--hair); height: var(--fin-top); background: var(--rule-2); transform-origin: 50% 100%; transform: scaleY(clamp(0, calc(var(--A) * 3), 1)); }
+
+/* Once assembled, the accent pane asks for you: the app's "waiting" ping. */
+.fin__ping { position: absolute; left: 40.6%; top: 39.06%; width: 18.75%; height: 21.88%; opacity: var(--done); pointer-events: none; }
+.fin__ping::after { content: ""; position: absolute; inset: 0; border-radius: 25%; border: var(--hair) solid var(--color-accent); animation: fin-ping 2.4s var(--ease-out-soft) 0.4s infinite; }
+@keyframes fin-ping { 0% { transform: scale(1); opacity: 0.85; } 70%, 100% { transform: scale(2.4); opacity: 0; } }
+
+.fin__h { max-width: 14em; }
+.fin__lead { max-width: 34em; text-align: center; }
+.fin__cta { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3); margin-top: var(--sp-2); }
+.fin__note { margin: 0; max-width: 60ch; color: var(--color-faint); line-height: 1.5; }
+@media (max-width: 559px) { .fin__cta { display: grid; width: 100%; } .fin__cta .na-btn { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .fin__ping::after { animation: none; opacity: 0; } }
+@media (pointer: coarse) { .fin__note a { display: inline-block; padding-block: 12px; margin-block: -12px; } }

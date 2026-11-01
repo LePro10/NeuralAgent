@@ -1,0 +1,68 @@
+/* Spec sheet. Foundation tokens only. */
+.spec__wrap { margin-inline: calc(var(--pad) * -1); border-block: var(--hair) solid var(--rule); }
+
+/* Shared rows */
+.spec__items { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); }
+.spec__item { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: var(--sp-4); padding: var(--sp-5) var(--pad); box-shadow: inset 0 calc(var(--hair) * -1) 0 var(--rule); }
+.spec__item:last-child { box-shadow: none; }
+.spec__ico { margin-top: 3px; color: var(--color-dim); }
+.spec__term { margin: 0; color: var(--color-bright); font: 520 1.0625rem/1.3 var(--font-sans); letter-spacing: -0.014em; }
+.spec__line { margin: 6px 0 0; color: var(--color-dim); font-size: var(--fs-small); line-height: 1.55; max-width: 46ch; text-wrap: pretty; }
+.spec__line .na-code { font-size: 0.84em; }
+.spec__tabmark { display: grid; place-items: center; width: 18px; height: 18px; flex: none; color: var(--color-dim); }
+.spec__count { margin-left: auto; color: var(--color-faint); font: 400 var(--fs-label)/1 var(--font-mono); }
+
+/* Phones: accordion */
+.spec__group { border-bottom: var(--hair) solid var(--rule); }
+.spec__group:last-child { border-bottom: 0; }
+.spec__ghead { margin: 0; font: inherit; }
+.spec__gbtn { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 60px; padding: 0 var(--pad); border: 0; background: transparent; text-align: left; color: var(--color-ink); }
+.spec__gbtn .spec__tablabel { font: 520 1.125rem/1.2 var(--font-sans); letter-spacing: -0.016em; }
+.spec__group[data-open] .spec__tablabel { color: var(--color-bright); }
+.spec__chev { color: var(--color-faint); transition: transform 0.3s var(--ease-out-soft); }
+.spec__gbtn[aria-expanded="true"] .spec__chev { transform: rotate(180deg); }
+.spec__gbtn:focus-visible { outline-offset: -4px; }
+.spec__gbody { border-top: var(--hair) solid var(--rule); background: color-mix(in oklab, var(--color-bright) 1.2%, transparent); }
+.spec__gbody:not([hidden]) .spec__item { animation: spec-in 0.5s var(--ease-out-soft) backwards; animation-delay: calc(var(--i, 0) * 28ms); }
+
+/* Tablet: an open group lists its lines in two columns. */
+@media (min-width: 600px) and (max-width: 899.98px) {
+  .spec__gbody .spec__items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .spec__gbody .spec__item { box-shadow: inset calc(var(--hair) * -1) 0 0 var(--rule), inset 0 calc(var(--hair) * -1) 0 var(--rule); }
+  .spec__gbody .spec__item:nth-child(even) { box-shadow: inset 0 calc(var(--hair) * -1) 0 var(--rule); }
+  .spec__gbody .spec__item:last-child:nth-child(odd) { grid-column: 1 / -1; box-shadow: none; }
+  .spec__gbody .spec__item:last-child:nth-child(even) { box-shadow: none; }
+  .spec__gbody .spec__item:nth-last-child(2):nth-child(odd) { box-shadow: inset calc(var(--hair) * -1) 0 0 var(--rule); }
+}
+
+/* Desktop: tabs + sheet */
+@media (min-width: 900px) {
+  .spec__sheet { display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: stretch; }
+  .spec__tabs { display: flex; flex-direction: column; border-right: var(--hair) solid var(--rule); padding: var(--sp-3) 0; }
+  .spec__tab { position: relative; display: flex; align-items: center; gap: var(--sp-3); min-height: 52px; padding: 0 var(--sp-5) 0 var(--pad); border: 0; background: transparent; text-align: left; color: var(--color-dim); font: 400 1rem/1.2 var(--font-sans); letter-spacing: -0.01em; transition: color 0.2s, background-color 0.2s; }
+  .spec__tab::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--color-accent); transform: scaleY(0); transition: transform 0.35s var(--ease-out-soft); }
+  .spec__tab[aria-selected="true"] { color: var(--color-bright); background: color-mix(in oklab, var(--color-bright) 3%, transparent); }
+  .spec__tab[aria-selected="true"]::before { transform: none; }
+  .spec__tab[aria-selected="true"] .spec__tablabel { font-weight: 520; }
+  .spec__tab:focus-visible { outline-offset: -3px; border-radius: 0; }
+  .spec__panels { min-width: 0; }
+  .spec__panel { outline: none; }
+  .spec__panel:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -3px; }
+  .spec__title { margin-inline: 0; padding-inline: var(--sp-5); height: 52px; background: transparent; }
+  .spec__items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .spec__item { padding: var(--sp-5); box-shadow: inset calc(var(--hair) * -1) 0 0 var(--rule), inset 0 calc(var(--hair) * -1) 0 var(--rule); transition: background-color 0.25s; }
+  .spec__item:nth-child(even) { box-shadow: inset 0 calc(var(--hair) * -1) 0 var(--rule); }
+  .spec__item:last-child:nth-child(odd) { grid-column: 1 / -1; box-shadow: none; }
+  .spec__item:last-child:nth-child(even) { box-shadow: none; }
+  .spec__item:nth-last-child(2):nth-child(odd) { box-shadow: inset calc(var(--hair) * -1) 0 0 var(--rule); }
+  .spec__panel:not([hidden]) .spec__item { animation: spec-in 0.55s var(--ease-out-soft) backwards; animation-delay: calc(var(--i, 0) * 32ms); }
+  .spec__item:hover .spec__ico { color: var(--color-accent); }
+  .spec__item:hover { background: color-mix(in oklab, var(--color-bright) 1.8%, transparent); }
+  .spec__ico { transition: color 0.2s; }
+  @media (hover: hover) { .spec__tab:hover { color: var(--color-bright); } }
+}
+@keyframes spec-in { from { opacity: 0; transform: translate3d(0, 8px, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .spec__item, .spec__gbody:not([hidden]) .spec__item, .spec__panel:not([hidden]) .spec__item { animation: none !important; }
+  .spec__chev, .spec__tab::before { transition: none; }
+}

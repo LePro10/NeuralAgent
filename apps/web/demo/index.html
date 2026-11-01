@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-accent="ice">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- The demo shares this origin with the real web remote: before anything reads storage, put an
+         in-memory one in its place (seeded with the look from the URL). src/demo/isolate.ts finishes the job. -->
+    <script>
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search);
+          var l = (q.get("look") || "").split(".");
+          var pick = function (v, ok, d) {
+            return ok.indexOf(v) >= 0 ? v : d;
+          };
+          var look = {
+            appearance: pick(q.get("appearance") || l[0], ["dark", "light"], "dark"),
+            scheme: pick(q.get("scheme") || l[1], ["night", "graphite", "midnight", "black", "dusk", "forest"], "night"),
+            accent: pick(q.get("accent") || l[2], ["ice", "mint", "ember", "lilac", "sand", "graphite"], null),
+          };
+          var mem = function (seed) {
+            var m = new Map(Object.entries(seed));
+            return {
+              getItem: function (k) {
+                return m.has(k) ? m.get(k) : null;
+              },
+              setItem: function (k, v) {
+                m.set(String(k), String(v));
+              },
+              removeItem: function (k) {
+                m.delete(k);
+              },
+              clear: function () {
+                m.clear();
+              },
+              key: function (i) {
+                return Array.from(m.keys())[i] || null;
+              },
+              get length() {
+                return m.size;
+              },
+            };
+          };
+          var local = mem({ "na:alerts": "off", "neuralagent.theme": JSON.stringify({ state: look, version: 0 }) });
+          var session = mem({});
+          Object.defineProperty(window, "localStorage", { value: local, configurable: true, writable: true });
+          Object.defineProperty(window, "sessionStorage", { value: session, configurable: true, writable: true });
+          window.__naMem = { local: local, session: session };
+          // The stage page (not the iframe inside it) shows the still of its scene from the first paint, before any script of the
+          // app has loaded; the stylesheet draws it (demo.css, "boot"). Same choice of view and scene as stage.tsx.
+          if (q.get("embed") !== "1") {
+            var h = document.documentElement;
+            var w = window.innerWidth;
+            var narrow = w < 900 || window.innerHeight < 500 || (matchMedia("(pointer: coarse)").matches && w < 1100);
+            var view = narrow || q.get("view") === "phone" ? "phone" : "desk";
+            var scene = q.get("scene") || "grid";
+            var still = { grid: "grid", permission: "permission", phone: "permission", neural: "neural", team: "team", files: "files", agents: "agents", idle: "hero" }[scene] || "grid";
+            h.dataset.stage = view + (narrow ? " full" : "");
+            if (look.appearance === "dark" && look.scheme === "night") {
+              var href = "/demo/" + view + "-" + still + ".webp";
+              h.style.setProperty("--boot-poster", "url(" + href + ")");
+              // The stylesheet only asks for it at first paint: ask earlier.
+              var pre = document.createElement("link");
+              pre.rel = "preload";
+              pre.as = "image";
+              pre.href = href;
+              document.head.appendChild(pre);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <!-- Link previews read the first theme-color: the brand accent. Browsers run the script and keep the dark one(s) below. -->
+    <meta name="theme-color" content="#b9d3ff" id="embed-color" />
+    <script>document.getElementById("embed-color").remove()</script>
+    <meta name="theme-color" content="#131a3d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f2f3f5" media="(prefers-color-scheme: light)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NeuralAgent demo" />
+    <title>Live demo · NeuralAgent</title>
+    <meta name="description" content="Try NeuralAgent in your browser: the real app against a simulated computer, with Claude Code, Codex and Gemini CLI at work. No account, no install. Nothing leaves this page." />
+    <link rel="canonical" href="https://agent.neuralhub.dev/demo/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NeuralAgent" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="NeuralAgent live demo" />
+    <meta property="og:description" content="The real app against a simulated computer. No account, no install." />
+    <meta property="og:url" content="https://agent.neuralhub.dev/demo/" />
+    <meta property="og:image" content="https://agent.neuralhub.dev/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The NeuralAgent app with several coding agents at work in a grid of panes." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NeuralAgent live demo" />
+    <meta name="twitter:description" content="The real app against a simulated computer. No account, no install." />
+    <meta name="twitter:image" content="https://agent.neuralhub.dev/og.png" />
+    <meta name="twitter:image:alt" content="The NeuralAgent app with several coding agents at work in a grid of panes." />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body data-page="demo">
+    <!-- Appearance and the launch screen's first frame, before any JS (packages/app/src/lib/launchFrame.ts). -->
+    <!--launch-->
+    <div id="root" aria-busy="true"><p class="na-boot" role="status">Starting the app…</p></div>
+    <script type="module" src="/src/demo/main.tsx"></script>
+  </body>
+</html>

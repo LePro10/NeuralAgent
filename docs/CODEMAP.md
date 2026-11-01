@@ -1,10 +1,10 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-10-31 by `node scripts/codemap.mjs` (516 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-01 by `node scripts/codemap.mjs` (694 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
-Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-protocol` via `cargo test`).
+Generated, not listed: `packages/protocol/src/gen/` (116 files, from `crates/na-protocol` via `cargo test`).
 
 ## apps/android/
 - **capacitor.config.ts** (20) — The app is the web remote served by the relay (`/app`), wrapped with native push, sign-in
@@ -12,11 +12,11 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 ## apps/android/android/app/src/main/java/dev/neuralhub/neuralagent/
 - **AgentTile.java** (25) — `class AgentTile, onStartListening(), onClick()`
 - **AgentWidget.java** (28) — `class AgentWidget, onUpdate()`
-- **CallAudio.java** (140) — `class CallAudio`
-- **CallService.java** (71) — `class CallService, onStartCommand(), onDestroy(), onBind()`
+- **CallAudio.java** (263) — `class CallAudio, onAudioDevicesAdded(), onAudioDevicesRemoved()`
+- **CallService.java** (126) — `class CallService, onStartCommand(), onTaskRemoved(), onDestroy(), onBind()`
 - **CallTile.java** (29) — `class CallTile, onStartListening(), onClick()`
-- **MainActivity.java** (152) — `class MainActivity, onCreate(), onPageStarted(), onPageCommitVisible(), onNewIntent(), onResume()`
-- **NativePlugin.java** (265) — `class NativePlugin, load(), callActive(), readClipboardImage(), copyText(), callRoute(), pushState(), pushToken(), dropToken(), setStatus(), pinWidget(), setNames(), launchTheme()`
+- **MainActivity.java** (167) — `class MainActivity, onCreate(), onPageStarted(), onPageCommitVisible(), onNewIntent(), onDestroy(), onResume()`
+- **NativePlugin.java** (335) — `class NativePlugin, load(), callResume(), callActive(), readClipboardImage(), shareFile(), copyText(), callRoute(), pushState(), pushToken(), dropToken(), setStatus(), pinWidget(), setNames()` +1
 - **PushService.java** (50) — `class PushService, onMessageReceived(), onNewToken()`
 - **Status.java** (92) — `class Status`
 
@@ -24,26 +24,36 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **vite.config.ts** (21) — Tauri expects a fixed port and must see Rust-side errors in the terminal.
 
 ## apps/desktop/src/
-- **dev-browser.tsx** (60) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
+- **dev-browser.tsx** (115) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
 - **hud.tsx** (44)
-- **main.tsx** (197)
+- **main.tsx** (220)
 
 ## apps/desktop/src-tauri/
 - **build.rs** (4)
 
 ## apps/desktop/src-tauri/src/
-- **daemon.rs** (165) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), ensure(), wait_gone(), stop()`
+- **autostart.rs** (850) — Starting NeuralAgent without anyone at the computer (D60): Settings → System → "Start · `const LOGIN_LABEL, const BOOT_LABEL, const WINDOW_LABEL, enum ServiceStart, struct Autostart, enum Os, struct Ctx, enum Step, status(), plan(), refresh(), installable(), set(), login_host_installed()` +1
+- **daemon.rs** (228) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), restart_newest()`
+- **duck.rs** (984) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
 - **hud.rs** (76) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
-- **lib.rs** (195) — `run()`
-- **main.rs** (7) — Prevents an extra console window on Windows in release builds.
-- **mic.rs** (187) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, impl Drop for Mic`
+- **lib.rs** (220) — `run_service(), run()`
+- **main.rs** (11) — Prevents an extra console window on Windows in release builds.
+- **mic.rs** (198) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, probe(), impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
+- **permissions.rs** (349) — Settings → System → Permissions (D58): what macOS lets NeuralAgent do, checked live without · `enum State, struct Permission, list(), pane(), request(), open(), repair(), lost_since_last_run()`
+- **service.rs** (547) — `neuralagent --service [--mode app|login|boot]`: the host that keeps `neuralagentd` running · `const LOCK, const STOP, const RESTART, const HANDOVER, enum Mode, parse_mode(), installed_app(), running(), active_mode(), app_program(), start_from_app(), main()`
+- **system.rs** (89) — Tauri commands for Settings → System (permissions, autostart) and the check after start that · `struct SystemStatus, system_status(), system_request(), system_open(), system_repair(), system_autostart(), self_check()`
 - **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
 - **update.rs** (175) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
-- **voice.rs** (491) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
+- **voice.rs** (543) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
+
+## apps/desktop/src-tauri/src/duck/
+- **linux.rs** (165) — Linux: each playing stream's own volume through `pactl` (PulseAudio, or PipeWire with · `struct Streams, impl Backend for Streams`
+- **mac.rs** (355) — macOS: the system output volume (Core Audio, no permission needed) and the own volume of · `struct System, impl Backend for System, apps(), struct Players, impl Backend for Players`
+- **win.rs** (148) — Windows: the own volume of every other app's audio session on the default output (WASAPI · `struct Sessions, impl Backend for Sessions`
 
 ## apps/web/
-- **vite.config.ts** (65) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
+- **vite.config.ts** (66) — One version for everything: the Cargo workspace's (scripts/set-version.mjs).
 
 ## apps/web/public/
 - **install.sh** (31) — Installs or updates NeuralAgent on macOS:
@@ -52,12 +62,12 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **sw.js** (67) — Web remote service worker: shows "an agent needs you" pushes and opens that agent on tap.
 
 ## apps/web/src/
-- **brand.tsx** (41) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
-- **changelog.tsx** (248) — /changelog: every release from CHANGELOG.md (bundled at build time via `virtual:changelog`,
-- **download.tsx** (100)
-- **landing.tsx** (89)
-- **legal.tsx** (133)
-- **simple.tsx** (32) — One tiny entry for simple pages like 404 (picked by <body data-page>).
+- **brand.tsx** (45) — The NeuralAgent mark: an N built from terminal panes (same shape as BrandMark in the app). · `BrandMark(), Brand(), Footer()`
+- **changelog.tsx** (12) — /changelog entry. Page: src/site/pages/changelog/. Data: virtual:changelog (CHANGELOG.md, see vite.config.ts).
+- **download.tsx** (18) — /download entry. Page: src/site/pages/download/. Foundation: src/site/base.css + foundation.css + src/site/ui.
+- **landing.tsx** (45) — Landing page entry (`/`). Foundation: src/site/base.css + foundation.css + src/site/ui/*.
+- **legal.tsx** (12) — /imprint, /privacy, /terms entry (one bundle, picked by <body data-page>). Page: src/site/pages/legal/.
+- **simple.tsx** (12) — 404 entry (404.html). Page: src/site/pages/notfound/. Simple pages stay one small entry.
 
 ## apps/web/src/admin/
 - **App.tsx** (96) — `Screen(), App()`
@@ -71,25 +81,139 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **hooks.ts** (38) — `interface Polled, usePolled()`
 - **main.tsx** (13)
 
+## apps/web/src/demo/
+- **api.ts** (288) — The control API of the live demo: what the landing page (and anything else on the site) can say · `type DemoScene, SCENES, DEMO_VERSION, type DemoView, type DemoActor, type DemoSignal, interface DemoSummary, interface DemoWorld, interface WorldOptions, loadWorld, type SettingsSection, type DemoRoute, type DemoAppearance, type DemoScheme` +10
+- **frame.tsx** (221) — A demo frame: the real NeuralAgent app (desktop layout at >= 900 px, phone layout below) running · `bootFrame()`
+- **isolate.ts** (220) — Imported first by every demo entry. The demo runs the real app on a page of the real site, so this · `interface Isolation, memoryStorage(), seedFor(), isolate()`
+- **main.tsx** (12) — Entry of /demo/. The isolation comes first: the demo shares the site's origin with the real web
+- **stage.tsx** (515) — The full-screen /demo/ page: a slim toolbar, one line saying what this is, and one frame (desktop · `bootStage()`
+
+## apps/web/src/demo/daemon/
+- **ansi.ts** (121) — ANSI helpers for the fake terminals: colours, boxes and wrapping. The scripted output only uses · `RESET, BOLD, DIM, ITALIC, UNDERLINE, INVERSE, ERASE_LINE, HIDE_CURSOR, SHOW_CURSOR, SNAPSHOT_HEAD, fg, bg, rgb, bgRgb` +15
+- **clock.ts** (253) — The world's clock: a priority queue of timers on a virtual timeline that can be paused, sped up · `interface ClockOptions, type Cancel, class Cancelled, interface Scope, makeScope(), interface Clock, makeClock()`
+- **content.ts** (513) — The files on the simulated disk: three small, believable projects plus a few ordinary folders. · `type Files, HOME, CODE, BILLING, BILLING_WORKING, BILLING_UNTRACKED, SHOP, SHOP_WORKING, DOCS, DOCS_WORKING, HOME_FILES, interface ProjectSeed, PROJECTS`
+- **diff.ts** (98) — Line diffs for the fake git: a classic LCS table (files in the demo are small), unified output · `interface DiffLine, interface Hunk, diffLines(), hunks(), counts(), unified()`
+- **harness.ts** (54) — Test helper (not shipped: only the tests import it): a protocol client on a world's transport. · `interface Probe, settle, open(), snapshotOf`
+- **index.ts** (135) — The fake computer as the landing page and the demo frames see it: `createWorld()` builds the world · `createWorld()`
+- **neural-brain.ts** (97) — What a visitor means when they write to Neural. Pure (text and the project names in, an intent · `type Mode, type NeuralIntent, engineOf(), projectOf(), taskOf(), matchNeural()`
+- **neural.test.ts** (216) — What a visitor means when they write to Neural (pure), and Neural answering, starting and stopping agents,
+- **neural.ts** (749) — Neural, the orchestrator: the conversation (streamed word by word), what it noticed, its notes, · `class Neural`
+- **rng.ts** (49) — A small seeded random generator (mulberry32). Everything the fake daemon invents comes from here, · `interface Rng, hash(), makeRng()`
+- **scenes.ts** (356) — Building a world: the disk and the projects, a believable past (an agent that finished in · `advanceUntil(), buildScene(), startDirector()`
+- **seed.ts** (209) — The starting point of the world: the disk, workspaces, profiles, the CLI catalog, settings, · `catalog, profiles, settings, limits, seedDisk(), workspaces(), neuralHistory(), freshState()`
+- **server.ts** (212) — One connection of the protocol, as the daemon sees it: handshake, subscription (snapshot + events), · `class ApiErr, interface CvAttach, class Conn`
+- **shell.ts** (621) — A small zsh-like shell on the fake disk: line editing, history, tab completion, pipes and enough · `class Shell`
+- **sim.ts** (299) — The simulated computer: one object that holds the protocol state, the virtual clock, the disk and · `HOST, DAEMON_VERSION, FEATURES, type Listener, class Sim`
+- **swarms.ts** (79) — Classic swarms of the Teams page: one that is still talking (with a message queued for a busy · `liveSwarm(), endedSwarm()`
+- **term.ts** (94) — A terminal of the fake computer: what it has printed (bounded), what is attached to it, and who · `type Flow, class Term`
+- **units.test.ts** (196) — The small parts: random numbers, the clock, the disk, the shell and the terminal stream.
+- **vfs.ts** (231) — The simulated computer's disk: a flat map of absolute paths to text files (and a few binary ones), · `interface VFile, type GitStatus, interface Repo, dirname, basename, join, normalize(), class Vfs, mimeOf()`
+- **world.test.ts** (223) — The fake daemon, end to end through its Transport: node --test --experimental-strip-types
+
+## apps/web/src/demo/daemon/agents/
+- **run.ts** (1082) — A scripted agent working: beats (say, read, edit, run …) are played with realistic pacing into the · `type Beat, interface SubAgent, interface Question, class Run, class Declined`
+- **scripts.ts** (292) — What the simulated agents do: short, believable tasks on the three projects, written as beats. · `type TaskFn, testOutput(), RETRY_PROMPT, webhookRetries, runbookNote, idempotencyKeys, refundEdges, clampQuantity, cartTotals, docsNext, replyTo(), type TaskEntry, TASKS, registerTask()` +1
+- **spawn.ts** (171) — Creating, restarting and closing sessions: the one place that knows how a session is made of a · `interface SpawnOpts, taskFor(), promptSession(), createSession(), stopSession(), closeSession(), restartSession()`
+- **style.ts** (177) — How each agent CLI looks in the terminal: bullets, result gutters, diffs, permission boxes, the · `type EngineId, interface Style, styleOf, num, sayText(), sayLines(), toolHeader(), resultLines(), diffLines(), plural, banner(), askBox(), inputBox(), statusLine` +3
+- **team.ts** (179) — The three competing takes on one goal ("a wishlist for the shop"), one per engine. Each works in · `RACE_GOAL, raceBeats(), verdicts, REVIEW_GOAL, buildRound1(), reviewRound1(), buildRound2(), reviewRound2()`
+
+## apps/web/src/demo/daemon/claude/
+- **claude.test.ts** (186) — The intent matcher (pure) and a Claude session answering what a visitor types, through the protocol.
+- **cv.ts** (192) — The Claude view of one session: a transcript the app renders as chat (messages, blocks), the · `CLAUDE_MODEL, ATTACH, MODELS, COMMANDS, interface SubTranscript, class CvSession`
+- **intent.ts** (97) — What a visitor means when they type into a demo agent. Pure: text in, an intent out, so it can be · `type Topic, type Recipe, type TestRecipe, type Intent, topicOf(), matchIntent()`
+- **skills.ts** (714) — What a demo Claude does for what the visitor typed: each intent (intent.ts) becomes a short, · `claudeReply()`
+
+## apps/web/src/demo/daemon/handlers/
+- **files.ts** (241) — Folders, files and git as the app asks for them: the folder picker, the file browser, the changes · `fsRoots(), fsList(), fsMkdir(), fileList(), fileRead(), fileSave(), fileUpload(), fileSearch(), gitChanges(), gitDiff(), worktreeMerge(), worktreeDiscard(), workspaceAdd()`
+- **index.ts** (372) — The request table of the fake daemon: every `Request` kind gets an answer. Reads are answered in · `handle()`
+- **misc.ts** (410) — Everything that is not a terminal, a file or a conversation: settings, profiles, tool servers, · `settingsSet(), profileSave(), profileDelete(), catalogRefresh(), mcpSave(), mcpDelete(), mcpImport(), usageReport(), discordPreview(), remoteSignIn(), remoteSignOut(), remoteEnable(), remotePair(), remoteRevoke()` +16
+
 ## apps/web/src/remote/
-- **Remote.tsx** (540) — `Remote()`
+- **Remote.tsx** (550) — `Remote()`
 - **main.tsx** (6)
-- **native.ts** (134) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText`
+- **native.ts** (149) — Inside the Android app, which loads this page from the relay: FCM push, sign-in in a Custom · `plugin, REDIRECT, signIn, apkVersion, openOutside, onActive, clipboardImage, copyText, shareFile()`
 - **push.ts** (173) — Web Push for the web remote: the service worker, the subscription the relay pushes to, and · `startWorker(), pushState(), enablePush(), disablePush(), syncPush(), takeLaunchRequest(), onOpenRequest(), doneOpening(), rememberNames(), setPushSilent()`
 - **session.ts** (56) — The web remote's account and relay link, shared by every screen. One per tab. · `ios, native, deviceName, account, link, useLink(), lastHost, REDIRECT`
 - **webUpdate.ts** (23) — The web remote (and the Android shell, which loads it from the relay) runs the build that was · `webUpdate`
 
 ## apps/web/src/site/
-- **Demo.tsx** (231) — The live demo: a simulated NeuralAgent window. Pure front-end; no network, no backend. · `Demo()`
-- **Hero.tsx** (72) — `Hero()`
-- **Nav.tsx** (91) — Where a section's content starts, below the fixed nav. Re-read on every call: lazy parts change heights. · `goTo(), Nav()`
-- **Scenes.tsx** (92) — Illustrations for the story and the feature tabs. Pure CSS/SVG, tokens only. · `GridScene(), VoiceScene(), PhoneScene(), SealScene(), SCENES`
-- **Sections.tsx** (215) — `DemoSection(), Numbers(), Security(), Platforms(), Faq(), Final(), SiteFooter()`
-- **Showcase.tsx** (232) — `Showcase()`
-- **Story.tsx** (111) — `Story()`
-- **data.ts** (94) — Content for the landing page. Only things the product really does (see docs/PLAN.md, STATUS.md). · `SITE, MAIL, INSTALL_CMD, AGENTS, NAV, FAQ, interface Latest, type Os, detectOs(), OS_LABEL, useRelease()`
-- **hooks.ts** (153) — Small scroll / viewport helpers for the landing page. No dependencies: one scroll listener, one · `reduced, useSeen(), useVisible(), useMedia(), startScroll(), useTyped(), useCopy()`
-- **parts.tsx** (185) — Small building blocks shared by hero, story, showcase and demo: typed terminals, waveform, window frame. · `type Line, useTypist(), Term(), StatusDot(), Win(), SIDE, Wave(), Orb(), CopyCmd(), AutoPane(), Btn(), Aurora()`
+- **content.ts** (100) — Shared facts and links for the marketing pages. Only things the product really does · `SITE, MAIL, GITHUB, INSTALL_CMD, AGENTS, SECTIONS, interface NavLink, NAV_LINKS, interface FooterColumn, FOOTER_COLUMNS`
+
+## apps/web/src/site/content/
+- **agents.ts** (42) — The 13 agent CLIs exactly as crates/na-daemon/src/catalog.rs names them (order, names, vendors, commands, ins… · `interface AgentInfo, AGENT_INFO, BYO`
+- **faq.ts** (67) — FAQ data. The accordion AND the FAQPage JSON-LD (static, in index.html) come from this one array. After editi… · `interface Faq, FAQ, plain`
+- **icons.ts** (12) — Extra lucide icons for the landing sections Spec, Security, Agents, Platforms, Faq, Final.
+- **platforms.ts** (69) — Platforms and download. Download kinds are the keys of /api/releases/latest -> downloads (never re-parse file… · `interface PlatformLink, interface Platform, PLATFORMS, REQUIREMENTS`
+- **security.ts** (55) — Security section copy and facts (site-audit.md Part B7, DECISIONS D28). Exact algorithms, honest limits. · `PLAIN, CIPHER_HEX, NONCE_HEX, group4, SEAL_STEPS, FACTS, LIMITS, LEAVES`
+- **spec.ts** (133) — The spec sheet: everything the product does, grouped. Facts only (research-local/site-overhaul/site-audit.md … · `interface SpecItem, interface SpecGroup, SPEC`
+- **static.test.ts** (72) — Run: node --experimental-strip-types --test apps/web/src/site/content/static.test.ts
+- **sync-static.ts** (81) — Keeps the static parts of apps/web/index.html in step with content/faq.ts: the FAQPage JSON-LD and the no-JS … · `INDEX, richHtml(), faqJsonLd(), noscriptBlock(), synced()`
+
+## apps/web/src/site/pages/
+- **Page.tsx** (15) — Shell of every sub-page: skip link, nav, `<main id="main">`, footer (same landmarks as the landing). · `Page()`
+- **boot.ts** (9) — First import of every sub-page entry (download, changelog, legal, 404): the CSS in the right order, then init…
+- **icons.ts** (9) — lucide icons the sub-pages use on top of site/ui/icons.ts (that file belongs to the foundation).
+
+## apps/web/src/site/pages/changelog/
+- **Changelog.tsx** (186) — /changelog: a release timeline from CHANGELOG.md (virtual:changelog). The newest release is open, older ones … · `Changelog()`
+- **Inline.tsx** (18) — `**bold**`, `` `code` `` and `[text](https://…)` inside an entry; everything else is plain text (never HTML). · `Inline()`
+- **model.ts** (56) — The changelog as the page needs it: ids, anchors, titles. Data: `virtual:changelog` (CHANGELOG.md parsed at b… · `type Release, hasItems, released, next, list, latest, idOf, ids, count, fromHash(), interface GroupMeta, GROUP, groupMeta, autoTitle()`
+
+## apps/web/src/site/pages/download/
+- **Download.tsx** (229) — /download: the visitor's own build first (version and date from /api/releases/latest), every other build, · `Download()`
+- **Info.tsx** (123) — The informational sections of /download: first start per system, what you need, the phone remote. · `FirstStart(), Needs(), PhoneRemote()`
+- **platforms.ts** (77) — The builds the release manifest can contain (`/api/releases/latest` → `downloads`, keys from · `interface Kind, KINDS, listKinds(), type MacArch, useMacArch(), primaryKind(), fileName(), WEB_REMOTE`
+
+## apps/web/src/site/pages/legal/
+- **Legal.tsx** (107) — /imprint, /privacy, /terms: a calm document. Index pane in the head, contents on the left from 1024 px, mono … · `Legal()`
+- **content.tsx** (96) — The legal texts. The wording is the legal text of the site: change it only when the owner asks. · `UPDATED, interface Section, interface Doc, DOCS, ORDER, slugOf`
+
+## apps/web/src/site/pages/notfound/
+- **NotFound.tsx** (143) — 404: a quiet terminal pane in "command not found" style. The path you asked for is echoed, the closest known … · `NotFound()`
+
+## apps/web/src/site/sections/
+- **Agents.tsx** (179) — Agents: the 13 CLIs as a roster beside a live terminal line. Hover, focus or tap a row: the pane shows the co… · `Agents()`
+- **Faq.tsx** (74) — FAQ: an accessible accordion (buttons with aria-expanded, regions), two columns on desktop. The same array re… · `Faq()`
+- **Final.tsx** (66) — Final call to action: the brand mark assembles from five panes as the section scrolls into view (BRIEF 2.5d),… · `Final()`
+- **Hero.tsx** (114) — Hero: the first half of the signature sequence. Headline, promise, the OS-aware actions, and below them the l… · `Hero()`
+- **Platforms.tsx** (122) — Platforms and download. Links come from /api/releases/latest (`downloads` keys: mac, mac-intel, windows, linu… · `Platforms()`
+- **Security.tsx** (263) — Security: "sealed in transit". One real prompt (Allow npm test?) is sealed on the computer, crosses the relay… · `Security()`
+- **Spec.tsx** (132) — Spec sheet: everything the product does, grouped. Desktop: a category switch (vertical tabs) beside one dense… · `Spec()`
+- **Stage.tsx** (26) — Signature sequence, second half: the live window docks and becomes a sticky stage; six chapters scroll beside… · `Stage()`
+- **StageChapter.tsx** (56) — The copy of one chapter, shared by the sticky stage (beside the live window) and the stacked layout (above a … · `ChapterBody()`
+- **StageStack.tsx** (80) — Phones and tablets: no sticky stage and no inline iframe (it would fight the page for the touch). Each chapte… · `StageStack()`
+- **StageSticky.tsx** (243) — The sticky stage (>= 900 px, mouse): one live desktop window and the phone stay pinned while six chapters scr… · `StageSticky()`
+
+## apps/web/src/site/stage/
+- **Devices.tsx** (177) — The devices of the stage: the desktop window (the site's own chrome around the live app), the phone, and the · `DESK, PHONE, LiveWindow, PhoneDevice, PosterDevice(), PosterLoop()`
+- **HeroRoster.tsx** (65) — The hero's quiet status block (BRIEF 2.5b, replacing the canvas field): three real agents of the demo world a… · `HeroRoster()`
+- **LiveFrame.tsx** (237) — One live frame of the demo: a poster that shows instantly, an iframe that joins the shared world behind it, a… · `interface LiveFrameHandle, LiveFrame`
+- **chapters.ts** (128) — The six chapters of the story. Copy uses only facts from research-local/site-overhaul/site-audit.md Part B. · `interface Chapter, CHAPTERS`
+- **mode.ts** (5) — One definition of "the page may run the sticky live stage": room (a 1280 px window cannot be worked with a th… · `STICKY`
+- **signals.ts** (95) — World signals turned into short readout lines for the active chapter ("● Claude Code in billing-api needs you… · `interface Line, clip, statusKind, type Label, agentLabels(), describe(), WATCH`
+- **useStageScroll.ts** (255) — The stage's one scroll loop. It caches where every chapter sits (on resize only), so a scroll frame reads not… · `interface St, presence, TOOLS, interface Geo, arrange(), useStageScroll()`
+- **world.ts** (70) — The landing hosts the shared demo world. The daemon chunk loads lazily (loadWorld is a dynamic import in · `hostWorld(), whenIdle(), saveData(), waitForFrame(), startRoute, frameSrc(), demoHref, posterSrc`
+
+## apps/web/src/site/ui/
+- **ActivityMark.tsx** (22) — `type ActivityKind, ACTIVITY_LABEL, ActivityMark()`
+- **AgentGlyph.tsx** (16) — Mirror of packages/app/src/components/AgentGlyph.tsx (not importable: the app barrel is heavy). Same glyph pe… · `AgentGlyph()`
+- **Button.tsx** (56) — `Button(), LinkButton()`
+- **CopyCommand.tsx** (26) — A shell command with a copy button: `$ curl … | sh`. The text is selectable, the button announces "Copied". · `CopyCommand()`
+- **Fold.tsx** (26) — A heading with its content. On phones the content folds into a closed <details> so long reference lists do no… · `Fold()`
+- **Footer.tsx** (65) — Footer for every marketing page: columns (Product, Download, Resources, Legal), GitHub, mail, the licence · `Footer()`
+- **Icon.tsx** (32) — Icon sizes on the site, in px. One stroke width (1.6) everywhere, like the app. · `ICON_SIZE, type IconSize, Icon(), GitHubIcon()`
+- **Kbd.tsx** (7) — A keycap. `<Kbd>⌘</Kbd><Kbd>K</Kbd>`. · `Kbd()`
+- **Nav.tsx** (156) — `Nav()`
+- **PaneField.tsx** (270) — The hero background graphic (BRIEF 2.5b): a dim field of tiny panes, tiled like a window manager would · `PaneField()`
+- **PaneTitle.tsx** (25) — Pane title bar: a status mark and a short path-like label in mono, e.g. `agents/side-by-side` · `PaneTitle()`
+- **Reveal.tsx** (81) — `type RevealKind, Reveal(), SlotLines()`
+- **Section.tsx** (59) — Faint column guides (hairlines at 25 / 50 / 75 %). Put inside a `.na-frame`. Desktop only. · `Guides(), Section()`
+- **SendToComputer.tsx** (57) — The canonical download address (with the slash: the bare form costs the receiving computer a redirect). · `SendToComputer()`
+- **hooks.ts** (235) — Small hooks for the marketing pages. No dependencies: IntersectionObserver, matchMedia and ONE shared · `prefersReducedMotion(), useMedia(), useReducedMotion, useIsPhone, useFinePointer, useInView(), usePageVisible(), startScrollLoop(), useScrollProgress(), useActiveSection(), useCopy(), useMoreToRight()`
+- **icons.ts** (9) — The lucide icons the marketing pages use, in one place (one import line for every agent; tree-shaken by name).
+- **index.ts** (21) — Barrel for the marketing foundation. Import from "../ui" (sections) or "./site/ui" (pages). · `ActivityMark, ACTIVITY_LABEL, AgentGlyph, Button, LinkButton, CopyCommand, Fold, Footer, GitHubIcon, Icon, ICON_SIZE, Kbd, Nav, PaneField` +13
+- **page.ts** (52) — Call once, before React renders, from every marketing page entry: · `initPage(), scrollToHash()`
+- **release.ts** (84) — OS detection and the latest release (shared by Nav, Hero, Footer, download page). One fetch per page load. · `interface Latest, type Os, detectOs(), OS_LABEL, isMobileOs, type ReleaseStatus, interface ReleaseState, interface Cta, useRelease(), shortDate()`
 
 ## crates/na-crypto/src/
 - **lib.rs** (170) — NeuralAgent E2E encryption v1. The TS twin lives in `packages/crypto`. · `enum Error, type Result, b64(), unb64(), fingerprint(), struct StaticKey, struct ClientHandshake, host_accept(), host_accept_with(), struct Session`
@@ -99,44 +223,59 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **vectors.rs** (60) — Cross-implementation vectors. Regenerate with NA_WRITE_VECTORS=1 (only when the spec changes).
 
 ## crates/na-daemon/src/
-- **audit.rs** (127) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
+- **audit.rs** (158) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
 - **awake.rs** (109) — Keeps the computer from sleeping while agents work (setting `keep_awake`). The display may · `struct Awake`
-- **call.rs** (579) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
+- **call.rs** (728) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
-- **claude_view.rs** (2274) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), parse_line_in(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
-- **core.rs** (1370) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
-- **cv_action.rs** (328) — Claude view: actions the phone asks for (`Request::CvAction`), done by typing the CLI's own · `menu_now()`
+- **claude_view.rs** (2310) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), parse_line_in(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
+- **core.rs** (1429) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
+- **cv_action.rs** (618) — Claude view: actions the phone asks for (`Request::CvAction`), done by typing the CLI's own · `menu_now()`
 - **cv_commands.rs** (369) — Claude view: the slash commands of Claude Code (table for CLI 2.1.316) plus the user's, · `builtin(), front_matter(), read_small(), collect_commands(), collect_skills(), collect_plugins()`
 - **cv_image.rs** (290) — Images in a Claude transcript (a `Read` of a picture, pasted images, screenshots from MCP · `const MAX_SEND, images_in(), index_of(), image_ref(), image_url(), dims(), serve(), fit()`
 - **cv_parse.rs** (485) — Claude view: the less common transcript shapes, kept out of `claude_view::parse_line`. · `between(), tool_meta(), agent_result_text(), task_kind(), task_notification(), enum ShellLine, shell_line(), split_pasted(), hook_attachment(), stop_hook_summary(), api_error(), refusal(), enum QueueOp, queue_op()` +4
 - **cv_screen.rs** (273) — Claude view: more that is read off the CLI's screen. The busy spinner (Claude Code drops · `spinner(), is_spinner(), checkbox(), wants_text(), detect_menu(), fingerprint(), classify()`
-- **cv_tasks.rs** (576) — Claude view: the background tasks of a conversation (subagents, background shells, monitors). · `valid_agent_id(), subagent_dir(), subagent_path(), struct Tasks, last_step(), step_label()`
-- **discord.rs** (200) — Discord Rich Presence (setting `discord_presence`). General shows only that NeuralAgent is in · `struct Presence, presence(), struct Discord`
+- **cv_tasks.rs** (869) — Claude view: the background tasks of a conversation (subagents, background shells, monitors). · `valid_agent_id(), subagent_dir(), subagent_path(), struct Tasks, struct Step, last_step(), step_label()`
+- **discord.rs** (1043) — Discord Rich Presence (Settings → Discord, D72). `discord_presence` is a privacy preset (Off, · `struct Extra, gather(), resolve(), presence(), card(), compact(), duration(), model_label(), streak(), preview(), struct Discord, impl Ipc for DiscordIpcClient`
 - **env.rs** (225) — The environment agents run in. · `const STRIP, struct LoginEnv, default_shell()`
-- **fsbrowse.rs** (109) — Read-only folder browsing for picking workspaces (also from the phone). · `expand(), list(), roots(), mkdir()`
+- **files.rs** (1072) — Files explorer (D67): list a folder, read a file in pieces, save a text file, upload into a · `const MAX_CHUNK, const DEFAULT_CHUNK, const MAX_SAVE, const MAX_UPLOAD, const MIN_FREE, struct Root, roots(), handle(), resolve(), list(), mime_of(), looks_text(), read(), save()` +4
+- **fsbrowse.rs** (181) — Read-only folder browsing for picking workspaces (also from the phone). · `expand(), expand_lexical(), list(), roots(), mkdir()`
 - **git.rs** (331) — Git through the `git` CLI: a summary per workspace, the changed files and their diff, and one · `const WORKTREE_DIR, is_repo(), summary(), changes(), diff(), worktree_create(), worktree_dirty(), worktree_merge(), worktree_remove()`
 - **history.rs** (279) — Search over past agent conversations on this computer, so they can be resumed: Claude Code · `struct History`
 - **hooks.rs** (130) — Agent hooks: `neuralagentd hook <event>` runs inside the agent's process tree and forwards · `client_main(), statusline_main(), subagent_statusline_main(), receive()`
 - **host.rs** (284) — The host as seen from remote devices (D42): voice models and update checks live in the · `struct Host`
 - **layout.rs** (265) — Split-tree helpers. Clients edit layouts freely (drag, resize, close); the daemon only needs · `const MAX_PANES, new_id(), new_tab(), grid_tab(), default_layout(), count_panes(), place_session(), clear_session(), sessions_in()`
-- **llm.rs** (343) — Chat with tool calls against the user's own model provider (BYOK): NeuralHub and other · `enum Msg, struct Call, struct Tool, struct Turn, struct Llm, impl Default for Llm, default_url(), needs_key(), struct Ask`
-- **main.rs** (232) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
+- **llm.rs** (366) — Chat with tool calls against the user's own model provider (BYOK): NeuralHub and other · `enum Msg, struct Call, struct Tool, struct Turn, struct Llm, impl Default for Llm, default_url(), needs_key(), struct Ask`
+- **main.rs** (248) — neuralagentd — the NeuralAgent host daemon. · `tls_init()`
 - **mcp.rs** (289) — MCP servers managed in one place and handed to every agent at launch. · `type Secrets, secrets_path(), load_secrets(), save_secrets(), valid_id(), struct Extra, for_engine(), import()`
-- **orch.rs** (774) — Neural, the orchestrator: a conversation with the user's own model that starts, prompts, · `struct Orch, type Speech, system_prompt(), watch(), trim()`
+- **orch.rs** (758) — Neural, the orchestrator: a conversation with the user's own model that starts, prompts, · `struct Orch, type Speech, enum Trigger, me(), last_part(), system_prompt(), trim()`
 - **paths.rs** (79) — Where the daemon keeps its files. · `const APP_ID, struct Paths, struct DaemonInfo, write_private()`
-- **policy.rs** (106) — What a client may do without asking. · `check()`
+- **permissions.rs** (426) — macOS privacy (TCC) from the service's side (D58). · `const NEEDS_FDA, struct Guards, guarded_root(), struct Gate, check(), full_disk_access()`
+- **policy.rs** (116) — What a client may do without asking. · `check()`
 - **preview.rs** (92) — Finds the address a dev server prints ("Local: http://localhost:5173/") in terminal output, · `find_url()`
 - **profiles.rs** (168) — Built-in launch profiles and how a profile becomes a command line. · `const INSTALL_PREFIX, builtin(), install_profile(), struct Launch, launch(), const CLAUDE_EVENTS, claude_settings()`
-- **pty.rs** (377) — One process in a pseudo terminal, mirrored by a headless VT emulator. · `struct Chunk, struct Spawn, enum PtyNote, struct Pty`
-- **remote.rs** (830) — Remote access: sign-in with the relay, the connection to it, and phones/browsers of the same · `const DEFAULT_RELAY, struct Remote, start(), handle(), struct Callback, callback(), impl Drop for Sess`
+- **pty.rs** (393) — One process in a pseudo terminal, mirrored by a headless VT emulator. · `struct Chunk, struct Spawn, enum PtyNote, struct Pty`
+- **remote.rs** (859) — Remote access: sign-in with the relay, the connection to it, and phones/browsers of the same · `const DEFAULT_RELAY, struct Remote, start(), handle(), struct Callback, callback(), impl Drop for Sess`
 - **secrets.rs** (49) — Keys the user typed in (LLM providers): the OS keychain in release builds on macOS and
-- **server.rs** (425) — Local WebSocket server (127.0.0.1 only, token + Origin check). · `random_token(), ct_eq(), struct App, router(), run_client(), run_channel(), struct Conn`
+- **server.rs** (480) — Local WebSocket server (127.0.0.1 only, token + Origin check). · `random_token(), ct_eq(), struct App, router(), run_client(), run_channel(), struct Conn, not_understood_res(), not_understood()`
+- **service.rs** (189) — The service's side of the host that keeps it running (D59). · `const RESTART, const HANDOVER, static SHUTDOWN, init(), host_mode(), booted_at(), before_login(), system(), restart(), watch_handover()`
+- **speech.rs** (64) — Process-wide speech memory rules (D74, D75). · `const MALLOC_ENV, forget_malloc_env(), parakeet()`
 - **swarm.rs** (619) — Swarms: a team of agents on one goal that hand work to each other. · `const SERVER_ID, const YOU, struct Outbox, default_team(), brief(), server(), bridge_env(), trim(), receive(), bridge_main()`
-- **usage.rs** (634) — Token use and cost from the CLIs' own transcripts, so it covers every conversation on this · `struct Price, price(), struct Usage, claude_limits(), since_day(), today()`
+- **usage.rs** (642) — Token use and cost from the CLIs' own transcripts, so it covers every conversation on this · `struct Price, price(), struct Usage, claude_limits(), since_day(), today()`
+
+## crates/na-daemon/src/neural/
+- **guard.rs** (397) — What Neural may do on its own, and what needs the user's OK (docs/notes/neural-v2.md → Safety). · `destructive(), destructive_command(), safe_command(), safe_permission()`
+- **history.rs** (151) — The conversation as the model sees it: only user ↔ Neural. What Neural did in a turn is one · `const COMPACT_AT, const KEEP_VERBATIM, build(), compaction(), compaction_prompt()`
+- **mod.rs** (850) — Neural v2 (D61–D64, docs/notes/neural-v2.md): the state Neural keeps besides the conversation · `mod guard, mod history, mod observe, mod pulse, mod tasks, mod tools, mod world, struct Runtime, const TASK_WAKES, load(), watch()`
+- **observe.rs** (211) — Observations: what Neural noticed about agents, kept apart from the conversation. Coalescing, · `const KEEP, const STUCK_MS, push(), label(), workspace_name(), describe_prompt(), agent_text(), clip(), struct Stuck`
+- **pulse.rs** (129) — When Neural speaks on its own: which observations wake it, batching and throttling. · `const BATCH_MS, const GAP_MS, const PER_HOUR, wakes(), struct Pulse`
+- **tasks.rs** (436) — Neural's tasks and teams: linking agents, status changes on agent events, and the team · `const MAX_ROUNDS, next_id(), create(), of_agent(), get_mut(), link(), enum Step, attempt_mut(), on_agent(), measured(), interrupted(), cleanable(), verdict(), new_team()` +6
+- **tools.rs** (640) — Neural's tools: what the model can do, and the guarded code that does it. Requests go · `struct Outcome, list(), tail()`
+- **world.rs** (347) — The world state: a compact picture of everything Neural should know, rendered fresh for every · `struct Ctx, short(), render()`
 
 ## crates/na-protocol/src/
-- **claude.rs** (844) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvToolMeta, struct CvHunk, struct CvTask, struct CvTodo, struct CvPr, struct CvWorktree, struct CvQueued, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption` +14
-- **lib.rs** (1509) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode, struct State, struct Swarm` +57
+- **claude.rs** (852) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvToolMeta, struct CvHunk, struct CvTask, struct CvTodo, struct CvPr, struct CvWorktree, struct CvQueued, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption` +14
+- **lib.rs** (1905) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +69
+- **neural.rs** (257) — Neural's own working state (D61–D64, docs/notes/neural-v2.md): the tasks it follows up, · `struct NeuralState, enum NeuralMode, struct NeuralTask, enum NeuralTaskStatus, struct NeuralTeam, enum TeamPattern, struct NeuralAttempt, enum AttemptState, struct NeuralNote, struct NeuralObs, enum ObsKind, struct NeuralPending`
 
 ## crates/na-relay/src/
 - **admin.rs** (125) — Admin API (`/api/admin`): accounts whose email is in `ADMIN_EMAILS`. · `router(), struct Admin`
@@ -171,40 +310,41 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **update.sh** (25) — Pull deployment (systemd timer): fetch a newer relay image, restart, keep it only if healthy,
 
 ## docs/brand/
-- **build-web-icons.mjs** (163) — Regenerates every web / PWA / Discord icon and the Open Graph cards from one master geometry.
+- **build-web-icons.mjs** (133) — Regenerates every web / PWA / Discord icon from one master geometry (OG cards: scripts/dev/site-og.mjs).
 
 ## packages/app/src/
-- **App.tsx** (437) — `App()`
+- **App.tsx** (445) — `App()`
+- **hud.ts** (5) — Entry for the desktop listening pill (apps/desktop/src/hud.tsx): only what the pill needs, so its · `VoiceHud`
 - **index.ts** (14) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote` +2
 
 ## packages/app/src/components/
 - **AccountRow.tsx** (34) — The user at the foot of the sidebar: photo (Google/GitHub when the relay knows it), name, email, · `AccountRow()`
-- **AgentCatalog.tsx** (141) — Every known agent CLI: what is installed, and a one-click install that runs visibly in a pane. · `AgentCatalog()`
+- **AgentCatalog.tsx** (33) — "Install agents…" from anywhere (`useCatalogSheet().setOpen(true)`) opens Settings → Agents · `AgentCatalog()`
 - **AgentGlyph.tsx** (36) — `AgentGlyph(), GlyphTile()`
 - **AgentsDashboard.tsx** (186) — `AgentsDashboard()`
 - **BrandMark.tsx** (13) — The NeuralAgent mark: an N built from terminal panes (docs/brand/neuralagent-mark.svg). · `BrandMark()`
 - **BrowserPane.tsx** (90) — Normalises what was typed: `localhost:3000` → `http://localhost:3000/`. · `toUrl(), BrowserPane()`
 - **CallAudioToggle.tsx** (26) — Earpiece / speaker switch among the call controls. Hidden where the browser cannot choose. · `CallAudioToggle()`
-- **CallScreen.tsx** (60) — The in-call surface for Neural: orb, running time, what was heard and said, mute / speaker / end. · `CallScreen()`
+- **CallScreen.tsx** (61) — The in-call surface for Neural: orb, running time, what was heard and said, mute / speaker / end. · `CallScreen()`
 - **ChangesSheet.tsx** (226) — `ChangesSheet()`
 - **EmptyPane.tsx** (119) — An empty pane is a launcher: pick what runs here. · `EmptyPane()`
 - **EngineTile.tsx** (58) — `QuietTile(), EngineTile(), tileGlyph`
-- **FolderBrowser.tsx** (188) — `pickHostFolder(), FolderBrowserSheet()`
+- **FolderBrowser.tsx** (215) — `pickHostFolder(), FolderBrowserSheet()`
 - **Glow.tsx** (33) — Colour pairs for a page's light: [left, right, centre] as colour tokens. · `Glow()`
 - **HistoryPage.tsx** (140) — The workspace whose folder holds `cwd` (the deepest one). · `HistoryPage()`
-- **HostSettings.tsx** (307) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings()`
+- **HostSettings.tsx** (399) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings(), WorkspaceDetail()`
 - **HostWatcher.tsx** (68) — `HostUpdateWatcher()`
 - **KeyBar.tsx** (268) — Phones: one compact row of the keys a phone keyboard lacks, right above the keyboard · `KeyBar()`
 - **LaunchScreen.tsx** (70) — The app's side of the launch screen (lib/launch.ts): it lifts the moment the daemon state is · `LaunchScreen(), LaunchNote()`
-- **McpPage.tsx** (243) — `McpPanel()`
-- **NeuralPage.tsx** (471) — `NeuralPage(), useOpenSession`
-- **Pane.tsx** (197) — `interface PaneActions, Pane()`
+- **McpPage.tsx** (265) — `McpPanel(), mcpDetail()`
+- **NeuralPage.tsx** (538) — `NeuralPage(), useOpenSession`
+- **Pane.tsx** (208) — `interface PaneActions, Pane()`
 - **PaneTree.tsx** (102) — `interface TreeCtx, PaneTree()`
-- **ProfileEditor.tsx** (108) — `ProfileEditor()`
+- **ProfileEditor.tsx** (110) — `ProfileEditor()`
 - **ReleaseNotes.tsx** (81) — Release notes from CHANGELOG.md (lib/changelog.ts): used by the update dialog and Settings → Updates. · `CHANGELOG_URL, ReleaseNotes()`
-- **RemotePage.tsx** (330) — Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePanel()`
-- **SettingsPage.tsx** (308) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
-- **SwarmPage.tsx** (95) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
+- **RemotePage.tsx** (332) — Settings → Remote access: invite-only sign-in, then this computer's devices and "Add phone". · `RemotePanel()`
+- **SettingsPage.tsx** (434) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
+- **SwarmPage.tsx** (103) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
 - **TerminalView.tsx** (403) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
 - **UpdateBadge.tsx** (124) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
@@ -212,13 +352,13 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
 - **VoiceHud.tsx** (92) — `type VoiceLevelSource, VoiceHud()`
-- **WorkspaceView.tsx** (299) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
+- **WorkspaceView.tsx** (321) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
 - **ZoomControl.tsx** (126) — Desktop interface size: applies the chosen size to the window's web view and handles the zoom · `ZoomControl()`
 
 ## packages/app/src/components/claude/
-- **AgentCard.tsx** (111) — Subagents in the transcript (A3 §2.7): one card per Agent/Task call with its type, what it was · `TasksContext, tokens(), counts(), AgentCard, AgentCards()`
+- **AgentCard.tsx** (111) — Subagents in the transcript (A3 §2.7, D65): one card per Agent/Task call with its type, what it · `interface AgentRef, TasksContext, AgentCard, AgentCards()`
 - **ChatScroll.tsx** (84) — The scrolling transcript of a conversation (main or subagent): `useStickToBottom` wired to the · `interface ChatScrollHandle, interface ChatScrollProps, ChatScroll`
-- **ClaudeView.tsx** (231) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
+- **ClaudeView.tsx** (255) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
 - **CommandPalette.tsx** (175) — Every Claude Code command in one place: built-ins grouped the way people think about them, · `interface CommandPaletteProps, CommandPalette()`
 - **Composer.tsx** (922) — The input at the bottom, shaped like Claude's. Resting: one 48px pill (attach "+", the text, · `interface ComposerProps, Composer()`
 - **ContextSheet.tsx** (102) — How full the context is and what the session cost so far. The ring sits in the composer; · `ContextRing(), ContextSheet()`
@@ -233,9 +373,12 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **RewindSheet.tsx** (62) — "Rewind to here": go back to before one of the user's messages, with the code, the · `RewindSheet()`
 - **Spark.tsx** (31) — Claude's clay spark: a burst of uneven rays. It turns and breathes while Claude works. · `Spark()`
 - **Steps.tsx** (145) — The machinery between two texts as one quiet line (A3 §2.5 "Steps line"): · `StepLabel(), StepRun`
-- **SubagentView.tsx** (108) — A subagent's own transcript, pushed over the conversation (A3 §2.7): a breadcrumb header · `interface AgentRef, SubagentView()`
-- **TasksSheet.tsx** (121) — Background work of a session in one sheet (A3 §2.7): subagents, background shells and · `TasksSheet()`
+- **StopTask.tsx** (54) — Stop one background agent or shell from its row (D65): a small square button behind the row · `canStop, useStopTask()`
+- **SubagentView.tsx** (116) — A subagent's own transcript, pushed over the conversation (A3 §2.7, D65): a breadcrumb header · `taskOfRef(), SubagentView()`
+- **TasksSheet.tsx** (57) — All background work of a session in one sheet (A3 §2.7, D65): the same rows and tree as the · `TasksSheet()`
 - **Transcript.tsx** (474) — The conversation, laid out like Claude's apps (A3): the owner's messages in a soft bubble on the · `time, useEntries(), BlockNote(), Transcript()`
+- **WorkRow.tsx** (171) — The look of background work, shared by the subagent card in the transcript, the running-work · `WorkGlyph(), StatusIcon(), WorkStatusLine(), WorkLines(), TaskOutput(), WorkRow(), WorkList()`
+- **WorkStrip.tsx** (129) — The running-work strip, docked above the composer (D65): a compact pill · `WorkStrip()`
 - **actions.ts** (196) — Things the Claude view does to the CLI by typing keys into its terminal: answer menus, · `interface Keys, serverActions, act(), sendPrompt, runKeys(), interrupt, shellSteps(), memoryPrompt, inputMode(), type Armed, typedMode(), resolveInput(), cycleMode(), isRewindable()` +10
 - **commands.ts** (379) — The command palette's catalogue: every Claude Code slash command (CLI 2.1.316, see · `type CommandKind, interface Command, GROUPS, CATALOGUE, catalogued, mergeCommands(), scoreCommand(), searchCommands(), interface Section, paletteSections(), commandLine(), opensDialog(), pushRecent(), loadRecent()` +1
 - **entries.ts** (293) — Messages → what the transcript shows (A3 §2.4, pure; tested in `lib/cvEntries.test.ts`). · `type Step, type Piece, interface Turn, type Entry, interface EntryCache, entryCache, textOf, toEntries(), openTools(), pendingUse(), lastTurn(), latestTodo(), interface GalleryItem, gallery()` +1
@@ -247,29 +390,58 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **stickModel.ts** (152) — The decision part of "stick to the bottom" (no DOM, tested in `lib/stickModel.test.ts`). · `NEAR_END, interface Metrics, class StickModel, firstVisible()`
 - **toolText.ts** (329) — Words and numbers for tool calls (pure, no React; tested in `lib/cvEntries.test.ts`): · `type Use, type Res, str, short, inputOf, type ToolMeta, interface Hunk, metaOf, toolTitle(), VERB, verbOf, toolArg(), isPathTool, isCodeArg` +18
 - **tools.tsx** (344) — What a tool call shows: the body of a step (Bash command and output, search results, tool · `changeRows, diffLines, toolArg, toolTitle, CwdContext, useRel(), picsOf(), picName, resultText, DiffStat(), Diff(), EditCard, EditCards(), Output()` +4
-- **useConversation.ts** (66) — The conversation of a Claude session, live from the daemon (reconnects included). With · `useConversation(), interface Tasks, useTaskList()`
+- **useConversation.ts** (68) — The conversation of a Claude session, live from the daemon (reconnects included). With · `useConversation(), interface Tasks, useTaskList()`
 - **useDictation.ts** (75) — Speech to text: records on this device (16 kHz mono PCM), the host's local model transcribes. · `useDictation()`
 - **useStickToBottom.ts** (238) — The transcript's scroll model (A3 §2.3): follow new output only while the reader is at the · `interface StickView, interface StickOptions, useStickToBottom()`
 - **useTasks.ts** (118) — Background work of a session (subagents, background shells, monitors) for badges and the · `usePublishTasks(), useTasks(), useTasksOpener(), openTasksSheet()`
+- **useWork.ts** (76) — React side of `work.ts`: one shared clock for elapsed times (ticks only while something that · `useNow(), useEndedAt(), useStripItems()`
+- **work.ts** (246) — Background work of a conversation in one shape for every surface (pure, no React; tested in · `type WorkStatus, type WorkKind, KEEP_MS, BATCH_MS, GROUP_MIN, QUIET_MS, isLive, statusOf(), STATUS_WORD, kindOf(), isToolId, agentIdOf(), canOpen(), titleOf` +13
+
+## packages/app/src/components/files/
+- **CodeView.tsx** (46) — Files explorer (D68): text and code with line numbers and light highlighting (highlight.ts). · `CodeView`
+- **FileIcon.tsx** (69) — Files explorer: the icon and colour of an entry, and its small git letter. · `iconOf(), GitMark()`
+- **FileViewer.tsx** (288) — Files explorer (D68): one open file. Code and text with line numbers, Markdown rendered (with · `type ViewerChrome, FileViewer()`
+- **FilesPane.tsx** (111) — Files explorer (D67), desktop: a pane next to the agents. The folder on the left, the open file · `FilesPane()`
+- **FolderView.tsx** (343) — Files explorer: one folder. A filter field (and a name search through everything below), sort · `Crumbs(), crumbsFor(), interface FolderViewProps, FolderView()`
+- **HomeAccess.tsx** (43) — Files explorer (D67): the one switch that lets phones and browsers browse the home folder, not · `FilesHomeAccess(), HomeFolderRow()`
+- **PhoneFiles.tsx** (89) — Files explorer (D67), phones: each folder and each file is its own page in the router · `FilesFolderPage(), FilePage()`
+- **actions.tsx** (105) — Files explorer: what you can do with a file or folder (the long-press / right-click menu and the · `type Fetch, interface FileActions, useFileActions()`
+- **api.ts** (113) — Files explorer (D67): the daemon calls. Files travel in pieces (`file_read` / `file_upload`, · `listFolder, searchFiles, readPiece, saveText, class Aborted, readWhole(), uploadInto(), giveToDevice()`
+- **highlight.ts** (191) — A small syntax highlighter for the file viewer: comments, strings, numbers, keywords, types, · `type TokenClass, interface Token, type Line, MAX_HIGHLIGHT, highlight()`
+- **hooks.ts** (211) — Files explorer: loading a folder (kept per path, so going back shows it at once and refreshes · `interface FolderState, useFolder(), useFileSearch(), interface OpenFile, interface FileState, useFile()`
+- **model.ts** (231) — Files explorer (D67): the pure parts. What kind of file this is, how to sort a folder, the · `type FileKind, PREVIEW_BYTES, MAX_TEXT, MAX_MEDIA, CHUNK, langOf(), kindOf(), type SortKey, interface Sort, sortEntries(), filterEntries(), interface Crumb, crumbsOf(), dirOf` +17
+- **prefs.ts** (29) — Files explorer (D67): how this device likes its folders shown (sort, hidden files, wrapping). · `useFilePrefs`
+- **send.ts** (60) — Files explorer (D68): "Send to agent" puts a file's path into an agent's next message. A Claude · `takeInsert(), agentsFor(), sendPathTo()`
+- **support.ts** (10) — Files explorer (D68): whether the computer's service knows the `file_*` requests. It lists · `useFilesSupported()`
+
+## packages/app/src/components/neural/
+- **NeuralBits.tsx** (70) — Pieces of the Neural conversation that are not plain chat: what Neural said on its own, · `ProactiveHeader(), PendingCards(), AwayCard()`
+- **NeuralPanel.tsx** (178) — What Neural knows and owns, beside the conversation: how proactive it is, its tasks, what it · `NeuralPanel(), neuralReq()`
 
 ## packages/app/src/components/phone/
-- **AgentsInbox.tsx** (134) — Phones: the Agents tab, the app's home. Every agent across all projects, sorted by what it needs · `useInbox(), inboxEyebrow(), AgentsInbox(), InboxSections()`
+- **AgentsInbox.tsx** (136) — Phones: the Agents tab, the app's home. Every agent across all projects, sorted by what it needs · `useInbox(), inboxEyebrow(), AgentsInbox(), InboxSections()`
 - **ConnectionBanner.tsx** (63) — Phones: when the computer has been out of reach for a few seconds, one calm pill under the · `ConnectionBanner()`
 - **NewSheet.tsx** (175) — Phones: "+" on Agents or in a project. Pick the project and the agent, say what it should do · `NewSheet()`
-- **PhoneApp.tsx** (165) — Phones: four tabs (Agents · Neural · Projects · Settings) in the Dock and the pages the phone · `PhoneApp()`
-- **ProjectsPage.tsx** (180) — Phones: the Projects tab (every project folder on the computer, status at a glance) and one · `ProjectsPage(), ProjectPage()`
+- **PhoneApp.tsx** (176) — Phones: four tabs (Agents · Neural · Projects · Settings) in the Dock and the pages the phone · `PhoneApp()`
+- **ProjectsPage.tsx** (185) — Phones: the Projects tab (every project folder on the computer, status at a glance) and one · `ProjectsPage(), ProjectPage()`
 - **Waiting.tsx** (17) — Phones: before the computer's state is in (cold start, reconnect, "Continue anyway" on the launch · `useHasState, Waiting()`
 - **rows.tsx** (215) — Phones: the rows of the Agents inbox and a project's page. One row per agent (quiet engine tile, · `wordOf, LIVE_ANSWERS, AgentInboxRow(), ErrorLine(), SwarmInboxRow()`
 
 ## packages/app/src/components/settings/
-- **nav.ts** (9) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column). · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
-- **panels.tsx** (608) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Discord, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), alertsSummary(), NotificationsPanel(), DiscordPanel(), presenceLabel, keepAwakeLabel, AboutPanel()`
+- **AgentsPanel.tsx** (161) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
+- **DiscordPanel.tsx** (202) — Settings → Discord (D72): a privacy preset, what each part of the card shows, and a live preview · `DiscordPanel(), ProfileCard()`
+- **SystemPanel.tsx** (491) — Settings → System (D58-D60): the computer's permissions, how the background service starts, and · `toSetUp, systemSummary(), SystemPanel()`
+- **nav.ts** (13) — Lets a settings page open a detail page above itself (phones: pushed; desktop: right column), · `interface SettingsNav, SettingsNavCtx, useSettingsNav`
+- **panels.tsx** (589) — The content of each Settings page (Appearance, Neural, Calls, Advanced, Notifications, About). The · `Choice(), AppearancePanel(), appearanceSummary(), CallsPanel(), PROVIDERS, NeuralPanel(), AdvancedPanel(), alertsSummary(), NotificationsPanel(), keepAwakeLabel, AboutPanel()`
 
 ## packages/app/src/components/swarm/
 - **NewSwarm.tsx** (188) — New swarm: the form (goal, workspace, team of role + agent) in a dialog on desktop, a sheet on phones. · `NewSwarmSheet()`
+- **NewTeam.tsx** (188) — New team: workspace, goal, pattern and the agents, in a dialog on desktop and a sheet on phones. · `NewTeamSheet()`
 - **SwarmDetail.tsx** (255) — One swarm: header (goal, status, time, actions), conversation with composer, and the team. · `SwarmDetail()`
 - **SwarmFeed.tsx** (133) — The swarm conversation: runs of messages, day labels, your bubbles, jump to the latest. · `SwarmFeed()`
 - **SwarmList.tsx** (63) — The swarms in two groups, running first. · `SwarmGroups()`
+- **TeamDetail.tsx** (182) — One Neural team: the goal, its status, and every attempt (race contestants, or builder + reviewer). · `ATTEMPT_WORD, PATTERN_WORD, roleLabel(), TeamDetail()`
+- **TeamsPage.tsx** (145) — Teams: Neural's race and build + review teams, plus the old swarms below them. · `TeamsPage()`
 - **members.tsx** (92) — A swarm member as the page shows it: role, its agent, and what it is doing now. · `interface MemberView, useMembers(), MemberButton(), RoleMark()`
 
 ## packages/app/src/components/workspace/
@@ -277,7 +449,7 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **NewAgentSheet.tsx** (81) — Phones: "+" in a workspace opens this sheet: every agent you can start as a big tile, the · `NewAgentSheet()`
 - **PhoneWorkspace.tsx** (452) — Phones: one agent at a time, full screen, under the Island ("Two Drops", PLAN C1). · `PhoneAgentScreen()`
 - **islandOverride.ts** (35) — Phones: a layer inside the agent screen (the subagent view) can take over the Island for as long · `interface IslandOverride, IslandOverrideContext, useIslandOverride()`
-- **paneMenu.tsx** (87) — What you can do with one pane, in one place: the desktop pane header's "…" menu and the phone · `usePaneSession(), paneTitle(), usePaneMenu()`
+- **paneMenu.tsx** (88) — What you can do with one pane, in one place: the desktop pane header's "…" menu and the phone · `usePaneSession(), paneTitle(), usePaneMenu()`
 
 ## packages/app/src/lib/
 - **agentReason.test.ts** (43)
@@ -285,7 +457,9 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **agentui.test.ts** (24)
 - **agentui.ts** (98) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **alerts.ts** (79) — How this device tells you that an agent finished, needs your input or stopped with an error: · `type AlertMode, type AlertKind, useAlerts, setAlertMode(), wantsSound, wantsNotify, ALERT_TEXT, chime()`
-- **call.ts** (220) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), interruptCall(), playPreview()`
+- **call.ts** (444) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), holdCall(), resumeCall(), interruptCall(), useCallWarm(), playPreview()`
+- **callState.test.ts** (38)
+- **callState.ts** (75) — Pure rules of a call with Neural (no DOM; tested in `callState.test.ts`): what the call screen · `ANSWER_TIMEOUT_MS, READY_TIMEOUT_MS, OFFLINE_TIMEOUT_MS, AUDIO_START_MS, type CallNotice, type CallHold, callSubtitle(), runningTime(), micErrorText(), noAnswerText(), SLOW_START_TEXT`
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
 - **changelog.ts** (75) — Release notes for the update dialog and Settings → Updates. The data is CHANGELOG.md parsed by · `compareVersions(), notesBetween(), notesFromMarkdown(), type InlinePart, inlineParts()`
@@ -294,6 +468,10 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **cvEntries.test.ts** (173)
 - **cvImages.test.ts** (51)
 - **cvImages.ts** (98) — Images in the Claude view (a `Read` of a picture, pasted images, MCP screenshots). The daemon · `REMOTE_EDGE, edgeFor, interface Loaded, b64ToBlob(), fromData, class ImageCache, fitBox(), sourceOf(), withoutSources, saveName(), kb`
+- **cvWork.test.ts** (91) — Background work of a Claude conversation: status, ids, summary, fade, tree (components/claude/work.ts).
+- **discord.test.ts** (38)
+- **discord.ts** (90) — Settings → Discord (D72): the privacy presets, the stats each part of the card can show, and how · `PRESETS, STATS, statLabel, DEFAULT_OPTIONS, presetOptions(), currentOptions(), customize(), presenceLabel, elapsed(), partyText`
+- **files.test.ts** (115)
 - **format.ts** (26) — 1234 -> "1.2k", 1_200_000 -> "1.2M". · `compact(), totalTokens, money(), duration()`
 - **host.ts** (138) — The host computer as seen from any client (D42). Voice models and update checks are daemon · `onHostNotice(), useHostModels(), interface HostVoice, useHostVoice(), interface HostUpdateView, useHostUpdate, checkHostUpdate(), installHostUpdate(), watchHostUpdate()`
 - **inbox.test.ts** (71)
@@ -303,14 +481,16 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **launchFrame.ts** (55) — The launch screen's first frame, written into every app entry page (desktop index.html and · `MARK_PANES, MARK_PX, SCHEME_ACCENT, THEME_SCRIPT, LAUNCH_MARKUP, LAUNCH_MARKER, launchFrame()`
 - **layout.ts** (142) — Pure layout-tree edits. The client changes the tree and sends `layout_set`; the daemon only · `MAX_PANES, newId, newTab(), panes(), activeTab(), updateTab(), splitPane(), removePane(), setContent(), setSizes(), swapPanes(), order(), gridOf(), frontTabFor()`
 - **mic-worklet.js** (39) — Microphone for calls with Neural: mono, downsampled to 16 kHz, 40 ms PCM16 frames,
+- **neural.test.ts** (51)
+- **neural.ts** (162) — What an older daemon (no Neural v2) sends: nothing. · `EMPTY_NEURAL, neuralOf(), neuralNotices(), neuralNoticesMemo(), TASK_WORD, racePick(), taskWord(), taskActivity(), OBS_WORD, obsActivity(), obsDetail(), type Away, awayOf(), awayLine()` +1
 - **openAgent.ts** (73) — "Open this agent", one function for every place that has an agent to show (the Agents list, · `openAgentOnDesktop(), useOpenAgent(), cachedAgent(), rememberAgents()`
-- **phoneRoute.test.ts** (304) — A browser history in memory: pushState/replaceState are instant, go/back land later (as in browsers).
-- **phoneRoute.ts** (472) — Phone navigation: four tabs (Agents, Neural, Projects, Settings), a stack of pages per tab, all · `type Tab, TABS, HOME, type Route, interface Nav, routeKey(), navKey, sameNav, hashOf(), parseHash(), entriesOf(), validNav(), interface PhoneNavState, usePhoneNav` +4
-- **platform.ts** (129) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
+- **phoneRoute.test.ts** (330) — A browser history in memory: pushState/replaceState are instant, go/back land later (as in browsers).
+- **phoneRoute.ts** (517) — Phone navigation: four tabs (Agents, Neural, Projects, Settings), a stack of pages per tab, all · `type Tab, TABS, HOME, type Route, interface Nav, routeKey(), navKey, sameNav, hashOf(), parseHash(), entriesOf(), validNav(), interface PhoneNavState, usePhoneNav` +5
+- **platform.ts** (189) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, type PermissionState, interface SystemPermission, type ServiceStart, interface SystemAutostart, interface SystemStatus, interface SystemApi, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
-- **settingsRoute.test.ts** (17)
-- **settingsRoute.ts** (28) — Which Settings section to show next. Anything can open Settings at a section (the command · `SETTINGS_PAGE, MOVED_TO_SETTINGS, useSettingsRoute, requestSettingsSection(), takeSettingsSection()`
+- **settingsRoute.test.ts** (25)
+- **settingsRoute.ts** (35) — Which Settings section to show next. Anything can open Settings at a section (the command · `SETTINGS_PAGE, MOVED_TO_SETTINGS, useSettingsRoute, requestSettingsSection(), takeSettingsSection(), matchesQuery()`
 - **status.ts** (37) — `STATUS, mostUrgent(), since(), activityOf()`
 - **stickModel.test.ts** (118)
 - **store.tsx** (82) — `DaemonProvider(), useClient(), usePlatform(), useDaemon(), useUi, useCatalogSheet, useChanges`
@@ -322,9 +502,10 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **termtext.ts** (71) — Plain text out of an xterm.js buffer, for copying: rows that xterm soft-wrapped are joined back · `interface TextLine, interface TextBuffer, MAX_TEXT, bufferLines(), capLines(), interface TerminalText, terminalText()`
 - **theme.ts** (139) — Themes: a colour scheme (ground, surfaces, ink; data-scheme) plus an accent (data-accent) and an · `type Scheme, type Accent, type Appearance, APPEARANCES, SCHEMES, ACCENTS, useTheme, accentOf, THEME_EVENT, resolvedAppearance(), syncThemeColor(), startTheme()`
 - **time.ts** (11) — "5 min ago", "3 h ago", or the date for anything older than a month. · `ago()`
+- **typeFirst.ts** (12) — Whether a form may put the cursor in its first field when it opens. Not on phones and touch · `useTypeFirst()`
 - **updateNotice.ts** (16) — "A new version is available" comes from three checks (this app or web build, the Android APK, · `updateNotice()`
 - **updates.ts** (240) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
-- **voice.ts** (49) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
+- **voice.ts** (66) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, interface DuckApp, DUCK_LEVELS, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
 - **voiceMeter.test.ts** (30)
 - **voiceMeter.ts** (37) — Motion for the voice pill's level bars: the daemon-side mic sends a 0..1 loudness ~25 times a · `METER_REST, METER_STALE_MS, approach(), barProfile(), listeningHeight(), writingHeight()`
 - **worktree.ts** (9) — Extra `session_start` fields: agents (not shells) in a git workspace get their own worktree when that is swit… · `useWorktreeStart()`
@@ -336,10 +517,10 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **index.ts** (222) — NeuralAgent E2E encryption v1 (WebCrypto only). Twin of crates/na-crypto. · `b64(), unb64(), toHex(), fingerprint(), generateStaticKey(), exportPublic(), importPrivateRaw(), interface DerivedKeys, deriveKeys(), class Session, interface ClientHello, clientStart(), hostAccept()`
 
 ## packages/protocol/src/
-- **apply.test.ts** (48)
-- **apply.ts** (77) — Messages kept in the conversation with Neural (`KEEP` in crates/na-daemon/src/orch.rs). · `apply()`
+- **apply.test.ts** (55)
+- **apply.ts** (80) — Messages kept in the conversation with Neural (`KEEP` in crates/na-daemon/src/orch.rs). · `apply()`
 - **client.test.ts** (137) — A transport the test plays the daemon on.
-- **client.ts** (611) — `PROTOCOL_VERSION, CV_FEATURES, interface Transport, type Connect, type ConnStatus, PING_EVERY, PING_TIMEOUT, WAKE_TIMEOUT, SEND_STALL, SLOW_UPLINK, drainedBy, REQUEST_WAIT, class RequestError, interface TermSink` +4
+- **client.ts** (632) — `PROTOCOL_VERSION, CV_FEATURES, interface Transport, type Connect, type ConnStatus, PING_EVERY, PING_TIMEOUT, WAKE_TIMEOUT, SEND_STALL, SLOW_UPLINK, drainedBy, REQUEST_WAIT, class RequestError, interface TermSink` +4
 - **cv.test.ts** (35)
 - **cv.ts** (61) — A client's copy of a Claude session's conversation (or of one subagent's, see `attachCv`). · `interface Conversation, emptyConversation, fromAttach(), prepend(), applyCv(), sortTasks(), taskForTool()`
 - **index.ts** (5) — `apply`
@@ -467,29 +648,36 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **check-tokens.mjs** (52) — Design contract check: app code uses design tokens only (packages/ui/DESIGN-CONTRACT.md).
 - **codemap.mjs** (120) — Generates docs/CODEMAP.md: one line per code file with its purpose (first doc comment) and its
 - **daemon-smoke.mjs** (108) — End-to-end smoke test for neuralagentd over its local WebSocket.
-- **e2e-remote.ts** (501) — End-to-end test of remote access: a local relay (test login), a daemon that signs in to it,
+- **e2e-remote.ts** (506) — End-to-end test of remote access: a local relay (test login), a daemon that signs in to it,
 - **e2e-swarm.ts** (151) — End-to-end test of a swarm: daemon + four stand-in agents (scripts/fake-agent.mjs) that hand a
 - **fake-agent.mjs** (71) — A stand-in for an agent CLI in tests: no model, a fixed part per swarm role. It reads prompts
 - **gen-protocol-index.mjs** (11) — Writes packages/protocol/src/gen/index.ts re-exporting every ts-rs generated type.
+- **macos-permissions.sh** (154) — NeuralAgent and macOS permissions (TCC), from a terminal. See docs/notes/system-integration.md. · `pane_url(), json_get(), signature(), status(), check(), setup()`
 - **release-collect.mjs** (64) — Release CI: picks one platform's build outputs, gives them stable names and writes the part of
 - **release-publish.mjs** (59) — Release CI: uploads every collected file to the relay and then publishes the merged manifest.
 - **set-version.mjs** (50) — Sets the release version everywhere it lives: the Cargo workspace (daemon, desktop app, relay;
 - **stage-daemon.mjs** (19) — Copies the release daemon to where the Tauri bundle picks it up as a sidecar
 
 ## scripts/dev/
-- **call-test.mjs** (137) — Synthetic call against the daemon: streams 16 kHz wavs as a microphone would (real time),
+- **call-test.mjs** (148) — Synthetic call against the daemon: streams 16 kHz wavs as a microphone would (real time),
+- **call-web.mjs** (193) — Call start timeline in a real browser: taps "Call Neural" N times and prints, per call, when
 - **chatty-agent.mjs** (79) — A talkative stand-in swarm member for UI checks (seed step `swarms`): on its brief it sends a
 - **conn-repro.mts** (210) — Repro harness for the phone's "Reconnecting to the daemon…": local relay (test login) + throwaway
 - **daemon.mjs** (128) — Talk to a test daemon from the command line (requests, sessions, Neural, usage).
 - **env.mjs** (124) — A throwaway test environment for UI work: a test daemon (own NEURALAGENT_HOME) + the desktop
 - **fake-cli.sh** (5) — Stand-in agent CLI for screenshots: ignores its args and gives a plain shell, so the daemon
-- **fake-llm.mjs** (23) — Fake OpenAI-compatible streaming chat endpoint, so Neural answers without a real model.
+- **fake-llm.mjs** (78) — Fake OpenAI-compatible streaming chat endpoint, so Neural answers without a real model.
 - **install-local.sh** (44) — Installs a locally built NeuralAgent.app over /Applications and restarts app + daemon. · `pid()`
 - **launch.mjs** (177) — Frame series of the launch sequence (a cold start) on each surface, to check that it is one
 - **lib.mjs** (237) — Shared helpers for the dev/test tools in scripts/dev: repo paths, a safe test-daemon home, · `ROOT, DEV, sleep, DEFAULT_HOME, DEFAULT_VITE_PORT, realDataDir(), testHome(), daemonBin, relayBin, daemonInfo, readState, waitForFile(), connect(), redact` +12
 - **montage.mjs** (12) — One labelled contact sheet from many screenshots (cheaper to review than many images).
+- **neural-e2e.mjs** (202) — End-to-end check of Neural v2 against a test daemon and the scripted fake LLM (no model quota).
+- **neural-smoke.mjs** (96) — Short smoke test of Neural v2 with a REAL model (costs a few cents). The test daemon must have
 - **seed.mjs** (113) — Demo data for screenshots in a test daemon: four workspaces, stand-in Claude/Codex/Gemini · `seed()`
-- **shot.mjs** (148) — Screenshot driver for the desktop UI (dev.html) against a test daemon, at standard sizes in
+- **shot.mjs** (152) — Screenshot driver for the desktop UI (dev.html) against a test daemon, at standard sizes in
+- **site-og.mjs** (63) — Generates the four 1200x630 share cards (apps/web/public/og.png, og/download.png, og/changelog.png, og/app.pn…
+- **site-posters.mjs** (182) — Posters of the live demo: still WebP images of the scenes, shown on the site while the real demo
+- **subagent-fixture.mjs** (153) — Fake Claude Code conversation with background work, for the subagent screens (D65): a main · `IDS, writeFixture(), live()`
 - **swarm-real.mjs** (65) — A real swarm: four Claude Code (Haiku) members on a tiny task in a throwaway git repo.
 - **web-push.mjs** (132) — Web Push in Chromium: the web remote (/app) against a local relay (test sign-in) + daemon, with
 - **web-remote.mjs** (127) — The web remote (/app, also what the Android app loads) in a browser against a local relay
@@ -508,11 +696,16 @@ Generated, not listed: `packages/protocol/src/gen/` (95 files, from `crates/na-p
 - **alerts.mjs** (22) — Settings → Notifications: sound, notification, both or nothing for this device.
 - **call.mjs** (22) — Call Neural in the browser with a fake microphone and log the call states.
 - **claude-images.mjs** (91) — Pictures in the Claude view: a Read of an image, an MCP screenshot, two reads folded into a
+- **files.mjs** (176) — Files explorer (components/files): a project's folder, code, Markdown, a big log, a picture and
 - **home.mjs** (6) — The start page after load. Usage: node scripts/dev/shot.mjs home
 - **nav.mjs** (67) — Navigation chrome: Settings (with Remote access and MCP servers inside; phones: the Settings
+- **neural.mjs** (58) — Neural v2 (D61–D64): the conversation with proactive reports and an Allow / Deny card, the
 - **pages.mjs** (31) — Tour of the main pages. Seed first (env.mjs up --seed [--llm]).
 - **phone.mjs** (66) — Phone shell (components/phone): the four tabs and the pages the phone router pushes.
+- **settings.mjs** (67) — Settings structure (D71) and Discord presence (D72): the section list, search, Agents, Profiles
+- **subagents.mjs** (122) — Subagents and background work in the Claude view (D65): cards in the transcript, the
 - **swarm.mjs** (135) — The Swarm page, clicked through: list, each swarm, the feed scrolled, a member, the actions,
+- **system.mjs** (33) — Settings → System (D58-D60): permissions, the guided setup, autostart and the service.
 - **workspace.mjs** (59) — The workspace view: split panes (Gemini + Claude), the focused pane, the Chat/Terminal switch,
 - **ws-menu.mjs** (37) — Desktop sidebar workspaces: the right-click menu, renaming in place, and dragging into a new order.
 - **zoom.mjs** (33) — Interface size (desktop): the setting in Settings → Appearance and the "120%" that shows while

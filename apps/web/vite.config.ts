@@ -58,6 +58,7 @@ export default defineConfig({
         terms: "terms/index.html",
         download: "download/index.html",
         changelog: "changelog/index.html",
+        demo: "demo/index.html",
       },
     },
   },

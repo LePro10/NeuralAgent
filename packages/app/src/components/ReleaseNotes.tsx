@@ -5,7 +5,7 @@ import { inlineParts } from "../lib/changelog";
 import type { ChangelogEntry } from "../lib/platform";
 import { usePlatform } from "../lib/store";
 
-export const CHANGELOG_URL = "https://agent.neuralhub.dev/changelog";
+export const CHANGELOG_URL = "https://agent.neuralhub.dev/changelog/";
 
 const GROUP: Record<string, { tone: Tone; Icon: LucideIcon }> = {
   New: { tone: "accent", Icon: Sparkles },
