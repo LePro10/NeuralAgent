@@ -5,25 +5,21 @@ Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rule
 plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). Older handoffs:
 [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md) and git history of this file.
 
-## Done, not committed (2026-11-02): "Hey Neural" round (D84)
-Brief: `research-local/briefs/hey-neural.md`. All in the working copy, **no commit, no deploy**
-(owner decides). Build + `cargo test --workspace`, desktop `cargo test`/clippy, `pnpm typecheck/test/
-lint:tokens/check:docs` green. Changes: wake word starts a call with preroll (`voice.rs`,
-`voice_preroll`, `duck_call` → `call_active`, `App.tsx`, `call.ts` `startCall(client, {wake,
-preroll})`, 20 s idle hang-up); daemon `call.rs` END_OF_TURN 0.8 s + HOLD for unfinished sentences,
-`na_voice::text::{strip_wake, unfinished}`; wake score 1.5 (corpus `/tmp/wakecorpus`, `say` voices);
-`backgroundThrottling: "disabled"`; Shimmer as clipped gradient, VoiceOrb `updatePlaybackRate`.
-Only tested automatically: no real-microphone/real-app run of wake → call, preroll timing, idle
-hang-up, hidden-window audio, or the animations on screen (run `ui-check` / a real try).
-Round 2 (D86, also uncommitted): wake chime, call state + hang-up in the HUD pill (`hud_call`,
-`hud-hangup`), guided "Learn my voice" (3 takes), loose wake path (`loose_match`). Only automatic
-tests plus browser screenshots of the pill; not tried in the real app: chime, clicking the
-non-focusable pill, hang-up event, guided learn, the loose path on a real voice.
-Another session (neuralagent-a7) adds a dictation history in `voice.rs`, `lib.rs`, `voice.ts`,
-HostSettings (D85); ship together, the owner picks the version.
+## Released 0.5.2 (2026-11-02)
+Tag `v0.5.2` = `mobile-overhaul` `7e4921f` (`main` not moved, as before). CI release run
+41494519192 green; `/api/releases/latest` serves 0.5.2. Relay + website deployed: build
+`0.5.2+mvzkram1`, rollback image `neuralagent-relay:prev` = `0.5.1+mvzcn8r8`; health, `/changelog/`,
+`/app/` checked. Contents: dictation history (D85: `apps/desktop/src-tauri/src/dictations.rs`,
+`components/settings/DictationHistory.tsx`, `voice.history*` host_ui ops), "Hey Neural" → call,
+chime, HUD hang-up, guided learn, loose wake path (D84, D86), paste screenshots, terminal size owner
+(D83), no double frame.
+**Not tried in the real app yet:** wake → call, preroll timing, idle hang-up, chime, HUD hang-up
+click, guided learn, loose path on a real voice, the dictation history with real dictations.
+Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
+(a long paste was lost on reload, which motivated D85).
 
 ## Where we are (2026-11-02)
-- Released: 0.5.1 (tag `v0.5.1` = `main` = `mobile-overhaul` `046401c`); `/api/releases/latest` serves it.
+- Released: 0.5.2 (see above). Earlier: 0.5.1 `046401c`.
 - **Deployed but NOT committed** (working copy on `mobile-overhaul`; relay build `0.5.1+mvzcn8r8`,
   rollback image `neuralagent-relay:prev` = `0.5.1+mvy9yr2p`), D83:
   - Dark glass surfaces draw one edge, no double frame (`packages/ui/ui/styles/effects.css`
