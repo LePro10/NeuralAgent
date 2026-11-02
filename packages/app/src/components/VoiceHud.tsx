@@ -1,5 +1,7 @@
 import { Shimmer, prefersReducedMotion } from "@neuralagent/ui";
+import { PhoneOff } from "lucide-react";
 import { useEffect, useRef } from "react";
+import type { HudCallState } from "../lib/platform";
 import { startTheme } from "../lib/theme";
 import type { VoiceStatus } from "../lib/voice";
 import { approach, barProfile, listeningHeight, METER_REST, METER_STALE_MS, writingHeight } from "../lib/voiceMeter";
@@ -12,19 +14,33 @@ export type VoiceLevelSource = (onLevel: (level: number) => void) => () => void;
 const BARS = 7;
 const HEIGHT = 22;
 
-/** The pill shown at the bottom of the screen while dictating or after "Hey Neural". */
-export function VoiceHud({ status, levels }: { status: VoiceStatus | null; levels?: VoiceLevelSource }) {
+const CALL_WORDS: Record<HudCallState, string> = { connecting: "Neural…", listening: "Listening", thinking: "Thinking…", speaking: "Neural speaks" };
+
+/**
+ * The pill shown at the bottom of the screen while dictating or after "Hey Neural". During a
+ * "Hey Neural" call (`call`) it says what Neural does and has a hang-up button.
+ */
+export function VoiceHud({ status, levels, call, onHangup }: { status: VoiceStatus | null; levels?: VoiceLevelSource; call?: HudCallState | null; onHangup?: () => void }) {
   const activity = status?.activity ?? "idle";
-  const writing = activity === "transcribing";
+  const inCall = activity === "awake" && !!call;
+  const writing = inCall ? call === "thinking" || call === "connecting" : activity === "transcribing";
   const mode = writing ? "writing" : activity === "listening" || activity === "awake" ? "listening" : "idle";
+  const words = inCall ? CALL_WORDS[call] : writing ? "Writing…" : activity === "awake" ? "Hey Neural is listening" : "Listening…";
   return (
     <div className="flex h-full items-center justify-center p-1">
-      <div className="flex h-10 items-center gap-3 rounded-full bg-raised px-4 shadow-edge">
-        <LevelBars mode={mode} levels={levels} label={writing ? "Writing" : "Listening"} />
-        {writing ? (
-          <Shimmer className="text-meta text-dim">Writing…</Shimmer>
-        ) : (
-          <span className="text-meta text-dim">{activity === "awake" ? "Hey Neural is listening" : "Listening…"}</span>
+      <div className={`flex h-10 items-center gap-3 rounded-full bg-raised shadow-edge ${inCall && onHangup ? "pr-1 pl-4" : "px-4"}`}>
+        <LevelBars mode={mode} levels={levels} label={writing ? "Working" : "Listening"} />
+        {writing ? <Shimmer className="text-meta text-dim">{words}</Shimmer> : <span className="text-meta text-dim">{words}</span>}
+        {inCall && onHangup && (
+          <button
+            type="button"
+            aria-label="Hang up"
+            title="Hang up"
+            onClick={onHangup}
+            className="ml-1 grid size-8 place-items-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 active:bg-danger/35"
+          >
+            <PhoneOff size={15} strokeWidth={1.8} />
+          </button>
         )}
       </div>
     </div>

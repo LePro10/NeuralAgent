@@ -1,7 +1,8 @@
 //! Checks the wake word and the VAD against a corpus (see `stt_bench`).
 //!
 //! `wake_vad <corpus dir> <kws model dir> <silero_vad.onnx>`
-//! Env: THRESHOLD (default 0.25), SCORE (default 2.0), KEYWORDS (a keywords file to try instead),
+//! Env: THRESHOLD, SCORE (defaults: `WakeConfig::default()`), TAIL / NOISE (silence after each
+//! clip, seconds / level), LOOSE=0 (spotter only), KEYWORDS (a keywords file to try instead),
 //! LEARN (comma-separated clip ids to learn the pronunciation from first).
 
 use std::path::PathBuf;
@@ -18,7 +19,8 @@ fn main() -> Result<()> {
     let corpus = PathBuf::from(corpus);
     let tsv = std::fs::read_to_string(corpus.join("sentences.tsv")).context("sentences.tsv")?;
     let env = |k: &str, d: f32| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
-    let mut config = WakeConfig { threshold: env("THRESHOLD", 0.25), score: env("SCORE", 2.0), ..Default::default() };
+    let base = WakeConfig::default();
+    let mut config = WakeConfig { threshold: env("THRESHOLD", base.threshold), score: env("SCORE", base.score), loose: env("LOOSE", 1.0) > 0.0, ..base };
     if let Ok(file) = std::env::var("KEYWORDS") {
         config.keywords = std::fs::read_to_string(file)?.trim().to_string();
     }
@@ -36,7 +38,18 @@ fn main() -> Result<()> {
         }
     }
 
-    let silence = |s: f32| vec![0.0f32; (s * 16_000.0) as usize];
+    // TAIL: seconds of silence after each clip; NOISE: its level (a room is never digital zero).
+    let tail = env("TAIL", 1.0);
+    let noise = env("NOISE", 0.0);
+    let mut seed = 1u32;
+    let mut silence = |s: f32| -> Vec<f32> {
+        (0..(s * 16_000.0) as usize)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed as f32 / u32::MAX as f32 - 0.5) * 2.0 * noise
+            })
+            .collect()
+    };
     let (mut hits, mut misses, mut false_wakes) = (0, 0, 0);
     let mut stream = Vec::new();
     let mut wake_ms = 0.0;
@@ -46,7 +59,7 @@ fn main() -> Result<()> {
         let wave = Wave::read(&corpus.join(format!("{id}.wav")).to_string_lossy()).context(id.to_string())?;
         let mut audio = silence(0.5);
         audio.extend_from_slice(wave.samples());
-        audio.extend(silence(1.0));
+        audio.extend(silence(tail));
         stream.extend_from_slice(&audio);
 
         // A fresh spotter per clip, fed in 100 ms pieces like a microphone.

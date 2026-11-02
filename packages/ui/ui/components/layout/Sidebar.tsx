@@ -225,11 +225,11 @@ export function Sidebar<T extends string>({ items: given, value, onChange, brand
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setPeek(false); }}
         // Collapsed it is barely there: thin, clear glass with a faint rim. Opened (peek or pin) it fills in.
         className={cn('glass rim pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-dialog p-2 transition-[background-color,border-color] duration-300 ease-out-soft',
-          !open && '!border-[rgb(var(--fg-rgb)/.05)] !bg-[color-mix(in_srgb,var(--color-chrome)_24%,transparent)]')}
+          !open && '!bg-[color-mix(in_srgb,var(--color-chrome)_24%,transparent)]')}
         initial={false}
         animate={{ width: open ? OPEN : RAIL, height: open && full ? full : 'auto' }}
         // A peeking island floats over the page; a pinned one sits in its place.
-        style={{ boxShadow: peek && !pinned ? 'var(--shadow-dialog), inset 0 1px 0 var(--glass-hi)' : open ? undefined : 'inset 0 1px 0 rgb(255 255 255 / .04)' }}
+        style={{ boxShadow: peek && !pinned ? 'var(--shadow-dialog)' : open ? undefined : 'none' }}
         transition={SPRING.sheet}
       >
         {/* Brand, and — only while open — a quiet pin at the far end of the same row. */}

@@ -4,6 +4,9 @@ import type { CallAudioApi } from "./callaudio";
 import type { CallHold } from "./callState";
 import type { VoiceApi } from "./voice";
 
+/** What the desktop's listening pill shows during a "Hey Neural" call. */
+export type HudCallState = "connecting" | "listening" | "thinking" | "speaking";
+
 /** Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. */
 export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
 
@@ -56,6 +59,12 @@ export interface Platform {
     onHold?: (cb: (held: CallHold | null) => void) => () => void;
     /** Android: take the sound back for a held call; false while another app still has it. */
     resume?: () => Promise<boolean>;
+    /**
+     * Desktop: what a "Hey Neural" call does now, for the listening pill outside the window
+     * (`null` when it ended); `onHangup` is its hang-up button.
+     */
+    show?: (state: HudCallState | null) => void;
+    onHangup?: (cb: () => void) => () => void;
   };
   /** Local dictation and wake word (desktop only). */
   voice?: VoiceApi;

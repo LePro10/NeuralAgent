@@ -27,8 +27,11 @@ use crate::core::Core;
 
 /// Rate of the audio sent to the client.
 pub const OUT_RATE: u32 = 24_000;
-/// A pause this long ends the caller's sentence.
-const END_OF_TURN: f32 = 0.5;
+/// A pause this long ends the caller's sentence (room to breathe; 0.5 s cut sentences in two).
+const END_OF_TURN: f32 = 0.8;
+/// A sentence that sounds unfinished ("…und", "ähm", a comma) waits this much longer for the
+/// rest, as long as the caller stays quiet; speaking again carries it on.
+const HOLD: Duration = Duration::from_millis(1800);
 /// When the answer has not started this long after the caller's sentence was understood, an
 /// acknowledgment is played.
 const FILLER_AFTER: Duration = Duration::from_millis(80);
@@ -502,6 +505,8 @@ fn run(
     line.send(CallEvent::State { state: CallState::Listening, error: None });
     let mut lang: &'static str = "de";
     let mut talking_since: Option<Instant> = None;
+    // An unfinished sentence waiting for the rest, and since when the caller is quiet.
+    let mut held: Option<(String, Instant)> = None;
     while !stop.is_cancelled() {
         let samples = match rx.recv_timeout(Duration::from_millis(30)) {
             Ok(s) => s,
@@ -527,16 +532,41 @@ fn run(
             talking_since = None;
         }
 
+        // What the caller said, once a sentence is complete (or held long enough).
+        let mut done: Vec<(String, Instant)> = Vec::new();
         for seg in segments {
             // The sentence ended a pause ago.
             let ended = Instant::now() - Duration::from_secs_f32(END_OF_TURN);
             let started = Instant::now();
             let text = engines.stt.transcribe(&heard.cut(seg.start, seg.samples.len()).unwrap_or(seg.samples))?;
-            let words = text.split_whitespace().count();
-            tracing::info!(stt_ms = started.elapsed().as_millis() as u64, words, "call: heard");
-            if words == 0 {
+            // A call started by "Hey Neural" hears the wake word again at its start.
+            let text = na_voice::text::strip_wake(&text);
+            tracing::info!(stt_ms = started.elapsed().as_millis() as u64, words = text.split_whitespace().count(), "call: heard");
+            let text = match held.take() {
+                Some((before, _)) if text.is_empty() => before,
+                Some((before, _)) => format!("{before} {text}"),
+                None => text,
+            };
+            if text.trim().is_empty() {
                 continue;
             }
+            if na_voice::text::unfinished(&text) {
+                held = Some((text, Instant::now()));
+            } else {
+                done.push((text, ended));
+            }
+        }
+        if let Some((_, since)) = held.as_mut()
+            && vad.speaking()
+        {
+            *since = Instant::now();
+        }
+        if held.as_ref().is_some_and(|(_, since)| since.elapsed() >= HOLD)
+            && let Some(h) = held.take()
+        {
+            done.push(h);
+        }
+        for (text, ended) in done {
             line.send(CallEvent::Heard { text: text.clone() });
             line.send(CallEvent::State { state: CallState::Thinking, error: None });
             lang = lang_of(&text, lang);

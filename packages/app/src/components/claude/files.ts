@@ -34,6 +34,25 @@ export function filesOf(dt: DataTransfer | null): File[] {
   return out.filter((f) => isImage(f) || typeOf(f) === "application/pdf");
 }
 
+/**
+ * The images in a paste (⌘V / Ctrl+V of a screenshot), or null for a plain text paste the field
+ * should handle itself. Calls preventDefault when it takes the paste. Where the event carries no
+ * image (Android WebViews, some WebKit builds) but also no text, the native shell or the async
+ * clipboard API reads the image.
+ */
+export function pastedImages(e: { clipboardData: DataTransfer | null; preventDefault(): void }, readNative?: () => Promise<File | null>): Promise<File[]> | null {
+  const files = filesOf(e.clipboardData);
+  if (files.length) {
+    e.preventDefault();
+    return Promise.resolve(files);
+  }
+  const dt = e.clipboardData;
+  if (dt?.getData("text/plain") || dt?.getData("text/html")) return null;
+  e.preventDefault();
+  if (readNative) return readNative().then((f) => (f ? [f] : [])).catch(() => []);
+  return readClipboardFiles().then((r) => r.files);
+}
+
 /** The clipboard through the async API (needs a user gesture and permission; may be unsupported). */
 export async function readClipboardFiles(): Promise<{ files: File[]; text: string; error?: string }> {
   const nav = navigator;

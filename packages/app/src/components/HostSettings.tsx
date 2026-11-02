@@ -1,9 +1,10 @@
 import type { DaemonClient, ModelInfo } from "@neuralagent/protocol";
 import { Button, Callout, ConfirmSheet, Empty, Input, List, Meter, Pill, Row, Segmented, Switch, toast } from "@neuralagent/ui";
 import { AudioLines, Check, Download, Ear, Folder, FolderGit2, GitBranch, Keyboard, Mic, Music, ShieldCheck, Trash2, Volume, Volume1 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { checkHostUpdate, installHostUpdate, useHostModels, useHostUpdate, useHostVoice, watchHostUpdate } from "../lib/host";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
+import { DictationHistory } from "./settings/DictationHistory";
 import { useSettingsNav } from "./settings/nav";
 import { DUCK_LEVELS, HOTKEYS, megabytes, type DuckApp, type VoiceApi, type VoiceConfig, type VoiceStatus } from "../lib/voice";
 
@@ -35,21 +36,44 @@ export function HostVoiceSettings({ mac, hostName }: { mac: boolean; hostName: s
   );
 }
 
+/** Recordings one "Learn my voice" round asks for. */
+const LEARN_TAKES = 3;
+
 function VoiceControls({ api, status, models, mac, hostName }: { api: VoiceApi; status: VoiceStatus; models: ModelInfo[]; mac: boolean; hostName: string | null }) {
   const [learning, setLearning] = useState(false);
   const { config } = status;
   const installed = (id: string) => models.find((m) => m.id === id)?.installed ?? false;
   const set = (patch: Partial<VoiceConfig>) => api.set({ ...config, ...patch }).catch(fail);
   const mic = hostName ? `${hostName}'s microphone` : "your microphone";
+  // Guided "Learn my voice": three takes in a row (more after a miss), started by the Record
+  // button or when the wake word is switched on with fewer than three recordings learned.
+  const [take, setTake] = useState(0);
+  const stop = useRef(false);
   const learn = async () => {
+    if (learning) {
+      stop.current = true; // after the take that is running
+      return;
+    }
+    stop.current = false;
     setLearning(true);
+    let done = 0;
+    let misses = 0;
     try {
-      await api.learn();
-      toast("Learned. Say it a few more times in different ways for best results.", { tone: "success" });
-    } catch (e) {
-      fail(e);
+      while (done < LEARN_TAKES && misses < 3 && !stop.current) {
+        setTake(done + 1);
+        try {
+          await api.learn();
+          done++;
+        } catch (e) {
+          misses++;
+          if (misses >= 3) fail(e);
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (done > 0) toast(done >= LEARN_TAKES ? "Neural knows your voice now." : `Learned ${done} of ${LEARN_TAKES}. Record again for the rest.`, { tone: "success" });
     } finally {
       setLearning(false);
+      setTake(0);
     }
   };
   return (
@@ -78,28 +102,38 @@ function VoiceControls({ api, status, models, mac, hostName }: { api: VoiceApi; 
             />
           }
         />
+        <DictationHistory api={api} status={status} />
       </List>
       <List
         label="Wake word"
-        footer="Say “Hey Neural” and then what you want, in one breath or after a pause. If it does not react to your voice, use Learn my voice a few times."
+        footer="Say “Hey Neural” to start a call with Neural, the same as Call Neural: say what you want in the same breath or after a pause, and keep talking. The call hangs up by itself after a quiet while. If it does not react to your voice, use Learn my voice a few times."
       >
         <Row
           Icon={Ear}
           title="Listen for “Hey Neural”"
-          detail={status.activity === "awake" ? "Listening for your command…" : undefined}
+          detail={status.activity === "awake" ? "In a call with Neural…" : undefined}
           trailing={
             <Switch
               label="Listen for Hey Neural"
               checked={config.wake_word}
               disabled={!installed("wake") || !installed("vad") || !installed("parakeet")}
-              onChange={(wake_word) => set({ wake_word })}
+              onChange={(wake_word) => {
+                void set({ wake_word });
+                if (wake_word && config.learned.length < LEARN_TAKES && !learning) void learn();
+              }}
             />
           }
         />
         <Row
           Icon={AudioLines}
           title="Learn my voice"
-          detail={learning ? `Say “Hey Neural” into ${mic} now…` : config.learned.length > 0 ? `${config.learned.length} recordings learned` : `Record yourself saying “Hey Neural” (${mic}).`}
+          detail={
+            learning
+              ? `Say “Hey Neural” into ${mic}, the way you usually would (${take} of ${LEARN_TAKES})…`
+              : config.learned.length > 0
+                ? `${config.learned.length} recordings learned. More help most: other rooms, near and far.`
+                : `Say “Hey Neural” three times so it reacts to your voice the first time (${mic}).`
+          }
           trailing={
             <span className="flex items-center gap-1">
               {config.learned.length > 0 && (
@@ -107,8 +141,8 @@ function VoiceControls({ api, status, models, mac, hostName }: { api: VoiceApi; 
                   Forget
                 </Button>
               )}
-              <Button size="xs" variant="ghost" busy={learning} disabled={!installed("wake") || !installed("vad")} onClick={learn}>
-                Record
+              <Button size="xs" variant="ghost" disabled={!installed("wake") || !installed("vad")} onClick={() => void learn()}>
+                {learning ? "Stop" : "Record"}
               </Button>
             </span>
           }

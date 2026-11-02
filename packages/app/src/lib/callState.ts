@@ -14,6 +14,11 @@ export const OFFLINE_TIMEOUT_MS = 45_000;
 /** The audio has not started this long after the microphone opened: ask for a tap. */
 export const AUDIO_START_MS = 1_200;
 
+/** A call started by "Hey Neural" hangs up by itself after this much quiet once Neural is done. */
+export const WAKE_IDLE_MS = 20_000;
+/** Quiet this long (no voice on the line, Neural neither busy nor talking) ends a wake word call. */
+export const wakeIdle = (quietMs: number) => quietMs >= WAKE_IDLE_MS;
+
 /** Why the line is not live right now, or nothing when it is. */
 export type CallNotice = "reconnecting" | "tap" | undefined;
 

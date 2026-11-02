@@ -148,6 +148,13 @@ Findings, in order of impact:
 - A call dialled from the quick tile on a cold app still pays the app start + relay connect +
   (if cold) the model load; the daemon cannot know earlier.
 
+## "Hey Neural" calls, end of speech (D84, 2026-11-02)
+- The desktop wake word starts this same call (`startCall(client, { wake: true, preroll })`): the
+  audio from 1.5 s before the spotter fired goes first, the daemon strips the wake word from the
+  text, the call hangs up after `WAKE_IDLE_MS` (20 s) of quiet. The spotter rests during any call.
+- `END_OF_TURN` 0.8 s; unfinished sentences ("und", "ähm", comma) wait up to `HOLD` 1.8 s more.
+- The desktop window is never throttled in the background (`backgroundThrottling: "disabled"`).
+
 ## Test tools
 - `scripts/dev/call-test.mjs`: synthetic call; now prints the connect timeline
   (`connect: connecting 1 ms, listening 3765 ms`). With no clips it only measures the connect.

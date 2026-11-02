@@ -32,6 +32,13 @@ export interface VoiceModel {
   error?: string;
 }
 
+/** One kept dictation (D85): unix ms, newest first in lists. */
+export interface Dictation {
+  id: string;
+  at: number;
+  text: string;
+}
+
 export interface VoiceStatus {
   config: VoiceConfig;
   models: VoiceModel[];
@@ -47,12 +54,21 @@ export interface VoiceApi {
   /** Records "Hey Neural" once; resolves with what was learned. */
   learn: () => Promise<string>;
   onStatus: (cb: (s: VoiceStatus) => void) => () => void;
-  /** Text spoken after "Hey Neural". */
-  onCommand: (cb: (text: string) => void) => () => void;
+  /** "Hey Neural" was heard on this computer: start a call with Neural. */
+  onWake: (cb: () => void) => () => void;
+  /**
+   * What was said from just before "Hey Neural" until now (16 kHz PCM16, base64), once; the
+   * call sends it first so a command spoken in the same breath is not lost.
+   */
+  preroll?: () => Promise<string | null>;
   /** macOS, this computer only: Music/Spotify access for lowering them in calls; never asks. */
   duckApps?: () => Promise<DuckApp[]>;
   /** Shows the macOS prompt for the running players (the user pressed Allow). */
   allowDuckApps?: () => Promise<DuckApp[]>;
+  /** The last dictations (newest first); absent on older hosts. */
+  history?: () => Promise<Dictation[]>;
+  deleteDictation?: (id: string) => Promise<void>;
+  clearHistory?: () => Promise<void>;
 }
 
 /** Shortcuts that work as hold-to-talk on every desktop OS. */

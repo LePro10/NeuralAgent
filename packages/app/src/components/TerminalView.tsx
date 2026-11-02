@@ -12,10 +12,10 @@ import { ClipboardPaste, Copy, ScrollText, TextSelect } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { copyFromProgram, copyWithToast, readClipboardText } from "../lib/clipboard";
 import { parseOsc52 } from "../lib/osc52";
-import { useClient, usePlatform } from "../lib/store";
+import { useClient, useDaemon, usePlatform } from "../lib/store";
 import { terminalText, type TerminalText } from "../lib/termtext";
 import { THEME_EVENT } from "../lib/theme";
-import { filesOf, isImage, pathToken, uploadFile } from "./claude/files";
+import { filesOf, isImage, pastedImages, pathToken, uploadFile } from "./claude/files";
 import { onShowTerminalText, TerminalTextSheet } from "./TerminalText";
 
 const FONT = '"IBM Plex Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
@@ -83,6 +83,10 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
   onFocusRef.current = onFocus;
   const focusedRef = useRef(focused);
   focusedRef.current = focused;
+  // The shared PTY's size as the daemon reports it (another client may have set it).
+  const ptyCols = useDaemon((c) => c.state?.sessions[sid]?.cols ?? 0);
+  const ptyRows = useDaemon((c) => c.state?.sessions[sid]?.rows ?? 0);
+  const adoptRef = useRef<(cols: number, rows: number) => void>(() => {});
   const [selected, setSelected] = useState(false);
   // What the program last copied itself (OSC 52, e.g. Claude Code's own mouse selection): xterm has
   // no selection then, but ⌘C and the menu's Copy should still work. Cleared by typing or a click.
@@ -146,8 +150,10 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
         return false;
       }
       if (e.type === "keydown" && !["Meta", "Control", "Shift", "Alt"].includes(e.key)) forgetProgramCopy();
-      // Ctrl+Shift+V: the browser's paste (xterm would send ^V).
-      if (!isMac() && e.type === "keydown" && e.code === "KeyV" && e.ctrlKey && e.shiftKey && !e.altKey) return false;
+      // Ctrl+V and Ctrl+Shift+V paste from this device's clipboard (text, or a screenshot as an
+      // uploaded image path), as in Windows Terminal. xterm would send ^V, and a CLI that reads the
+      // clipboard on ^V (Claude Code) reads the host's clipboard, not the one of a remote browser.
+      if (!isMac() && e.type === "keydown" && e.code === "KeyV" && e.ctrlKey && !e.metaKey && !e.altKey) return false;
       // Shift+Enter = newline inside the prompt (agents read ESC CR as "insert newline").
       if (e.type === "keydown" && e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
         client.write(sid, "\x1b\r");
@@ -171,12 +177,21 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       return true;
     });
 
+    // One PTY, several clients (desktop pane, phone, a second window): the client the user touched
+    // last sets the size; the others show the PTY at its real size (clipped or with a margin)
+    // instead of reflowing its output into their own width, and claim it back on the next input.
     let size = { cols: 0, rows: 0 };
+    // Showing someone else's size (not ours) until this client is used again.
+    let adopted = false;
     // xterm reflows wrapped lines on resize, but TUIs like Claude Code redraw by moving the cursor up
     // as many lines as they printed at the old width, so after a resize the view keeps half-erased
     // ghosts of the old frame. The daemon's screen does not reflow and stays clean: once resizing
     // has settled, repaint from its snapshot.
     let resync = 0;
+    const repaint = () => {
+      clearTimeout(resync);
+      resync = window.setTimeout(() => !disposed && client.reattach(sid), 400);
+    };
     // `force`: tell the daemon even if our last report is unchanged (another client, or the Claude
     // view, may have resized the shared PTY since; the client in front wins).
     const refit = (force = false) => {
@@ -185,17 +200,29 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       if (!dims || !Number.isFinite(dims.cols)) return;
       const cols = Math.max(20, dims.cols);
       const rows = Math.max(4, dims.rows);
+      if (!force && cols === size.cols && rows === size.rows) return;
+      const moved = adopted || (size.cols !== 0 && (cols !== size.cols || rows !== size.rows));
       if (cols !== t.cols || rows !== t.rows) t.resize(cols, rows);
-      if (force || cols !== size.cols || rows !== size.rows) {
-        const moved = size.cols !== 0 && (cols !== size.cols || rows !== size.rows);
-        size = { cols, rows };
-        client.req({ m: "term_resize", p: { sid, cols, rows } }).catch(() => {});
-        if (moved) {
-          clearTimeout(resync);
-          resync = window.setTimeout(() => !disposed && client.reattach(sid), 400);
-        }
-      }
+      size = { cols, rows };
+      adopted = false;
+      client.req({ m: "term_resize", p: { sid, cols, rows } }).catch(() => {});
+      if (moved) repaint();
     };
+    // The daemon reports the PTY's size (own reports echo back too).
+    // `fresh`: a snapshot is being drawn anyway, no repaint needed.
+    const adopt = (cols: number, rows: number, fresh = false) => {
+      if (disposed || !cols || !rows || size.cols === 0) return;
+      const own = cols === size.cols && rows === size.rows;
+      if (own && !adopted) return;
+      adopted = !own;
+      if (cols === t.cols && rows === t.rows) return;
+      t.resize(cols, rows);
+      if (!fresh) repaint();
+    };
+    adoptRef.current = adopt;
+    // Input on this device takes the size back.
+    const claim = () => adopted && refit(true);
+    const onAnyInput = () => focusedRef.current && document.visibilityState === "visible" && claim();
 
     let detach = () => {};
     let glCanvas: HTMLCanvasElement | undefined;
@@ -222,8 +249,10 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       refit(true);
       if (focusedRef.current) t.focus();
       detach = client.attach(sid, {
-        reset(snapshot) {
+        reset(snapshot, cols, rows) {
           t.reset();
+          // Draw the snapshot at the size it was taken at.
+          adopt(cols, rows, true);
           replaying = true;
           t.write(snapshot, () => (replaying = false));
           refit();
@@ -278,18 +307,10 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       return true;
     };
     const onPaste = (e: ClipboardEvent) => {
-      const files = filesOf(e.clipboardData).filter(isImage);
-      if (!files.length) {
-        if (platform.readClipboardImage && !e.clipboardData?.getData("text/plain")) {
-          e.preventDefault();
-          e.stopPropagation();
-          void platform.readClipboardImage().then((f) => f && sendImages([f])).catch(() => {});
-        }
-        return;
-      }
-      e.preventDefault();
+      const got = pastedImages(e, platform.readClipboardImage);
+      if (!got) return;
       e.stopPropagation();
-      void sendImages(files);
+      void got.then(sendImages);
     };
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
@@ -311,6 +332,9 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     });
     const onFocusIn = () => onFocusRef.current();
     el.addEventListener("focusin", onFocusIn);
+    el.addEventListener("pointerdown", claim, true);
+    document.addEventListener("keydown", onAnyInput, true);
+    document.addEventListener("pointerdown", onAnyInput, true);
     // A left click starts a new selection (the program's or xterm's): the old copy is stale.
     const onDown = (e: MouseEvent) => e.button === 0 && forgetProgramCopy();
     el.addEventListener("mousedown", onDown, true);
@@ -362,6 +386,10 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
       el.removeEventListener("drop", onDrop);
       offDrop?.();
       el.removeEventListener("focusin", onFocusIn);
+      el.removeEventListener("pointerdown", claim, true);
+      document.removeEventListener("keydown", onAnyInput, true);
+      document.removeEventListener("pointerdown", onAnyInput, true);
+      adoptRef.current = () => {};
       el.removeEventListener("mousedown", onDown, true);
       osc52.dispose();
       cancelHold();
@@ -386,6 +414,8 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     if (focused) term.current?.focus();
   }, [focused]);
 
+  useEffect(() => adoptRef.current(ptyCols, ptyRows), [ptyCols, ptyRows]);
+
   const mac = isMac();
   const canCopy = selected || hasProgramCopy;
   // Nothing selected yet: say how, since programs that use the mouse (Claude Code) take plain drags.
@@ -405,11 +435,11 @@ export function TerminalView({ sid, focused, startedAt, webgl, touch, onFocus }:
     {
       label: "Paste",
       Icon: ClipboardPaste,
-      shortcut: mac ? "⌘V" : "Ctrl+Shift+V",
+      shortcut: mac ? "⌘V" : "Ctrl+V",
       onSelect: () =>
         void readClipboardText().then((s) => {
           if (s) term.current?.paste(s);
-          else if (s === null) toast(`Paste with ${mac ? "⌘V" : "Ctrl+Shift+V"}: the browser keeps the clipboard from this menu`);
+          else if (s === null) toast(`Paste with ${mac ? "⌘V" : "Ctrl+V"}: the browser keeps the clipboard from this menu`);
           term.current?.focus();
         }),
     },

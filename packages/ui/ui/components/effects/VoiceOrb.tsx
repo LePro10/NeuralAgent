@@ -37,6 +37,17 @@ export function VoiceOrb({ size, level, busy, atRest, speed, interactive = true,
   const scale = useSpring(useMotionValue(1), { stiffness: 300, damping: 26 });
   useEffect(() => level?.on('change', (v) => scale.set(1 + v * 0.14)), [level, scale]);
   const blur = Math.max(2, size * 0.09);
+  // Busy speeds the swirl up through its playback rate: it carries on from the angle it is at.
+  // Switching the CSS duration instead jumped the swirl to another angle each time Neural
+  // started or stopped working (the stutter in "Neural is working").
+  const swirl = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // About twice the idle pace (a 3.2 s lap): busy, but calm. 1.6 s was a frantic spin.
+    const rate = busy ? (speed ?? 7) / 3.2 : 1;
+    for (const a of swirl.current?.getAnimations?.() ?? []) {
+      if (a.playbackRate !== rate) a.updatePlaybackRate(rate);
+    }
+  }, [busy, speed]);
 
   return (
     <motion.span
@@ -54,7 +65,7 @@ export function VoiceOrb({ size, level, busy, atRest, speed, interactive = true,
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <i className="voice-orb-swirl"><i style={{ filter: `blur(${blur}px)` }} /></i>
+      <i ref={swirl} className="voice-orb-swirl"><i style={{ filter: `blur(${blur}px)` }} /></i>
       <i className="voice-orb-blob"><i style={{ filter: `blur(${blur * 0.8}px)` }} /></i>
       <motion.i className="voice-orb-shine" style={{ backgroundImage: shine }} />
     </motion.span>

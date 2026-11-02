@@ -7,7 +7,7 @@
 import type { DaemonClient, HostUpdate, ModelInfo } from "@neuralagent/protocol";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
-import type { VoiceApi, VoiceStatus } from "./voice";
+import type { Dictation, VoiceApi, VoiceStatus } from "./voice";
 
 /** Pushes from the host that are not part of the synced state. */
 export function onHostNotice(client: DaemonClient, topic: string, cb: (data: unknown) => void): () => void {
@@ -50,8 +50,11 @@ export function useHostVoice(client: DaemonClient, local: VoiceApi | undefined):
       set: (config) => call<void>("voice.set", config),
       download: () => Promise.resolve(), // models are the daemon's (host_model_download)
       learn: () => call<string>("voice.learn"),
+      history: () => call<Dictation[]>("voice.history"),
+      deleteDictation: (id) => call<void>("voice.history_delete", { id }),
+      clearHistory: () => call<void>("voice.history_clear"),
       onStatus: (cb) => onHostNotice(client, "voice", (d) => cb(d as VoiceStatus)),
-      onCommand: () => () => {},
+      onWake: () => () => {},
     };
     let live = true;
     const probe = () =>

@@ -3,7 +3,7 @@ import { ArrowUp, ClipboardPaste, CornerDownLeft, Ellipsis, ImagePlus, Keyboard,
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CTRL_LETTERS, ctrlSeq, SEQ } from "../lib/termKeys";
 import { useClient, usePlatform } from "../lib/store";
-import { filesOf, isImage, pathToken, readClipboardFiles, uploadFile } from "./claude/files";
+import { isImage, pastedImages, pathToken, readClipboardFiles, uploadFile } from "./claude/files";
 import { showTerminalText } from "./TerminalText";
 
 /**
@@ -228,14 +228,8 @@ function LineInput({ sid, pending, onTaken }: { sid: string; pending: File[]; on
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPaste={(e) => {
-              const f = filesOf(e.clipboardData);
-              if (f.length) {
-                e.preventDefault();
-                void add(f);
-              } else if (!e.clipboardData.getData("text/plain") && platform.readClipboardImage) {
-                e.preventDefault();
-                void nativePaste();
-              }
+              const got = pastedImages(e, platform.readClipboardImage);
+              if (got) void got.then((f) => { if (f.length) void add(f); });
             }}
             placeholder="Type to the agent"
             enterKeyHint="send"

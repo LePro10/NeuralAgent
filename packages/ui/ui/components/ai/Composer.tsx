@@ -154,7 +154,9 @@ export function Composer({ onSend, placeholder = 'Ask anything', busy, progress,
 
   const onPaste = (e: React.ClipboardEvent) => {
     if (!allowFiles) return;
-    const fs = Array.from(e.clipboardData.files ?? []);
+    // Screenshots: some browsers carry the image only as an item, not in `files`.
+    let fs = Array.from(e.clipboardData.files ?? []);
+    if (!fs.length) fs = Array.from(e.clipboardData.items ?? []).filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter((f): f is File => !!f);
     if (fs.length) { e.preventDefault(); addFiles(fs); return; }
     const raw = e.clipboardData.getData('text/plain');
     if (raw.length > LONG_CHARS || raw.split('\n').length > LONG_LINES) { e.preventDefault(); add([{ id: nextId++, kind: 'text', name: 'Pasted text', text: raw }]); }

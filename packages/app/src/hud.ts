@@ -2,3 +2,4 @@
 // hidden window does not load the whole app bundle.
 export type { VoiceStatus } from "./lib/voice";
 export { VoiceHud, type VoiceLevelSource } from "./components/VoiceHud";
+export type { HudCallState } from "./lib/platform";

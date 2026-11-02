@@ -1012,3 +1012,89 @@ Neural prompts. Decision ([notes/insights.md](notes/insights.md)):
   a toast with a Copy button.
 - **Not done**: no automatic copy-on-select for xterm's own selection (terminals differ; iTerm2
   on, Windows Terminal off). Can become a setting.
+
+## D83 — One PTY, several clients: the device in use owns the size, the others adopt it (2026-11-02)
+- A session's PTY has one size, but a desktop pane, a phone and the Claude view can show it at once.
+  Before, each view kept its own xterm size, so a phone (or the Claude view's fixed 100×30) shrinking
+  the PTY left the desktop drawing narrow output at its own width: scrambled lines.
+- Now (`TerminalView.tsx`): the daemon's `session.cols/rows` is watched; when it differs from what
+  this view last reported, the view resizes xterm to the PTY size (clipped or with a margin) and
+  repaints from the daemon snapshot. Input on this device (click or key in the focused pane, window
+  focus, page shown again) claims the size back. Adopting never reports a size, so two clients
+  cannot ping-pong.
+- Rejected: scaling the adopted terminal to fit (unreadable at 190 columns on a phone); a daemon-side
+  "owner" (needs protocol changes for what the session size already tells).
+- Paste: on Windows/Linux Ctrl+V is the browser's paste in the terminal (like Windows Terminal), not
+  ^V; a CLI reading the clipboard on ^V would read the host's, not a remote browser's. Screenshots in
+  a paste go through `pastedImages()` (`claude/files.ts`) for terminal, Claude composer and key bar.
+- Glass + rim drew the border and, one hair inside, the rim with the same radius: a double frame with
+  mismatched corners (clear at 1px on Windows). Dark: the border turns clear and the rim is the edge
+  (`effects.css`). Light keeps its dark border (a white rim alone is no edge).
+
+## D84 — "Hey Neural" starts a call; generous end of speech; smooth "working" motion (2026-11-02)
+- Before, the wake word recorded one utterance in the desktop process (its own VAD + Parakeet) and
+  sent the text to Neural: no spoken answer, a second model in memory, and the spotter rested for up
+  to 8 s while waiting and transcribing (the next "Hey Neural" went unheard).
+- Now the wake word starts the same call as "Call Neural" (`voice.rs` → `voice-wake` → `startCall(
+  client, { wake, preroll })`). The desktop keeps the last 1.5 s before the spotter fired plus what
+  follows until the call takes it (`voice_preroll`, PCM16 base64, one `call_audio` message), so
+  "Hey Neural, start Claude" in one breath reaches the call whole; the daemon strips the wake word
+  from what it hears (`na_voice::text::strip_wake`). The call's first microphone frame (it overlaps
+  the preroll's end) is dropped. While any call runs in the window (`duck_call` → `call_active`)
+  the spotter rests and then restarts on fresh audio. A wake word call hangs up after 20 s of quiet
+  (`WAKE_IDLE_MS`; no voice, Neural not busy or talking). Rejected: running the call natively in
+  Rust (needs a second daemon connection and its own echo cancellation).
+- Calls: the pause that ends a sentence is 0.8 s (was 0.5 s); a sentence ending on "und", "and",
+  "ähm", a comma… is held up to 1.8 s more while the caller stays quiet and joined with what follows
+  (`unfinished`). Cost: about 0.3 s more per turn.
+- Wake spotter: boost score 1.5 (was 2.0). Synthetic `say` corpus (8 English + 6 German voices, 126
+  clips, `examples/wake_vad.rs` with `NOISE=0.003`): English 17/18 (was 13/18), all 27/42 (was
+  23/42), 0 false wakes either way; a higher score (3.0) hit fewer; the threshold (0.15–0.25) made no
+  difference. German TTS voices are still mostly missed (the model is English-only: "Learn my
+  voice", D20). A mispronunciation line for those voices (`▁HE N A IL`) did not help.
+- A speaking wake word call cancels a Neural run that was busy (a new `orch_send` supersedes it).
+- Background: the main window has `backgroundThrottling: "disabled"` (WKWebView suspends a hidden
+  web view otherwise; macOS 14+). Browser tabs need nothing: playback is scheduled on the audio
+  clock, a page with live audio is not frozen, only UI timers slow down.
+- "Working…" stutter: the shimmer moved a band one way and a copy of the text the other way; the
+  copy snapped to whole pixels on its own and the label shook. Now one element with a gradient
+  clipped to the text (`background-position` animates; repainting one label is cheap). The orb
+  switched `animation-duration` between idle and busy, which jumps a CSS animation to another
+  angle; it now changes the playback rate (`updatePlaybackRate`) and keeps its angle.
+  Owner: the busy orb was far too strong. Busy now swirls at about twice the idle pace (3.2 s lap,
+  was 1.6 s) and the warm blob drifts less (scale 1.1, was 1.2).
+
+## D85 — Dictation history on the desktop (2026-11-02)
+**Why:** a long dictation was pasted into a web page that turned it into an in-memory card and
+lost it on reload; NeuralAgent kept only the last text in memory, so it was gone for good.
+**Decision:** the desktop app keeps the last 50 dictations in `dictations.json` next to
+`voice.json` (mode 0600, atomic write), saved *before* the text is typed so a failed paste
+cannot lose it. Settings → Voice shows them in a collapsed `Disclosure` ("Recent dictations")
+with copy, delete and clear all (`components/settings/DictationHistory.tsx`). Commands
+`voice_history`, `voice_history_delete`, `voice_history_clear`; remotes reach them through the
+existing `host_ui` forwarding (`voice.history*`), no daemon or protocol change. Older hosts
+answer "unknown operation" and the section stays hidden.
+**Alternatives:** keep it only in memory (lost on restart, the case that hurt); store it in the
+daemon state (dictation is the desktop app's, and the daemon may run on another machine); an
+off switch (not now: nothing leaves the computer and the user can clear it).
+
+## D86 — "Hey Neural": chime, call controls in the pill, guided "Learn my voice", looser detector (2026-11-02)
+**Context:** after D84 the owner asked for a small tone when "Hey Neural" is heard, a pill that
+shows the call and can hang up (minimal), a guided voice training, and "cover it more broadly so
+it really recognizes it every time".
+**Decision:**
+- A wake call plays a short two-note sine chime (gain 0.06) once the preroll is sent, and a falling
+  one before the 20 s idle hang-up (`chime()` in `lib/call.ts`).
+- The voice pill shows the call state ("Neural…", "Listening", "Thinking…", "Neural speaks") and a
+  round hang-up button. `hud_call` (Rust) makes the pill window clickable only while a call runs
+  and forwards the state; the button emits `hud-hangup` to the main window, which ends the call.
+- "Learn my voice" is guided: three takes in a row, Record/Stop, up to three misses. Turning the
+  wake word on with fewer than three learned takes starts it. Learned lines are capped at 10
+  (was 6). The spotter rests while learning.
+- A second, looser path in `na_voice::wake`: a small streaming recognizer on the same model with
+  endpointing; a short phrase whose words are close to the keyword (`loose_match`: same first and
+  last letter, edit distance ≤ len/4, short first word) also wakes. On the `say` corpus +1 hit,
+  still 0 false wakes; about 2 % CPU instead of 1 %. `WakeConfig.loose` turns it off.
+**Alternatives:** a lower keyword score (more false wakes on the corpus); a bigger KWS model (download
+size); a system notification sound (cannot be made quiet enough, not in the call's audio path).
+

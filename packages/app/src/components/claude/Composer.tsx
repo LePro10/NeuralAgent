@@ -17,7 +17,7 @@ import { act, cycleMode, memoryPrompt, resolveInput, runKeys, sendPrompt, server
 import { CommandPalette } from "./CommandPalette";
 import { type Command, mergeCommands, opensDialog, saveRecent, searchCommands } from "./commands";
 import { ContextRing, ContextSheet } from "./ContextSheet";
-import { filesOf, isImage, pathToken, readClipboardFiles, uploadFile } from "./files";
+import { filesOf, isImage, pastedImages, pathToken, readClipboardFiles, uploadFile } from "./files";
 import { contextOf, fastOf, queuedOf } from "./metaInfo";
 import { DEFAULT_EFFORT, EFFORT_NOTE, EFFORTS, effortName, MODELS, MODES, modeOf, modelAlias, modelName } from "./models";
 import { PickNote, PickRow, PickSection, Picker } from "./Picker";
@@ -286,15 +286,8 @@ export function Composer({ sid, meta, busy, phone, empty, disabled, hidden, mess
   };
 
   const onPaste = (e: ClipboardEvent) => {
-    const f = filesOf(e.clipboardData);
-    if (f.length) {
-      e.preventDefault();
-      void addFiles(f);
-    } else if (platform.readClipboardImage && !e.clipboardData?.getData("text/plain")) {
-      // Android WebViews paste nothing for an image; the shell reads the clipboard itself.
-      e.preventDefault();
-      void platform.readClipboardImage().then((img) => img && addFiles([img])).catch(() => {});
-    }
+    const got = pastedImages(e, platform.readClipboardImage);
+    if (got) void got.then((f) => { if (f.length) void addFiles(f); });
   };
   // Desktop shell: OS file drops arrive as local paths (this machine is the host), typed in directly.
   const card = useRef<HTMLDivElement>(null);

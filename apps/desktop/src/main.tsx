@@ -1,4 +1,4 @@
-import { App, DaemonProvider, storedZoom, type ChangelogEntry, type DuckApp, type Platform, type ServiceSwitch, type SystemAutostart, type SystemStatus, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
+import { App, DaemonProvider, storedZoom, type ChangelogEntry, type Dictation, type DuckApp, type Platform, type ServiceSwitch, type SystemAutostart, type SystemStatus, type UpdateInfo, type VoiceStatus } from "@neuralagent/app";
 import "@neuralagent/app/styles.css";
 import { DaemonClient, webSocketTransport } from "@neuralagent/protocol";
 import { getVersion } from "@tauri-apps/api/app";
@@ -95,14 +95,20 @@ const platform: Platform = {
     download: (id) => invoke("voice_download", { id }),
     learn: () => invoke<string>("voice_learn"),
     onStatus: (cb) => subscribe<VoiceStatus>("voice", cb),
-    onCommand: (cb) => subscribe<string>("voice-command", cb),
+    onWake: (cb) => subscribe<null>("voice-wake", () => cb()),
+    preroll: () => invoke<string | null>("voice_preroll"),
     duckApps: () => invoke<DuckApp[]>("duck_apps"),
     allowDuckApps: () => invoke<DuckApp[]>("duck_allow_apps"),
+    history: () => invoke<Dictation[]>("voice_history"),
+    deleteDictation: (id) => invoke("voice_history_delete", { id }),
+    clearHistory: () => invoke("voice_history_clear"),
   },
   // A call in this window: music and other apps go quieter while it runs (src-tauri/src/duck.rs).
   call: {
     active: (on) => void invoke("duck_call", { on }).catch(() => {}),
     onDial: () => () => {},
+    show: (state) => void invoke("hud_call", { state }).catch(() => {}),
+    onHangup: (cb) => subscribe<null>("hud-hangup", () => cb()),
   },
   // Settings → System: permissions and autostart of this computer (src-tauri/src/system.rs, D58-D60).
   system: {
@@ -189,6 +195,12 @@ client.serveHost(async (op, args) => {
       return invoke("voice_set", { config: args });
     case "voice.learn":
       return invoke<string>("voice_learn");
+    case "voice.history":
+      return invoke<Dictation[]>("voice_history");
+    case "voice.history_delete":
+      return invoke("voice_history_delete", { id: (args as { id?: unknown } | null)?.id });
+    case "voice.history_clear":
+      return invoke("voice_history_clear");
     case "system.status":
       // Read only for phones: what is missing here and how the service starts.
       return invoke<SystemStatus>("system_status");

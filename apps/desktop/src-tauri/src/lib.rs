@@ -1,5 +1,6 @@
 mod autostart;
 mod daemon;
+mod dictations;
 mod duck;
 mod hud;
 mod mic;
@@ -76,6 +77,28 @@ fn voice_set(voice: State<'_, Arc<Voice>>, config: VoiceConfig) -> Result<(), St
 #[tauri::command]
 fn voice_download(voice: State<'_, Arc<Voice>>, id: String) -> Result<(), String> {
     voice.download(&id).map_err(|e| format!("{e:#}"))
+}
+
+/// The audio since "Hey Neural" for the call it started (16 kHz PCM16, base64), once.
+#[tauri::command]
+fn voice_preroll(voice: State<'_, Arc<Voice>>) -> Option<String> {
+    voice.take_preroll()
+}
+
+/// The last dictations, newest first (D85).
+#[tauri::command]
+fn voice_history(voice: State<'_, Arc<Voice>>) -> Vec<dictations::Dictation> {
+    voice.dictations.list()
+}
+
+#[tauri::command]
+fn voice_history_delete(voice: State<'_, Arc<Voice>>, id: String) -> Result<(), String> {
+    voice.dictations.delete(&id).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn voice_history_clear(voice: State<'_, Arc<Voice>>) -> Result<(), String> {
+    voice.dictations.clear().map_err(|e| format!("{e:#}"))
 }
 
 /// Records "Hey Neural" once (up to 4 s) and teaches the wake word this pronunciation.
@@ -221,7 +244,12 @@ pub fn run() {
             voice_set,
             voice_download,
             voice_learn,
+            voice_preroll,
+            voice_history,
+            voice_history_delete,
+            voice_history_clear,
             duck::duck_call,
+            hud::hud_call,
             duck::duck_apps,
             duck::duck_allow_apps,
             system::system_status,

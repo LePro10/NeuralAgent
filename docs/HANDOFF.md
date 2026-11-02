@@ -2,78 +2,42 @@
 
 Current state for a fresh session. Start with [../AGENTS.md](../AGENTS.md) (rules, routine), then
 [CODEMAP.md](CODEMAP.md) to find files. Progress and the owner's checklist: [STATUS.md](STATUS.md);
-plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). The longer previous handoff
-(module pointers per milestone): [archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md).
+plan: [PLAN.md](PLAN.md); decisions: [DECISIONS.md](DECISIONS.md). Older handoffs:
+[archive/HANDOFF-2026-10-30.md](archive/HANDOFF-2026-10-30.md) and git history of this file.
 
-## Latest (2026-11-01, evening) — copy/paste overhaul (D82), NOT committed, not released
-- Terminal: OSC 52 handler (`lib/osc52.ts` + test), so Claude Code's own mouse selection lands on the clipboard;
-  ⌘C / menu Copy reuse it; menu hints "⌥-drag / Shift-drag to select". One clipboard path (`lib/clipboard.ts`,
-  registered in `DaemonProvider`); desktop native `clipboard_write_text` / `clipboard_text` (arboard).
-- Checks green: typecheck, test, lint:tokens, check:docs, `cargo check -p neuralagent-desktop`.
-- Open: not tried by hand in the real Tauri app yet (needs `pnpm dev` with a test NEURALAGENT_HOME and Claude
-  Code in fullscreen/mouse mode); web remote in Safari falls back to a toast with a Copy button.
+## Done, not committed (2026-11-02): "Hey Neural" round (D84)
+Brief: `research-local/briefs/hey-neural.md`. All in the working copy, **no commit, no deploy**
+(owner decides). Build + `cargo test --workspace`, desktop `cargo test`/clippy, `pnpm typecheck/test/
+lint:tokens/check:docs` green. Changes: wake word starts a call with preroll (`voice.rs`,
+`voice_preroll`, `duck_call` → `call_active`, `App.tsx`, `call.ts` `startCall(client, {wake,
+preroll})`, 20 s idle hang-up); daemon `call.rs` END_OF_TURN 0.8 s + HOLD for unfinished sentences,
+`na_voice::text::{strip_wake, unfinished}`; wake score 1.5 (corpus `/tmp/wakecorpus`, `say` voices);
+`backgroundThrottling: "disabled"`; Shimmer as clipped gradient, VoiceOrb `updatePlaybackRate`.
+Only tested automatically: no real-microphone/real-app run of wake → call, preroll timing, idle
+hang-up, hidden-window audio, or the animations on screen (run `ui-check` / a real try).
+Round 2 (D86, also uncommitted): wake chime, call state + hang-up in the HUD pill (`hud_call`,
+`hud-hangup`), guided "Learn my voice" (3 takes), loose wake path (`loose_match`). Only automatic
+tests plus browser screenshots of the pill; not tried in the real app: chime, clicking the
+non-focusable pill, hang-up event, guided learn, the loose path on a real voice.
+Another session (neuralagent-a7) adds a dictation history in `voice.rs`, `lib.rs`, `voice.ts`,
+HostSettings (D85); ship together, the owner picks the version.
 
-## Latest (2026-11-01, afternoon) — landing slimmed down, DEPLOYED, NOT committed
-- Landing 18.5k px -> 14.8k px: Hero centred over a scroll-linked aura (blobs + grid, `--c`) with a release pill and
-  an agent ribbon (HeroRoster removed); new `sections/Highlights` bento (5 motion panes, pointer light, links to
-  /features/); Security shows only the walkthrough (`<Security full />` on /security/ has facts, limits, what leaves);
-  Platforms is now 5 compact tiles (details on /download/); FAQ shows 6, "Show all". Agents + full Spec moved to the new
-  page `/features/` (`src/features.tsx`); new `/security/` (`src/security.tsx`). Nav: Features, Live demo, Security,
-  Download, Changelog. Relay counts the two new pages (`telemetry.rs` PAGES), sitemap updated.
-- Deployed from the working copy: build `0.5.0+mvxw9z5g`, rollback image `neuralagent-relay:prev`. Checks green.
-- Open: commit this; `docs/ADMIN-HANDBUCH.md` has an unrelated uncommitted edit (not mine); no OG images for the two
-  new pages yet (they use /og.png).
-
-## Where we are (2026-11-01, afternoon)
-- **0.5.0 released and deployed** (D81 insights, [notes/insights.md](notes/insights.md)): admin
-  dashboard tabs, anonymous usage ping (opt-out), problem reports with diagnostics, cookieless site
-  counts, downloads/update checks per platform/version/country, admin mail + push. Tag `v0.5.0` =
-  `main` = `mobile-overhaul` (`16b95cc`), CI Release run 41312725246 green,
-  `/api/releases/latest` serves 0.5.0. Relay + website live: build `0.5.0+mvxvve17`, healthy,
-  rollback image `neuralagent-relay:prev` (= 0.4.0 build).
-- GeoIP: `/opt/neuralagent/geoip.sh` ran once (DB-IP 2026-11 loaded), root cron `17 4 3 * *`.
-- Not done: App Privacy panel not screenshotted (`ui-check`); admin push not tried on a real phone.
-- Owner rule: always ask which version number before a release.
-
-## Before that (2026-11-01, midday)
-- **0.4.1 released** (patch, D80): LLM keys out of the macOS keychain into `keys.json` with a
-  one-time migration (no more password prompts on update/settings change, daemon start no longer
-  blocks), update relaunch via Launch Services (no second Dock icon), single-instance plugin on
-  all desktops. Tag `v0.4.1` = `main` = `mobile-overhaul` (`1b4a0e5`), CI run 41305906543 green,
-  `/api/releases/latest` serves 0.4.1. Website/relay NOT redeployed (only `/changelog` is stale;
-  run `deploy-web` if wanted). The 0.4.0→0.4.1 update itself still runs the old relaunch and one
-  last keychain prompt; check after that update that both are gone.
-
-## Before that (2026-11-01, night)
-- **0.4.0 released and deployed.** Tag `v0.4.0` = `main` = `mobile-overhaul` (`c50ee30`). CI
-  Release run 41262931077 green (desktop x4 + APK); `/api/releases/latest` serves 0.4.0, the
-  update check from 0.3.4 answers 200. Relay + website deployed from that commit: build
-  `0.4.0+mvx78qcr`, container healthy, rollback image `neuralagent-relay:prev` (= the 0.3.4 web
-  remote build). The owner's installed app was not touched; it updates itself.
-- What 0.4.0 contains (commits `33437c0`, `6844a8e` on top of the phone overhaul D52-D57):
-  - **Power round** (D58-D78): service host + autostart + Settings → System
-    ([notes/system-integration.md](notes/system-integration.md)), Neural v2 + Teams
-    ([notes/neural-v2.md](notes/neural-v2.md)), subagents ([notes/subagents.md](notes/subagents.md)),
-    Files ([notes/files.md](notes/files.md)), calls/ducking ([notes/calls.md](notes/calls.md),
-    [notes/ducking.md](notes/ducking.md)), Settings + Discord
-    ([notes/settings-discord.md](notes/settings-discord.md)), memory
-    ([notes/performance.md](notes/performance.md)). Reports: `research-local/team/`.
-  - **Website rebuild + live demo** (D79, [notes/website.md](notes/website.md)): the real app runs
-    in the page against a fake daemon in the browser; new landing, /demo/, /download/,
-    /changelog/, legal pages, 404, posters and share cards. Brief, research, critic and fix
-    reports: `research-local/site-overhaul/` (`BRIEF.md`, `review/`).
-- All checks green before the tag: pnpm typecheck/test/lint:tokens/check:docs, web tests 38/38,
-  cargo test (workspace), web build; live pages checked with Playwright (no console errors).
-
-## Next
-1. Owner: hand checks in STATUS "Your checklist": the website on a real iPhone/Android and Safari,
-   then the power-round block (permissions, ducking, Discord, memory, new APK on a real phone).
-2. Owner decision: remote-added projects (D42) are approved at once, so a paired phone can open
-   any folder (review5). The website copy states this honestly; change it if D42 changes.
-3. Owner: imprint postal address and contact, Windows minimum version (both not invented).
-4. When the demo or the app's look changes: `node scripts/dev/site-posters.mjs <dev url>` then
-   `node scripts/dev/site-og.mjs`; new protocol requests need an answer in
-   `apps/web/src/demo/daemon/handlers` (tests check every request is answered).
+## Where we are (2026-11-02)
+- Released: 0.5.1 (tag `v0.5.1` = `main` = `mobile-overhaul` `046401c`); `/api/releases/latest` serves it.
+- **Deployed but NOT committed** (working copy on `mobile-overhaul`; relay build `0.5.1+mvzcn8r8`,
+  rollback image `neuralagent-relay:prev` = `0.5.1+mvy9yr2p`), D83:
+  - Dark glass surfaces draw one edge, no double frame (`packages/ui/ui/styles/effects.css`
+    `.glass.rim`, `Sidebar.tsx` without extra inset highlight).
+  - Shared PTY size (`packages/app/src/components/TerminalView.tsx`): the device in use owns it, other
+    views adopt the daemon's `session.cols/rows` and claim it back on input. Two-browser check script:
+    `research-local/termtest/run.mjs`.
+  - Ctrl+V pastes in the terminal on Windows/Linux; screenshots via `pastedImages()`
+    (`packages/app/src/components/claude/files.ts`) in terminal, Claude composer, key bar.
+  - Files: CHANGELOG (Unreleased), DECISIONS D83, CODEMAP, KeyBar, TerminalView, claude/Composer,
+    claude/files, ui ai/Composer, Sidebar, effects.css. Desktop/Android get it with the next release
+    (ask the owner for the version number).
+- Open from this round: owner to decide on the commit; try on a real Windows PC + phone; light mode
+  keeps border + white rim (two fine lines) on purpose.
 
 ## Open issues
 - Website: not tried on real iOS Safari, a real Android phone or Firefox; relay soft 404 (unknown

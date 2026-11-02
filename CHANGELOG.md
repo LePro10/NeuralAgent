@@ -11,6 +11,25 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-02
+
+### New
+- **Your last dictations are kept** in Settings → Voice → Recent dictations: copy one, delete one or clear all. A long dictation is no longer lost when the app you spoke into drops it. The last 50 stay on your computer only.
+
+### Improved
+- **"Hey Neural" now starts a call with Neural**, the same as Call Neural: Neural answers out loud and you can keep talking. What you say in the same breath as "Hey Neural" is not lost. The call hangs up by itself after about 20 seconds of quiet.
+- **A soft tone when "Hey Neural" is heard**, and the voice pill shows the call (listening, thinking, speaking) with a button to hang up.
+- **"Learn my voice" guides you** through three short recordings and starts by itself when you turn on "Hey Neural". A second, looser check catches "Hey Neural" said quickly or unclearly.
+- **Neural lets you finish your sentence in calls.** A short pause to breathe no longer cuts you off, and a sentence that stops on "and" or "ähm" waits for the rest.
+- **"Hey Neural" is heard more often the first time** (tuned on test recordings: 17 of 18 instead of 13 of 18 for English voices, still no false wakes).
+- **Neural answers out loud while its window is in the background** or closed to the menu bar.
+- **The "Working…" animation runs smoothly**: the label no longer shakes and the orb no longer jumps when Neural starts or stops working.
+- **Paste screenshots with Ctrl+V or ⌘V** everywhere: in the terminal, the Claude view and the phone's input line, in the app and in the browser. On Windows and Linux, Ctrl+V now pastes in the terminal like in Windows Terminal (Ctrl+Shift+V still works).
+
+### Fixed
+- **The terminal no longer scrambles when the same agent is open on your phone and your computer.** The device you use sets the terminal size; the other one shows it cleanly and takes it back as soon as you click or type there.
+- **No more double frame** around the sidebar, sheets, the dock and menus in dark mode, most visible on Windows.
+
 ## [0.5.1] - 2026-11-01
 
 ### Fixed

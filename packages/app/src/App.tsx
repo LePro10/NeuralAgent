@@ -27,6 +27,7 @@ import { phoneRouter, usePhoneNav } from "./lib/phoneRoute";
 import { ALERT_TEXT, chime, useAlerts, wantsNotify, wantsSound } from "./lib/alerts";
 import { writeClipboard } from "./lib/clipboard";
 import { useClient, useDaemon, usePlatform, useUi } from "./lib/store";
+import type { HudCallState } from "./lib/platform";
 import { useUpdateWatch } from "./lib/updates";
 import { useUsageNotice } from "./lib/usageNotice";
 import { MOVED_TO_SETTINGS, SETTINGS_PAGE, requestSettingsSection } from "./lib/settingsRoute";
@@ -136,17 +137,16 @@ export function App() {
   const usage = workspace === USAGE;
   const current = neural || dashboard || swarmPage || settingsOpen || history || usage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
-  // "Hey Neural, …": hand what was heard to Neural and show the conversation.
-  useEffect(
-    () =>
-      platform.voice?.onCommand((text) => {
-        if (!text.trim()) return;
-        if (phoneRef.current) phoneRouter().go({ tab: "neural", stack: [] });
-        else setWorkspace(NEURAL);
-        client.req({ m: "orch_send", p: { text } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
-      }),
-    [platform.voice, client, setWorkspace],
-  );
+  // "Hey Neural": the same call as "Call Neural" (the call screen stays over any page, and the
+  // window plays the answers while it is hidden). What was said with the wake word comes first.
+  useEffect(() => {
+    const voice = platform.voice;
+    return voice?.onWake(() => void startCall(client, { wake: true, preroll: voice.preroll }));
+  }, [platform.voice, client]);
+  // The listening pill shows a wake word call outside the window, with a hang-up button.
+  const pill = useCall((c): HudCallState | null => (!c.on || !c.wake ? null : !c.ready || c.state === "connecting" ? "connecting" : c.state === "thinking" || c.state === "speaking" ? c.state : "listening"));
+  useEffect(() => platform.call?.show?.(pill), [platform, pill]);
+  useEffect(() => platform.call?.onHangup?.(() => endCall()), [platform]);
 
 
   // Phones: the quick tile starts a call (on the Neural page); the native side keeps it alive.

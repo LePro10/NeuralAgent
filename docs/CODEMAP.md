@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-01 by `node scripts/codemap.mjs` (715 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-02 by `node scripts/codemap.mjs` (719 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -25,8 +25,8 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 
 ## apps/desktop/src/
 - **dev-browser.tsx** (115) — Dev only: the desktop UI in a plain browser (UI tests, debugging). Not part of the build.
-- **hud.tsx** (44)
-- **main.tsx** (222)
+- **hud.tsx** (52)
+- **main.tsx** (234)
 
 ## apps/desktop/src-tauri/
 - **build.rs** (4)
@@ -34,9 +34,10 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## apps/desktop/src-tauri/src/
 - **autostart.rs** (850) — Starting NeuralAgent without anyone at the computer (D60): Settings → System → "Start · `const LOGIN_LABEL, const BOOT_LABEL, const WINDOW_LABEL, enum ServiceStart, struct Autostart, enum Os, struct Ctx, enum Step, status(), plan(), refresh(), installable(), set(), login_host_installed()` +1
 - **daemon.rs** (228) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), restart_newest()`
-- **duck.rs** (984) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
-- **hud.rs** (76) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update()`
-- **lib.rs** (249) — `run_service(), run()`
+- **dictations.rs** (140) — The last dictations, kept on this computer so a text is not lost when the app it was typed · `const KEEP, struct Dictation, struct Dictations`
+- **duck.rs** (987) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
+- **hud.rs** (87) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update(), hud_call()`
+- **lib.rs** (277) — `run_service(), run()`
 - **main.rs** (11) — Prevents an extra console window on Windows in release builds.
 - **mic.rs** (198) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, probe(), impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
@@ -45,7 +46,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **system.rs** (89) — Tauri commands for Settings → System (permissions, autostart) and the check after start that · `struct SystemStatus, system_status(), system_request(), system_open(), system_repair(), system_autostart(), self_check()`
 - **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
 - **update.rs** (203) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
-- **voice.rs** (543) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
+- **voice.rs** (551) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/desktop/src-tauri/src/duck/
 - **linux.rs** (165) — Linux: each playing stream's own volume through `pactl` (PulseAudio, or PipeWire with · `struct Streams, impl Backend for Streams`
@@ -235,7 +236,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## crates/na-daemon/src/
 - **audit.rs** (158) — Audit log: what phones, browsers and the orchestrator did on this computer. · `struct Audit`
 - **awake.rs** (109) — Keeps the computer from sleeping while agents work (setting `keep_awake`). The display may · `struct Awake`
-- **call.rs** (729) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
+- **call.rs** (759) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
 - **claude_view.rs** (2310) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), parse_line_in(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
 - **core.rs** (1446) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
@@ -309,16 +310,16 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 ## crates/na-voice/examples/
 - **stt_bench.rs** (69) — STT benchmark: word error rate, real-time factor and latency per model on a corpus.
 - **tts_bench.rs** (88) — Text-to-speech benchmark: speed, time to first audio, and intelligibility (the speech is
-- **wake_vad.rs** (88) — Checks the wake word and the VAD against a corpus (see `stt_bench`).
+- **wake_vad.rs** (101) — Checks the wake word and the VAD against a corpus (see `stt_bench`).
 
 ## crates/na-voice/src/
 - **download.rs** (180) — Voice models: what exists, what is installed, and a checked download into `<data>/models`. · `struct Spec, const PARAKEET, const WAKE, const VAD, const SUPERTONIC, const SPECS, struct ModelStatus, spec(), path(), download()`
 - **lib.rs** (23) — Local speech for NeuralAgent, on top of sherpa-onnx (CPU, int8 models). · `mod download, mod stt, mod text, mod tts, mod vad, mod wake, const SAMPLE_RATE, mod models`
 - **stt.rs** (171) — Speech to text: offline models transcribe a finished utterance, streaming models also give · `enum SttKind, struct SttModel, file(), tokens(), enum Engine, struct Stt, struct Live`
-- **text.rs** (43) — Text helpers: normalisation for comparisons and word error rate. · `normalize(), wer()`
+- **text.rs** (107) — Text helpers: normalisation for comparisons and word error rate. · `normalize(), wer(), strip_wake(), unfinished()`
 - **tts.rs** (136) — Local text to speech (sherpa-onnx): Supertonic (multilingual) and Pocket TTS (English, cloned voice). · `enum TtsKind, struct TtsModel, struct Speech, struct Tts`
 - **vad.rs** (69) — Voice activity detection (Silero): cuts microphone audio into utterances. · `struct Segment, struct Vad`
-- **wake.rs** (100) — Wake word ("Hey Neural") with a small streaming keyword spotter (zipformer, ~3 MB). · `const HEY_NEURAL, struct WakeConfig, impl Default for WakeConfig, struct Wake, learn()`
+- **wake.rs** (250) — Wake word ("Hey Neural") with a small streaming keyword spotter (zipformer, ~3 MB). · `const HEY_NEURAL, struct WakeConfig, impl Default for WakeConfig, struct Wake, learn(), loose_match()`
 
 ## deploy/relay/
 - **geoip.sh** (20) — Monthly: fetch the free DB-IP "IP to Country Lite" table (CC BY 4.0, https://db-ip.com) into the
@@ -329,7 +330,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 
 ## packages/app/src/
 - **App.tsx** (447) — `App()`
-- **hud.ts** (5) — Entry for the desktop listening pill (apps/desktop/src/hud.tsx): only what the pill needs, so its · `VoiceHud`
+- **hud.ts** (6) — Entry for the desktop listening pill (apps/desktop/src/hud.tsx): only what the pill needs, so its · `VoiceHud`
 - **index.ts** (14) — `App, DaemonProvider, useClient, useDaemon, usePlatform, useUi, VoiceHud, HostUpdateWatcher, bindCallAudio, storedZoom, launch, useLaunch, GRACE_MS, LaunchNote` +2
 
 ## packages/app/src/components/
@@ -347,9 +348,9 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **FolderBrowser.tsx** (215) — `pickHostFolder(), FolderBrowserSheet()`
 - **Glow.tsx** (33) — Colour pairs for a page's light: [left, right, centre] as colour tokens. · `Glow()`
 - **HistoryPage.tsx** (140) — The workspace whose folder holds `cwd` (the deepest one). · `HistoryPage()`
-- **HostSettings.tsx** (399) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings(), WorkspaceDetail()`
+- **HostSettings.tsx** (433) — `HostVoiceSettings(), HostUpdates(), WorkspaceSettings(), WorkspaceDetail()`
 - **HostWatcher.tsx** (68) — `HostUpdateWatcher()`
-- **KeyBar.tsx** (268) — Phones: one compact row of the keys a phone keyboard lacks, right above the keyboard · `KeyBar()`
+- **KeyBar.tsx** (262) — Phones: one compact row of the keys a phone keyboard lacks, right above the keyboard · `KeyBar()`
 - **LaunchScreen.tsx** (70) — The app's side of the launch screen (lib/launch.ts): it lifts the moment the daemon state is · `LaunchScreen(), LaunchNote()`
 - **McpPage.tsx** (265) — `McpPanel(), mcpDetail()`
 - **NeuralPage.tsx** (538) — `NeuralPage(), useOpenSession`
@@ -361,12 +362,12 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **SettingsPage.tsx** (443) — Settings. Phones: the computer on top, then a grouped list with quiet icon tiles; each row is a · `SettingsPage(), PhoneSettingsRoot(), PhoneSettingsSection()`
 - **SwarmPage.tsx** (103) — Swarms: teams of agents on one goal that hand work to each other, and their conversation. · `SwarmPage()`
 - **TerminalText.tsx** (66) — The terminal's text as plain, selectable text: phones cannot select in xterm's canvas, so this · `showTerminalText, onShowTerminalText(), TerminalTextSheet()`
-- **TerminalView.tsx** (441) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
+- **TerminalView.tsx** (471) — One xterm.js view of a daemon session. The daemon holds the real terminal; this view attaches · `isAppShortcut(), TerminalView()`
 - **UpdateBadge.tsx** (124) — The running version and the Update button. Desktop: above the account block at the sidebar's · `UpdateBadge()`
 - **UpdateDialog.tsx** (120) — "NeuralAgent X is available": what changed since this version and Install now / Later (desktop), · `UpdateDialog()`
 - **UpdateSettings.tsx** (122) — Settings → Updates. Desktop: app and background-service versions, the service switch after an · `LocalUpdates(), WebVersion()`
 - **UsagePage.tsx** (260) — `UsagePage()`
-- **VoiceHud.tsx** (92) — `type VoiceLevelSource, VoiceHud()`
+- **VoiceHud.tsx** (108) — `type VoiceLevelSource, VoiceHud()`
 - **WorkspaceView.tsx** (321) — WebGL contexts are limited per page; above this many visible panes we fall back to the DOM renderer. · `interface PaneRef, WorkspaceView()`
 - **ZoomControl.tsx** (126) — Desktop interface size: applies the chosen size to the window's web view and handles the zoom · `ZoomControl()`
 
@@ -375,7 +376,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **ChatScroll.tsx** (84) — The scrolling transcript of a conversation (main or subagent): `useStickToBottom` wired to the · `interface ChatScrollHandle, interface ChatScrollProps, ChatScroll`
 - **ClaudeView.tsx** (255) — The Claude Code UI over the real CLI, dressed like Anthropic's own apps: the conversation is · `ClaudeView(), splitActivity()`
 - **CommandPalette.tsx** (175) — Every Claude Code command in one place: built-ins grouped the way people think about them, · `interface CommandPaletteProps, CommandPalette()`
-- **Composer.tsx** (922) — The input at the bottom, shaped like Claude's. Resting: one 48px pill (attach "+", the text, · `interface ComposerProps, Composer()`
+- **Composer.tsx** (915) — The input at the bottom, shaped like Claude's. Resting: one 48px pill (attach "+", the text, · `interface ComposerProps, Composer()`
 - **ContextSheet.tsx** (102) — How full the context is and what the session cost so far. The ring sits in the composer; · `ContextRing(), ContextSheet()`
 - **DockCard.tsx** (151) — The frame of a card docked where the composer sits (permission, plan, question, menu): · `DockCard(), Btn(), AnswerField()`
 - **Images.tsx** (480) — Pictures in the conversation, like Claude Code desktop shows them: a rounded thumbnail under · `ImageSidContext, ImageAgentContext, interface Pic, GalleryContext, Thumb(), NoImage(), Pictures, Viewer()`
@@ -397,7 +398,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **actions.ts** (196) — Things the Claude view does to the CLI by typing keys into its terminal: answer menus, · `interface Keys, serverActions, act(), sendPrompt, runKeys(), interrupt, shellSteps(), memoryPrompt, inputMode(), type Armed, typedMode(), resolveInput(), cycleMode(), isRewindable()` +10
 - **commands.ts** (379) — The command palette's catalogue: every Claude Code slash command (CLI 2.1.316, see · `type CommandKind, interface Command, GROUPS, CATALOGUE, catalogued, mergeCommands(), scoreCommand(), searchCommands(), interface Section, paletteSections(), commandLine(), opensDialog(), pushRecent(), loadRecent()` +1
 - **entries.ts** (293) — Messages → what the transcript shows (A3 §2.4, pure; tested in `lib/cvEntries.test.ts`). · `type Step, type Piece, interface Turn, type Entry, interface EntryCache, entryCache, textOf, toEntries(), openTools(), pendingUse(), lastTurn(), latestTodo(), interface GalleryItem, gallery()` +1
-- **files.ts** (122) — Getting images from paste, drop, camera and clipboard buttons to the host's upload folder. · `MAX_SEND, typeOf, isImage, filesOf(), readClipboardFiles(), shrink(), uploadFile(), pathToken`
+- **files.ts** (141) — Getting images from paste, drop, camera and clipboard buttons to the host's upload folder. · `MAX_SEND, typeOf, isImage, filesOf(), pastedImages(), readClipboardFiles(), shrink(), uploadFile(), pathToken`
 - **metaInfo.ts** (78) — Readers for `CvMeta`, including the fields the daemon adds from the statusline payload · `type MetaX, guessWindow, interface ContextInfo, contextOf(), shortTokens(), money(), span(), tasksRunning, fastOf, queuedOf`
 - **models.ts** (74) — Claude Code's model aliases (what `/model <alias>` takes), effort levels and permission modes, with Claude's … · `MODELS, modelName(), modelAlias(), EFFORTS, DEFAULT_EFFORT, EFFORT_NOTE, effortName, interface Mode, MODES, modeOf, TERMINAL_COMMANDS, contextLimit`
 - **promptState.ts** (243) — What kind of menu the CLI shows (permission, plan approval, question, confirm, other menu) · `type PromptKind, interface PendingUse, type PromptX, isPlanPrompt(), isQuestionPrompt(), isReviewPrompt(), promptKind(), interface QOption, interface Question, questionsOf(), checkState(), interface ScreenOption, screenOptions(), currentQuestion()` +15
@@ -444,6 +445,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 
 ## packages/app/src/components/settings/
 - **AgentsPanel.tsx** (161) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
+- **DictationHistory.tsx** (106) — The last dictations of the host (D85): a text is never lost when the app it was typed into · `DictationHistory()`
 - **DiscordPanel.tsx** (202) — Settings → Discord (D72): a privacy preset, what each part of the card shows, and a live preview · `DiscordPanel(), ProfileCard()`
 - **PrivacyPanel.tsx** (161) — Settings → Privacy and support (docs/notes/insights.md): the anonymous usage ping (on unless · `privacySummary(), PrivacyPanel(), PrivacyIcon`
 - **SystemPanel.tsx** (491) — Settings → System (D58-D60): the computer's permissions, how the background service starts, and · `toSetUp, systemSummary(), SystemPanel()`
@@ -473,9 +475,9 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **agentui.test.ts** (24)
 - **agentui.ts** (98) — Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **alerts.ts** (79) — How this device tells you that an agent finished, needs your input or stopped with an error: · `type AlertMode, type AlertKind, useAlerts, setAlertMode(), wantsSound, wantsNotify, ALERT_TEXT, chime()`
-- **call.ts** (444) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, startCall(), endCall(), muteCall(), holdCall(), resumeCall(), interruptCall(), useCallWarm(), playPreview()`
-- **callState.test.ts** (38)
-- **callState.ts** (75) — Pure rules of a call with Neural (no DOM; tested in `callState.test.ts`): what the call screen · `ANSWER_TIMEOUT_MS, READY_TIMEOUT_MS, OFFLINE_TIMEOUT_MS, AUDIO_START_MS, type CallNotice, type CallHold, callSubtitle(), runningTime(), micErrorText(), noAnswerText(), SLOW_START_TEXT`
+- **call.ts** (531) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, interface CallStart, startCall(), endCall(), muteCall(), holdCall(), resumeCall(), interruptCall(), useCallWarm(), playPreview()`
+- **callState.test.ts** (44)
+- **callState.ts** (80) — Pure rules of a call with Neural (no DOM; tested in `callState.test.ts`): what the call screen · `ANSWER_TIMEOUT_MS, READY_TIMEOUT_MS, OFFLINE_TIMEOUT_MS, AUDIO_START_MS, WAKE_IDLE_MS, wakeIdle, type CallNotice, type CallHold, callSubtitle(), runningTime(), micErrorText(), noAnswerText(), SLOW_START_TEXT`
 - **callaudio.ts** (97) — Where a call with Neural is heard: at the ear (quiet, default) or on the loudspeaker. · `type CallRoute, interface CallAudioApi, useCallRoute, bindCallAudio(), setCallRoute(), useBindCallAudio(), useCanPickRoute(), probeWebOutputs(), applyWebRoute()`
 - **changelog.test.ts** (33)
 - **changelog.ts** (75) — Release notes for the update dialog and Settings → Updates. The data is CHANGELOG.md parsed by · `compareVersions(), notesBetween(), notesFromMarkdown(), type InlinePart, inlineParts()`
@@ -485,11 +487,13 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **cvImages.test.ts** (51)
 - **cvImages.ts** (98) — Images in the Claude view (a `Read` of a picture, pasted images, MCP screenshots). The daemon · `REMOTE_EDGE, edgeFor, interface Loaded, b64ToBlob(), fromData, class ImageCache, fitBox(), sourceOf(), withoutSources, saveName(), kb`
 - **cvWork.test.ts** (91) — Background work of a Claude conversation: status, ids, summary, fade, tree (components/claude/work.ts).
+- **dictations.test.ts** (24)
+- **dictations.ts** (14) — Formatting for the kept dictations (D85, `components/settings/DictationHistory.tsx`). · `dictationTime(), wordCount`
 - **discord.test.ts** (38)
 - **discord.ts** (90) — Settings → Discord (D72): the privacy presets, the stats each part of the card can show, and how · `PRESETS, STATS, statLabel, DEFAULT_OPTIONS, presetOptions(), currentOptions(), customize(), presenceLabel, elapsed(), partyText`
 - **files.test.ts** (115)
 - **format.ts** (26) — 1234 -> "1.2k", 1_200_000 -> "1.2M". · `compact(), totalTokens, money(), duration()`
-- **host.ts** (138) — The host computer as seen from any client (D42). Voice models and update checks are daemon · `onHostNotice(), useHostModels(), interface HostVoice, useHostVoice(), interface HostUpdateView, useHostUpdate, checkHostUpdate(), installHostUpdate(), watchHostUpdate()`
+- **host.ts** (141) — The host computer as seen from any client (D42). Voice models and update checks are daemon · `onHostNotice(), useHostModels(), interface HostVoice, useHostVoice(), interface HostUpdateView, useHostUpdate, checkHostUpdate(), installHostUpdate(), watchHostUpdate()`
 - **inbox.test.ts** (71)
 - **inbox.ts** (69) — The phone's Agents inbox: every agent across all projects, sorted by what it needs from you. · `type InboxItem, interface Inbox, isAgent(), sectionOf(), buildInbox()`
 - **launch.ts** (128) — The launch screen: one element (#na-launch, lib/launchFrame.ts) that is on screen from the first · `type LaunchPhase, MIN_MS, GRACE_MS, launch, useLaunch()`
@@ -504,7 +508,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **osc52.ts** (34) — OSC 52: a program in the terminal puts text on the clipboard (`ESC ] 52 ; c ; <base64> BEL`). · `OSC52_MAX, parseOsc52()`
 - **phoneRoute.test.ts** (330) — A browser history in memory: pushState/replaceState are instant, go/back land later (as in browsers).
 - **phoneRoute.ts** (517) — Phone navigation: four tabs (Agents, Neural, Projects, Settings), a stack of pages per tab, all · `type Tab, TABS, HOME, type Route, interface Nav, routeKey(), navKey, sameNav, hashOf(), parseHash(), entriesOf(), validNav(), interface PhoneNavState, usePhoneNav` +5
-- **platform.ts** (191) — Push on this device: "install" means iPhone/iPad must add the page to the Home Screen first. · `type PushState, interface Platform, type PermissionState, interface SystemPermission, type ServiceStart, interface SystemAutostart, interface SystemStatus, interface SystemApi, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi, interface WebUpdateApi`
+- **platform.ts** (200) — What the desktop's listening pill shows during a "Hey Neural" call. · `type HudCallState, type PushState, interface Platform, type PermissionState, interface SystemPermission, type ServiceStart, interface SystemAutostart, interface SystemStatus, interface SystemApi, interface UpdateInfo, interface UpdateApi, interface ChangelogEntry, interface ServiceSwitch, interface ServiceSwitchApi` +1
 - **profiles.test.ts** (9)
 - **profiles.ts** (37) — What can start right now: the terminal, custom profiles, and built-in agents whose CLI is installed. · `launchable(), splitArgs(), joinArgs()`
 - **settingsRoute.test.ts** (25)
@@ -524,7 +528,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **updateNotice.ts** (16) — "A new version is available" comes from three checks (this app or web build, the Android APK, · `updateNotice()`
 - **updates.ts** (240) — Update state for the version label / Update button (UpdateBadge), the update dialog (UpdateDialog) · `FIRST_CHECK_MS, EVERY_MS, FOCUS_GAP_MS, interface Offer, interface UpdateState, useUpdates(), checkNow(), openUpdateDialog(), closeUpdateDialog(), applyUpdate(), loadChangelog(), notesFor(), useUpdateWatch()`
 - **usageNotice.ts** (42) — The one-time notice that NeuralAgent shares anonymous usage statistics (docs/notes/insights.md). · `useUsageNotice()`
-- **voice.ts** (66) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, interface DuckApp, DUCK_LEVELS, type VoiceActivity, interface VoiceModel, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
+- **voice.ts** (82) — Desktop voice (dictation, wake word); mirrors `apps/desktop/src-tauri/src/voice.rs`. · `interface VoiceConfig, interface DuckApp, DUCK_LEVELS, type VoiceActivity, interface VoiceModel, interface Dictation, interface VoiceStatus, interface VoiceApi, HOTKEYS, megabytes`
 - **voiceMeter.test.ts** (30)
 - **voiceMeter.ts** (37) — Motion for the voice pill's level bars: the daemon-side mic sends a 0..1 loudness ~25 times a · `METER_REST, METER_STALE_MS, approach(), barProfile(), listeningHeight(), writingHeight()`
 - **worktree.ts** (9) — Extra `session_start` fields: agents (not shells) in a git workspace get their own worktree when that is swit… · `useWorktreeStart()`
@@ -555,7 +559,7 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **AgentTrace.tsx** (197) — What the assistant is doing, above its answer — tools and thinking in one · `type StepState, interface TraceStep, traceLabel(), AgentTrace(), StatusLine()`
 - **AssistantOrb.tsx** (24) — Luna's presence in chat: the voice orb, driven by assistant state. · `AssistantOrb()`
 - **ChangePill.tsx** (39) — What an answer changed, as small pills under it ("Moved Gym to 18:00", · `interface Change, ChangePills()`
-- **Composer.tsx** (342) — The assistant's input: a slim glass pill (44px on phones, 40 on desktop) · `type Attachment, interface ComposerHandle, interface ComposerProps, Composer(), SendButton(), ComposerDock()`
+- **Composer.tsx** (344) — The assistant's input: a slim glass pill (44px on phones, 40 on desktop) · `type Attachment, interface ComposerHandle, interface ComposerProps, Composer(), SendButton(), ComposerDock()`
 - **ConfirmCard.tsx** (60) — Approval before an external or irreversible action (send a mail, pay, · `type Decision, ConfirmCard()`
 - **DiffCard.tsx** (100) — What a change did, line by line. Inline (one column, red out / green in) · `type DiffLine, diffLines(), DiffCard()`
 - **EmptyChatHero.tsx** (47) — The first screen of a chat: the mark (or a small orb), a greeting that · `EmptyChatHero()`
@@ -611,11 +615,11 @@ Generated, not listed: `packages/protocol/src/gen/` (118 files, from `crates/na-
 - **Odometer.tsx** (49) — Odometer: every digit is a reel 0–9 that rolls to its place on a spring · `Odometer(), NumberTicker`
 - **ParticleOrb.tsx** (304) — A particle sphere — presence for an assistant. It breathes when idle, bands · `type OrbMood, interface ParticleOrbProps, ParticleOrb()`
 - **RevealText.tsx** (51) — Lines that rise out of a mask, as if set: for page titles and the one · `RevealText()`
-- **Shimmer.tsx** (18) — "Working…" label with a light sweeping across it, compositor only (see · `Shimmer()`
+- **Shimmer.tsx** (17) — "Working…" label with a light sweeping across it (see `.shimmer` in · `Shimmer()`
 - **Spotlight.tsx** (40) — Spotlight card: a soft accent light follows the pointer across the surface · `Spotlight()`
 - **TaskCheck.tsx** (46) — Task check: done in three precise steps, 520 ms in all — the circle fills · `TaskCheck()`
 - **TextScramble.tsx** (35) — Decode: characters cycle through glyphs and settle left to right into the · `TextScramble()`
-- **VoiceOrb.tsx** (63) — Voice orb: a small glass sphere with light swirling inside. Small, it is a · `interface VoiceOrbProps, VoiceOrb()`
+- **VoiceOrb.tsx** (74) — Voice orb: a small glass sphere with light swirling inside. Small, it is a · `interface VoiceOrbProps, VoiceOrb()`
 - **index.ts** (17)
 
 ## packages/ui/ui/components/layout/

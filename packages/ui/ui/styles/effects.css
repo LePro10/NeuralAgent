@@ -85,6 +85,11 @@
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
   }
+  /* Glass with a rim draws one edge, not two: the border stays (it keeps the box size) but turns
+     clear, and the rim is the line. Border + rim + a top inset highlight read as a double frame with
+     mismatched corners, very visible at 1px hairlines (Windows, DPR 1). Light keeps its dark
+     border: there the white rim alone is no edge, and the pair reads as one edge with a gloss. */
+  :root:not([data-appearance="light"]) .glass.rim { border-color: transparent; box-shadow: var(--shadow-float); }
   /* Blocked / not allowed: hatched in a status colour (default danger). */
   .hatched {
     --hatch: var(--color-danger);
@@ -207,19 +212,16 @@
   .fade-x { -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
 
   /* ── Text motion ────────────────────────────────────────────────────── */
-  /* "Working…" shimmer: band and text move in opposite directions, so the text stays put.
-     Markup: <Shimmer> (ui/components/effects/Shimmer.tsx). */
-  .shimmer { position: relative; display: inline-block; max-width: 100%; vertical-align: bottom; color: var(--color-dim); }
-  .shimmer-band {
-    position: absolute; inset: 0; pointer-events: none;
-    -webkit-mask-image: linear-gradient(90deg, transparent 6%, #000 50%, transparent 94%);
-    mask-image: linear-gradient(90deg, transparent 6%, #000 50%, transparent 94%);
-    animation: shimmer-band var(--shimmer-speed, 1.5s) linear infinite;
-  }
-  .shimmer-band > span {
-    position: absolute; inset: 0; color: var(--shimmer-color, var(--color-bright));
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    animation: shimmer-text var(--shimmer-speed, 1.5s) linear infinite;
+  /* "Working…" shimmer: a light runs through the letters while the text itself never moves.
+     One element, the gradient is clipped to the glyphs and only its position animates. (An
+     earlier version moved a band one way and a copy of the text the other way: the copy snapped
+     to whole pixels on its own and the label shook.) Repainting one short label is cheap, the
+     one exception to "transform and opacity only". Markup: <Shimmer> (ui/components/effects/Shimmer.tsx). */
+  .shimmer {
+    display: inline-block; max-width: 100%; vertical-align: bottom; color: transparent;
+    background: linear-gradient(90deg, var(--color-dim) 35%, var(--shimmer-color, var(--color-bright)) 50%, var(--color-dim) 65%) 0 0 / 250% 100% no-repeat;
+    -webkit-background-clip: text; background-clip: text;
+    animation: shimmer var(--shimmer-speed, 1.5s) linear infinite;
   }
   /* Streamed words arrive by colour, not blur (a blur makes every word its own layer). */
   .word-in { animation: word-in .45s var(--ease-out-soft) both; }
@@ -266,7 +268,8 @@
     background: conic-gradient(from 20deg, transparent 0 12%, var(--orb-swirl-a) 26%, transparent 42% 55%, var(--orb-swirl-b) 70%, transparent 86%);
     opacity: .9;
   }
-  .voice-orb.is-busy .voice-orb-swirl { animation-duration: 1.6s; }
+  /* Busy swirls faster: VoiceOrb.tsx changes the playback rate, so the swirl speeds up from
+     where it is (a new animation-duration would jump to another angle). */
   .voice-orb-blob { inset: 22% 18% 10% 22%; animation: orb-drift 5.5s ease-in-out infinite; }
   .voice-orb-blob > i { background: radial-gradient(circle, var(--orb-blob), transparent 68%); }
   .voice-orb-shine { inset: 0; background: radial-gradient(60% 40% at 38% 18%, rgb(255 255 255 / .38), transparent 70%); }
@@ -337,8 +340,7 @@
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes shimmer-band { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-@keyframes shimmer-text { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @keyframes word-in { from { color: transparent; } }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
@@ -346,7 +348,7 @@
 @keyframes ping { 0% { transform: scale(1); opacity: .7; } 80%, 100% { transform: scale(2.8); opacity: 0; } }
 @keyframes skeleton-sweep { to { transform: translateX(100%); } }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
-@keyframes orb-drift { 0%, 100% { transform: translate(-10%, 8%) scale(1); } 50% { transform: translate(12%, -10%) scale(1.2); } }
+@keyframes orb-drift { 0%, 100% { transform: translate(-7%, 5%) scale(1); } 50% { transform: translate(8%, -7%) scale(1.1); } }
 @keyframes lb-spin { to { transform: rotate(360deg); } }
 @keyframes lb-breathe { from { opacity: .35; } to { opacity: .9; } }
 @keyframes pulse-soft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
@@ -354,6 +356,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .light-border-ring > i, .light-border-glow, .voice-orb > i, .ping::after, .skeleton::after { animation: none; }
+  .shimmer { animation: none; background: none; color: var(--color-dim); }
   .activity-ring > i, .activity-pulse::after { animation: none; }
   .activity-ring > i { opacity: 0; }
   .activity-ring { background: color-mix(in srgb, var(--color-accent) 75%, transparent); }

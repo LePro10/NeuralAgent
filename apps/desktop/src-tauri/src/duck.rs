@@ -583,9 +583,12 @@ pub fn configure(app: &AppHandle, on: bool, level: u8) {
     }
 }
 
-/// A call runs in this app's window (the UI reports it).
+/// A call runs in this app's window (the UI reports it). The wake word rests meanwhile.
 #[tauri::command]
 pub fn duck_call(app: AppHandle, on: bool) {
+    if let Some(v) = app.try_state::<std::sync::Arc<crate::voice::Voice>>() {
+        v.call_active(on);
+    }
     if let Some(d) = app.try_state::<Ducking>() {
         d.send(Msg::Reason(Reason::Call, on));
     }

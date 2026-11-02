@@ -1,6 +1,7 @@
 //! A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user
 //! sees that the computer is listening even when NeuralAgent is in the background. It never takes
-//! focus: the text has to land in the app the user is typing in.
+//! focus: the text has to land in the app the user is typing in. During a "Hey Neural" call it
+//! shows what Neural does and a hang-up button (`hud_call`, D86).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -54,6 +55,16 @@ pub fn update(app: &AppHandle, activity: Activity) {
         let _ = window.set_position(LogicalPosition::new(pos.x + (size.width - WIDTH) / 2.0, pos.y + size.height - HEIGHT - 72.0));
     }
     let _ = window.show();
+}
+
+/// The call the pill shows during a "Hey Neural" call ("connecting", "listening", "thinking",
+/// "speaking"; `None` when it ended), reported by the main window. During a call the pill takes
+/// clicks (its hang-up button); otherwise clicks go through it.
+#[tauri::command]
+pub fn hud_call(app: AppHandle, state: Option<String>) {
+    let Some(window) = app.get_webview_window(LABEL) else { return };
+    let _ = window.set_ignore_cursor_events(state.is_none());
+    let _ = app.emit_to(LABEL, "hud-call", state);
 }
 
 /// Sends the microphone level (0..1, `voice-level`) to the pill every [`LEVEL_EVERY`] while the

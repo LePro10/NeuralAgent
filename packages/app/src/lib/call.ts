@@ -9,6 +9,10 @@
  * "Connecting…" until the microphone is open *and* the computer listens. A dropped connection
  * shows "Reconnecting…" and the call resumes by itself (the client re-sends `call_start`); a call
  * the computer never answers, or a lost microphone, ends with a reason instead of hanging.
+ *
+ * "Hey Neural" on the desktop starts the same call (`wake`): what was said with the wake word
+ * goes to the computer first (`preroll`), and the call hangs up by itself once nobody has
+ * spoken for `WAKE_IDLE_MS` after the last answer.
  */
 import type { CallEvent, CallState, DaemonClient } from "@neuralagent/protocol";
 import type { VoiceState } from "@neuralagent/ui";
@@ -26,6 +30,8 @@ import {
   OFFLINE_TIMEOUT_MS,
   READY_TIMEOUT_MS,
   SLOW_START_TEXT,
+  WAKE_IDLE_MS,
+  wakeIdle,
 } from "./callState";
 
 interface CallView {
@@ -33,6 +39,8 @@ interface CallView {
   on: boolean;
   /** The microphone is open. */
   live: boolean;
+  /** Started by "Hey Neural" (the desktop's listening pill shows it). */
+  wake?: boolean;
   /** The computer has taken the call and listens (its speech models are loaded). */
   ready: boolean;
   state: VoiceState;
@@ -62,10 +70,17 @@ const isNativeAndroid = () => !!(globalThis as { Capacitor?: { getPlatform?: () 
 
 let current: Session | null = null;
 
-export async function startCall(client: DaemonClient) {
+export interface CallStart {
+  /** Started by "Hey Neural": hangs up by itself when the conversation is over. */
+  wake?: boolean;
+  /** Audio said before the call's microphone opened (16 kHz PCM16, base64), sent first. */
+  preroll?: () => Promise<string | null>;
+}
+
+export async function startCall(client: DaemonClient, start: CallStart = {}) {
   if (current) return;
-  useCall.setState({ ...IDLE, on: true });
-  const s = new Session(client);
+  useCall.setState({ ...IDLE, on: true, wake: !!start.wake });
+  const s = new Session(client, start);
   current = s;
   try {
     await s.open();
@@ -169,8 +184,16 @@ class Session {
   /** Start timeline for the console (ms after the tap): where a slow start spent its time. */
   private t0 = performance.now();
   private marks: string[] = [];
+  /** Microphone frames held back until the preroll went out (wake word calls). */
+  private pending: string[] | null = null;
+  /** Wake word calls: the last time someone spoke or Neural was busy, and the check for it. */
+  private lastActive = performance.now();
+  private idleCheck: ReturnType<typeof setInterval> | null = null;
 
-  constructor(readonly client: DaemonClient) {}
+  constructor(
+    readonly client: DaemonClient,
+    private readonly start: CallStart = {},
+  ) {}
 
   private mark(what: string) {
     this.marks.push(`${what} ${Math.round(performance.now() - this.t0)}`);
@@ -203,10 +226,16 @@ class Session {
     this.mark("worklet");
     if (this.closed) return;
     const node = new AudioWorkletNode(ctx, "neural-mic");
+    if (this.start.preroll) this.pending = [];
     node.port.onmessage = (e: MessageEvent<{ pcm: ArrayBuffer; level: number }>) => {
       const quiet = this.muted || this.held;
-      callLevel.set(quiet ? 0 : Math.min(1, e.data.level * 4));
-      if (!quiet) this.client.callAudio(b64(e.data.pcm));
+      const level = quiet ? 0 : Math.min(1, e.data.level * 4);
+      callLevel.set(level);
+      if (level > 0.15) this.lastActive = performance.now();
+      if (quiet) return;
+      const frame = b64(e.data.pcm);
+      if (this.pending) this.pending.push(frame);
+      else this.client.callAudio(frame);
     };
     this.node = node;
     // A silent path to the output keeps the worklet pulled in every engine.
@@ -214,12 +243,47 @@ class Session {
     sink.gain.value = 0;
     node.connect(sink).connect(ctx.destination);
     this.attach(stream);
+    if (this.start.preroll) await this.sendPreroll(this.start.preroll);
+    if (this.start.wake) {
+      // "I'm listening": after the preroll, so the desktop's recording does not carry it.
+      chime(ctx, "open");
+      this.idleCheck = setInterval(() => this.idle(), 1000);
+    }
     // `resume()` can wait forever where audio needs a tap: go on, and ask for one if needed.
     await Promise.race([resumed, new Promise((r) => setTimeout(r, AUDIO_START_MS))]);
     this.mark(`audio ${ctx.state}`);
     if (this.closed) return;
     this.audioState();
     useCall.setState({ live: true });
+  }
+
+  /**
+   * What was said since just before "Hey Neural" (the desktop kept it), then the frames the
+   * microphone gave meanwhile. The first of those overlaps the end of the preroll: dropped.
+   */
+  private async sendPreroll(take: () => Promise<string | null>) {
+    const pre = await take().catch(() => null);
+    this.mark("preroll");
+    if (this.closed) return;
+    if (pre) this.client.callAudio(pre);
+    const held = this.pending ?? [];
+    this.pending = null;
+    for (const f of held.slice(pre ? 1 : 0)) this.client.callAudio(f);
+  }
+
+  /** A wake word call is over: nobody spoke for a while, and Neural is neither busy nor talking. */
+  private idle() {
+    const { state, ready } = useCall.getState();
+    const playing = !!this.ctx && this.playhead > this.ctx.currentTime;
+    if (state !== "listening" || playing || !ready) this.lastActive = performance.now();
+    if (current === this && wakeIdle(performance.now() - this.lastActive)) {
+      console.info(`call: no one spoke for ${WAKE_IDLE_MS / 1000} s, hanging up (wake word call)`);
+      if (this.idleCheck) clearInterval(this.idleCheck);
+      this.idleCheck = null;
+      // A falling cue, so nobody keeps talking into a closed line; then hang up.
+      if (this.ctx) chime(this.ctx, "close");
+      setTimeout(() => current === this && endCall(), 450);
+    }
   }
 
   /** No word from the computer in time: hang up; it took the call but does not listen yet: wait a bit longer. */
@@ -298,6 +362,7 @@ class Session {
     this.offConn?.();
     if (this.offline) clearTimeout(this.offline);
     if (this.noAnswer) clearTimeout(this.noAnswer);
+    if (this.idleCheck) clearInterval(this.idleCheck);
     if (this.resumeOnTap) removeEventListener("pointerdown", this.resumeOnTap, true);
     this.client.callEnd();
     this.flush();
@@ -411,6 +476,28 @@ function setAudioSession(type: "play-and-record" | "auto") {
   } catch {
     /* not settable here */
   }
+}
+
+/**
+ * A soft two-note cue on the call's own output (so it follows earpiece/speaker): rising when a
+ * "Hey Neural" call listens, falling when it hangs up by itself. Quiet sine tones, ~0.3 s.
+ */
+function chime(ctx: AudioContext, kind: "open" | "close") {
+  const start = ctx.currentTime + 0.01;
+  const notes = kind === "open" ? [659.3, 880] : [659.3, 493.9];
+  notes.forEach((freq, i) => {
+    const at = start + i * 0.09;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(0.06, at + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + 0.25);
+  });
 }
 
 /** Plays a voice preview (PCM16 base64). */

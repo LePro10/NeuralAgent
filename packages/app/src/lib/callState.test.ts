@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { callSubtitle, micErrorText, noAnswerText, runningTime } from "./callState.ts";
+import { callSubtitle, micErrorText, noAnswerText, runningTime, WAKE_IDLE_MS, wakeIdle } from "./callState.ts";
 
 test("connecting until the microphone is open and the computer listens", () => {
   assert.equal(callSubtitle({ live: true, ready: false, notice: undefined, seconds: 0 }), "Connecting…");
@@ -34,4 +34,10 @@ test("microphone failures in plain words", () => {
   assert.match(micErrorText({ name: "WorkletError" }), /Reload/);
   assert.equal(micErrorText({ name: "Error", message: "boom" }), "The call could not start: boom");
   assert.match(noAnswerText(false), /Can't reach/);
+});
+
+test("a wake word call hangs up only after a long quiet", () => {
+  assert.equal(wakeIdle(5_000), false, "a breath or a pause to think");
+  assert.equal(wakeIdle(WAKE_IDLE_MS - 1), false);
+  assert.equal(wakeIdle(WAKE_IDLE_MS), true);
 });
