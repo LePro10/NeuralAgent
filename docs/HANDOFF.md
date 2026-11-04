@@ -18,7 +18,16 @@ click, guided learn, loose path on a real voice, the dictation history with real
 Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
 (a long paste was lost on reload, which motivated D85).
 
-## Autopilot built, relay + website deployed, not committed (2026-11-03)
+## Released 0.5.3 (2026-11-04)
+Tag `v0.5.3` = `main` `9b5308b` (Autopilot D87-D89/D91, SSH workspaces D90, Teams removed). CI
+release run 41792783678 green; `/api/releases/latest` serves 0.5.3. `mobile-overhaul` was
+fast-forwarded into `main` and deleted: **work on `main` from now on.**
+**Pending:** `.github/workflows/ci.yml` drops the removed "Swarm end-to-end test" step; it is
+uncommitted because the gh token lacks the `workflow` scope (run `gh auth refresh -h github.com -s
+workflow` on a machine with a browser, then commit + push it). Until then the CI job fails at that
+step (the release workflow is independent).
+
+## Autopilot built, relay + website deployed (2026-11-03)
 **Deployed 2026-11-03** (with the SSH workspaces of the other session): relay build
 `0.5.2+mw17iga8`, rollback image `neuralagent-relay:prev` = `0.5.2+mvzkram1`. Health, `/app/`,
 `/admin/`, changelog checked; `/api/me/reports`, `/api/admin/keys` answer 401 without auth.
