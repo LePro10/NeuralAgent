@@ -87,9 +87,11 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
     installed.map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     if macos::relaunch().is_ok() {
+        crate::daemon::keep_service_on_exit(); // agents keep running across the update
         app.exit(0);
         return Ok(());
     }
+    crate::daemon::keep_service_on_exit();
     app.restart();
 }
 

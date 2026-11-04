@@ -15,7 +15,8 @@
 //!
 //! One host per data dir (`host.lock`). Files it shares with the daemon (crates/na-daemon/src/
 //! service.rs) and the app: `host.json` (about the host), `host.restart`, `host.handover`,
-//! `host.stop` (the app stopped the service on purpose: wait until it wants it again).
+//! `host.stop` (the app stopped the service on purpose: the app's own host ends, a launchd/systemd
+//! host waits until the app wants it again, see `idles_on_stop`).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -262,11 +263,23 @@ fn next(restart: bool, handover: bool, stop: bool, code: Option<i32>, ran: Durat
     Next::Again(Duration::from_secs((1u64 << crashes.min(6)).min(60)))
 }
 
+/// Does a host stay (idle) after the app stopped the service on purpose? The app's own host ends
+/// with it: an idle host would keep the old app's executable running after Quit (and after an
+/// update, until it was killed by hand). A launchd/systemd host stays: with `KeepAlive` it would
+/// be started again at once, and a fresh host clears `host.stop`, so the service would come back.
+fn idles_on_stop(mode: Mode) -> bool {
+    mode != Mode::App
+}
+
 fn run(data: &Path, mode: Mode, host: &mut HostFile, lock: std::fs::File) -> i32 {
     let mut crashes = 0u32;
     let mut lock = Some(lock);
     loop {
         if data.join(STOP).exists() {
+            if !idles_on_stop(mode) {
+                log(data, "stopped on purpose: host ends");
+                return 0;
+            }
             std::thread::sleep(Duration::from_secs(1));
             continue;
         }
@@ -529,6 +542,27 @@ mod tests {
         assert_eq!(next(false, false, false, Some(101), s(5), 20), Next::Again(s(60)));
         // After a long run, a crash restarts at once.
         assert_eq!(next(false, false, false, Some(101), s(900), 5), Next::Again(s(1)));
+    }
+
+    #[test]
+    fn only_autostart_hosts_stay_after_a_stop() {
+        assert!(!idles_on_stop(Mode::App));
+        assert!(idles_on_stop(Mode::Login));
+        assert!(idles_on_stop(Mode::Boot));
+    }
+
+    /// "Quit and stop all agents" leaves `host.stop`: the app's host returns instead of idling.
+    #[test]
+    fn app_host_ends_on_stop() {
+        let dir = std::env::temp_dir().join(format!("na-host-stop-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(STOP), b"").unwrap();
+        let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(LOCK)).unwrap();
+        lock.lock().unwrap();
+        let mut host = HostFile { pid: 1, mode: "app".into(), started_at: 0, restarts: 0, app: None, version: "test".into() };
+        assert_eq!(run(&dir, Mode::App, &mut host, lock), 0);
+        assert!(!running(&dir), "the lock is released");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
