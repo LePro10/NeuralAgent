@@ -40,19 +40,19 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 
 ## apps/desktop/src-tauri/src/
 - **autostart.rs** (850) — Starting NeuralAgent without anyone at the computer (D60): Settings → System → "Start · `const LOGIN_LABEL, const BOOT_LABEL, const WINDOW_LABEL, enum ServiceStart, struct Autostart, enum Os, struct Ctx, enum Step, status(), plan(), refresh(), installable(), set(), login_host_installed()` +1
-- **daemon.rs** (228) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), restart_newest()`
+- **daemon.rs** (283) — Finds or starts `neuralagentd`. · `const APP_ID, const PROTOCOL, struct DaemonInfo, data_dir(), running_daemon(), ensure(), install_binary(), lean(), detach(), wait_gone(), stop(), keep_service_on_exit(), on_app_exit(), restart_newest()`
 - **dictations.rs** (140) — The last dictations, kept on this computer so a text is not lost when the app it was typed · `const KEEP, struct Dictation, struct Dictations`
 - **duck.rs** (987) — Lowers other audio while the user talks to the computer (D73, `docs/notes/ducking.md`): while · `const DEFAULT_LEVEL, enum Reason, enum Route, struct Target, trait Backend, impl Backend for Box, struct Duck, struct Ducking, voice(), configure(), duck_call(), struct DuckApp, duck_apps(), duck_allow_apps()`
 - **hud.rs** (87) — A small pill at the bottom of the screen while dictating or after "Hey Neural", so the user · `create(), update(), hud_call()`
-- **lib.rs** (277) — `run_service(), run()`
+- **lib.rs** (279) — `run_service(), run()`
 - **main.rs** (11) — Prevents an extra console window on Windows in release builds.
 - **mic.rs** (198) — Microphone capture: the default input device as 16 kHz mono f32 chunks. · `take_level(), meter(), struct Mic, probe(), impl Drop for Mic`
 - **models.rs** (3) — Voice models moved to `na_voice::download` so the daemon can manage them for remote clients.
 - **permissions.rs** (349) — Settings → System → Permissions (D58): what macOS lets NeuralAgent do, checked live without · `enum State, struct Permission, list(), pane(), request(), open(), repair(), lost_since_last_run()`
-- **service.rs** (547) — `neuralagent --service [--mode app|login|boot]`: the host that keeps `neuralagentd` running · `const LOCK, const STOP, const RESTART, const HANDOVER, enum Mode, parse_mode(), installed_app(), running(), active_mode(), app_program(), start_from_app(), main()`
+- **service.rs** (581) — `neuralagent --service [--mode app|login|boot]`: the host that keeps `neuralagentd` running · `const LOCK, const STOP, const RESTART, const HANDOVER, enum Mode, parse_mode(), installed_app(), running(), active_mode(), app_program(), start_from_app(), main()`
 - **system.rs** (89) — Tauri commands for Settings → System (permissions, autostart) and the check after start that · `struct SystemStatus, system_status(), system_request(), system_open(), system_repair(), system_autostart(), self_check()`
-- **tray.rs** (139) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
-- **update.rs** (203) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
+- **tray.rs** (143) — Menu bar / tray icon: shows how many agents need you, opens the window, and quits either just · `create(), update(), show_main()`
+- **update.rs** (205) — App updates from agent.neuralhub.dev (Tauri updater, signed with the release key). Installing · `struct UpdateInfo, update_server(), update_check(), update_install()`
 - **voice.rs** (551) — Voice on the desktop: hold a hotkey to dictate into any app, and the "Hey Neural" wake word. · `struct VoiceConfig, impl Default for VoiceConfig, enum Activity, struct VoiceStatus, struct Voice, impl Drop for WakeLoop, on_shortcut()`
 
 ## apps/desktop/src-tauri/src/duck/
