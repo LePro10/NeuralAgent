@@ -18,6 +18,12 @@ click, guided learn, loose path on a real voice, the dictation history with real
 Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
 (a long paste was lost on reload, which motivated D85).
 
+## Released + deployed 0.5.5 (2026-11-04)
+D92: connector tool schemas normalized (`connectors/schema.rs`, `Connector.warnings`), pilot tools
+`build_connector`/`connector_status`, `PilotMessage.connector_id` -> live card in chat
+(`LiveConnector.tsx`), chat keeps scroll, `ErrorNotice`. Relay build `0.5.5+mw1zlmvd`. Not yet
+tried with a live model: the pilot building a connector from chat.
+
 ## Released + deployed 0.5.4 (2026-11-04)
 Tag `v0.5.4` = `main` `9e47e38`: connector builds recover (snapshot in `connectors/.backup/`,
 reset/restore/retry, `node --check` step, "Build stopped" card), agent picker per connector,
