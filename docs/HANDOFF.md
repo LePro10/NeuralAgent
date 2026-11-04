@@ -18,6 +18,14 @@ click, guided learn, loose path on a real voice, the dictation history with real
 Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
 (a long paste was lost on reload, which motivated D85).
 
+## Released + deployed 0.5.4 (2026-11-04)
+Tag `v0.5.4` = `main` `9e47e38`: connector builds recover (snapshot in `connectors/.backup/`,
+reset/restore/retry, `node --check` step, "Build stopped" card), agent picker per connector,
+default agent in Settings -> Agents (`settings.default_profile`), Discord connector 1.1.0. Relay +
+website deployed: build `0.5.4+mw1v18o8`, rollback image `neuralagent-relay:prev` = 0.5.3 build.
+Note: the safety classifier of the agent can refuse some connector requests (e.g. a Discord
+"admin/nuke" bot); that is not bypassed. Users can still put own code in the folder + "Check again".
+
 ## Released 0.5.3 (2026-11-04)
 Tag `v0.5.3` = `main` `9b5308b` (Autopilot D87-D89/D91, SSH workspaces D90, Teams removed). CI
 release run 41792783678 green; `/api/releases/latest` serves 0.5.3. `mobile-overhaul` was
