@@ -70,10 +70,6 @@ export function describe(s: DemoSignal, label: Label = () => null): Omit<Line, "
       return s.role === "user" ? { kind: "idle", text: `You: ${clip(s.text, 46)}` } : { kind: "working", text: `Neural: ${clip(s.text, 46)}` };
     case "agent-started":
       return { kind: "working", agent: s.agent, text: `Started: ${clip(s.name, 40)}` };
-    case "team-step":
-      return { kind: "idle", text: clip(s.step, 56) };
-    case "team-picked":
-      return { kind: "done", text: `Kept ${clip(s.winner, 36)}` };
     default:
       return null;
   }
@@ -89,6 +85,5 @@ export const WATCH: Record<string, DemoSignal["type"][]> = {
   permission: ["prompt-opened", "prompt-answered"],
   phone: ["prompt-opened", "prompt-answered"],
   neural: ["neural-message", "agent-started"],
-  team: ["team-step", "team-picked"],
   files: [],
 };

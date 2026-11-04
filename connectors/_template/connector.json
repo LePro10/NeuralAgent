@@ -1,0 +1,36 @@
+{
+  "name": "My connector",
+  "icon": "plug",
+  "description": "One sentence: what this connector lets the autopilot do.",
+  "kind": "api",
+  "version": "0.1.0",
+  "guide": [
+    "Step 1 for a beginner: where to go (with a link) and what to click.",
+    "Step 2: what to copy and where to paste it below.",
+    "Step 3: press **Test connection**."
+  ],
+  "setup": [
+    {
+      "key": "base_url",
+      "label": "Address",
+      "type": "url",
+      "required": true,
+      "placeholder": "https://example.com",
+      "help": "Plain words: what to enter here and where to find it."
+    },
+    {
+      "key": "api_token",
+      "label": "Access token",
+      "type": "secret",
+      "required": true,
+      "help": "Where to create it. It stays on this computer."
+    }
+  ],
+  "tools": {
+    "whoami": "read",
+    "list_items": "read",
+    "post_note": "write"
+  },
+  "events": [],
+  "check": "whoami"
+}

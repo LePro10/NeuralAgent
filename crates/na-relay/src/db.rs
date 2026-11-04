@@ -181,6 +181,7 @@ impl Db {
             let _ = c.execute(&format!("ALTER TABLE devices ADD COLUMN {col} TEXT"), []);
         }
         c.execute_batch(crate::insights::SCHEMA)?;
+        c.execute_batch(crate::apikeys::SCHEMA)?;
         Ok(Db(Mutex::new(c)))
     }
 

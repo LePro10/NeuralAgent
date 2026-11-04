@@ -1,5 +1,5 @@
 // What a visitor means when they write to Neural (pure), and Neural answering, starting and stopping agents,
-// asking before it acts, and running the two team patterns, all through the protocol.
+// asking before it acts, all through the protocol.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createWorld } from "./index.ts";
@@ -27,8 +27,6 @@ test("neural brain: what a visitor writes is read the way a person means it", ()
   assert.deepEqual(matchNeural("be quiet", PROJECTS), { k: "mode", mode: "quiet" });
   assert.deepEqual(matchNeural("speak up again", PROJECTS), { k: "mode", mode: "active" });
   assert.deepEqual(matchNeural("remember that we use pnpm", PROJECTS), { k: "remember", note: "we use pnpm" });
-  assert.deepEqual(matchNeural("race three agents on the wishlist", PROJECTS), { k: "team", pattern: "race", project: null });
-  assert.deepEqual(matchNeural("build and review the shipping hint in web-shop", PROJECTS), { k: "team", pattern: "review", project: "web-shop" });
   // Start and stop name an engine and a project.
   assert.deepEqual(matchNeural("start codex in web-shop to add a free shipping hint", PROJECTS), { k: "start", engine: "codex", project: "web-shop", task: "Add a free shipping hint." });
   assert.deepEqual(matchNeural("ask Gemini in docs-site to add a Next section to the guide", PROJECTS), { k: "start", engine: "gemini", project: "docs-site", task: "Add a Next section to the guide." });
@@ -40,7 +38,7 @@ test("neural brain: what a visitor writes is read the way a person means it", ()
   assert.equal(taskOf("start claude"), "");
 });
 
-async function neuralWorld(scene: "neural" | "team" | "grid" = "neural") {
+async function neuralWorld(scene: "neural" | "grid" = "neural") {
   const w = await createWorld({ latency: 0, auto: false, now: NOW, scene });
   const c = await open(w);
   return { w, c };
@@ -161,55 +159,4 @@ test("neural: memory, mode and approve", async () => {
   }
 });
 
-test("neural: a race ends in review and Use this merges the pick", async () => {
-  const { w, c } = await neuralWorld("grid");
-  try {
-    await tell(w, c, "race three agents on the wishlist", 3000);
-    let task: any;
-    for (let i = 0; i < 400 && task?.status !== "review"; i++) {
-      await w.clock.advance(1000);
-      await settle(1);
-      task = (await neuralOf(w)).n.tasks.find((t: any) => t.team?.pattern === "race" && /wishlist/i.test(t.title));
-    }
-    assert.equal(task?.status, "review", "the race reaches Pick one");
-    assert.equal(task.team.attempts.length, 3);
-    for (const a of task.team.attempts) {
-      assert.equal(a.state, "ready");
-      assert.equal(a.check_ok, true);
-      assert.ok(!a.verdict, "a race has no reviewer, so no verdict chip");
-    }
-    const winner = task.team.attempts[0];
-    await c.req("neural_team_pick", { task_id: task.id, session_id: winner.session_id });
-    await w.clock.advance(4000);
-    await settle(3);
-    const done = (await neuralOf(w)).n.tasks.find((t: any) => t.id === task.id);
-    assert.equal(done.status, "done");
-    assert.equal(done.team.attempts.find((a: any) => a.session_id === winner.session_id).state, "merged");
-    assert.ok(done.team.attempts.filter((a: any) => a.session_id !== winner.session_id).every((a: any) => a.state === "dropped"));
-  } finally {
-    c.close();
-    w.dispose();
-  }
-});
 
-test("neural: build and review hands over twice and ends approved", async () => {
-  const { w, c } = await neuralWorld("grid");
-  try {
-    await tell(w, c, "build and review the free shipping hint in web-shop", 3000);
-    const seen = new Set<string>();
-    let task: any;
-    for (let i = 0; i < 600 && task?.status !== "done"; i++) {
-      await w.clock.advance(1000);
-      await settle(1);
-      task = (await neuralOf(w)).n.tasks.find((t: any) => t.team?.pattern === "review" && /shipping/i.test(t.title) && !/seed/.test(t.id));
-      const rev = task?.team?.attempts.find((a: any) => a.role === "reviewer");
-      if (rev?.verdict) seen.add(`${task.team.round}:${rev.verdict}`);
-    }
-    assert.equal(task?.status, "done", "the loop finishes");
-    assert.ok([...seen].some((s) => s.endsWith(":changes")), "the reviewer asked for changes first");
-    assert.ok([...seen].some((s) => s.endsWith(":approved")), "then approved");
-  } finally {
-    c.close();
-    w.dispose();
-  }
-});

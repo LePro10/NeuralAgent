@@ -2,7 +2,7 @@
 
 Drivers and kits for checking the app by hand or by an agent: a throwaway test daemon with the
 UI in a browser, screenshots at phone and desktop sizes in light and dark, the web remote against
-a local relay, Neural/call/swarm kits and the Android WebView probe. CI uses the scripts one level
+a local relay, Neural/call kits and the Android WebView probe. CI uses the scripts one level
 up (`scripts/e2e-*.ts`, `scripts/daemon-smoke.mjs`); these are for interactive checks.
 
 **Safety:** every tool runs its own daemon under a `/tmp` home (`lib.mjs` refuses the installed
@@ -29,21 +29,18 @@ node scripts/dev/env.mjs down                  # stops exactly what `up` started
 - `env.mjs up|status|down [--home dir] [--port n] [--seed] [--llm] [--no-vite]`. State in
   `<home>/dev-env.json`, logs in `<home>/{daemon,vite,fake-llm}.log`. The daemon gets
   `NEURALAGENT_DEV_ORIGIN=http://127.0.0.1:<port>` (debug builds accept that one extra origin).
-- `seed.mjs base|swarms|llm|nollm|mcp|ask` (`NEURALAGENT_HOME` set): four workspaces, stand-in
+- `seed.mjs base|llm|nollm|mcp|ask` (`NEURALAGENT_HOME` set): four workspaces, stand-in
   Claude/Codex/Gemini sessions (`fake-cli.sh`) in done / needs-input / working / error states via
-  real hook events, a fake-agent swarm, MCP servers; `llm` points Neural at `fake-llm.mjs`;
-  `swarms` adds a busy six-member swarm (`chatty-agent.mjs`, a long goal, many messages) and an
-  ended one, for the Swarm page.
+  real hook events, MCP servers; `llm` points Neural at `fake-llm.mjs`.
 - `shot.mjs [scene] [args] [--devices] [--schemes] [--out] [--dpr] [--inset] [--status-bar]
   [--hash "&update=0.3.0"] [--fake-mic f.wav] [--engine] [--montage]`. Devices: `phone` 390×844,
   `small` 360×780, `kb` 390×450 (keyboard open), `tablet` 820×1180, `laptop` 1280×800,
   `desk` 1440×900. Phones run in Chromium with touch and a simulated 28 px Android status bar
   inset; desktop sizes in WebKit (like the macOS app). Default DPR 1 keeps images small.
-- Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Projects, Swarm,
+- Scenes (`scenes/*.mjs`): `home` (start page), `pages` (Neural, Agents, Projects, Autopilot,
   History, Usage, MCP, Settings; pass names to limit), `phone` (phone walkthrough: inbox, agent,
   palette, subagent, back chain), `call` (Call Neural with a fake mic),
-  `swarm` (every swarm state, stop confirm, a member, sending, the new-swarm form, narrow windows;
-  seed `swarms` first), `claude-images` (pictures in the Claude view and the viewer; daemon and
+  `claude-images` (pictures in the Claude view and the viewer; daemon and
   shot need `CLAUDE_CONFIG_DIR=/tmp/<dir>`, see the scene's header).
   `subagents` (cards, the running-work strip, nested agents, Tasks sheet; data from
   `subagent-fixture.mjs`, same `CLAUDE_CONFIG_DIR` rule; arg `live` adds a finish and the fade).
@@ -92,9 +89,9 @@ node scripts/dev/env.mjs down --home /tmp/na-neural
   (never echo the key); prints what Neural did and said for a human to judge, plus hard checks.
 - `fake-llm.mjs`: header lists the scripted-mode rule format (`user`, `tool`, `world`, `once`,
   `say`/`call`, `{{agent}}`). Screens: `shot.mjs neural` (`scenes/neural.mjs`: chat with a
-  pending card, the panel, the team sheet, the Teams page).
+  pending card, the panel).
 
-## Neural, calls, swarm (real models)
+## Neural, calls (real models)
 - Real Neural: start a test daemon with the key from the keychain (never echo it):
   `NEURALAGENT_HOME=/tmp/na-neural NEURALAGENT_LLM_KEY="$(security find-generic-password -s neuralagent-llm -w)" target/release/neuralagentd serve`,
   then `daemon.mjs orch "Starte den testbot in …"`. Budget rules: `docs/STATUS.md`.
@@ -102,9 +99,6 @@ node scripts/dev/env.mjs down --home /tmp/na-neural
   and measures time to first audio (env `NOISE`, `ECHO`, `HOLD`, `OUT`). Make clips with
   `say -o q.wav --data-format=LEI16@16000 "…"`. Needs voice models in `$NEURALAGENT_HOME/models`.
 - Browser call UI: `shot.mjs call --devices phone --schemes dark --fake-mic q.wav`.
-- `swarm-real.mjs ["goal"]`: four Claude Code (Haiku) members on a tiny task in
-  `/tmp/na-swarm-real` (`TRUST=0` once trusted, `git -C /tmp/na-swarm-real checkout greet.py` resets).
-  The stand-in version without models runs in CI: `scripts/e2e-swarm.ts`.
 
 ## Android
 - Emulator recipe: `docs/HANDOFF.md` → "How to run". Local relay + daemon:

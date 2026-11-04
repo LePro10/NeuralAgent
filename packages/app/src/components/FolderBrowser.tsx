@@ -1,6 +1,6 @@
-import type { FsEntry, FsRoots } from "@neuralagent/protocol";
+import type { FsEntry, FsRoots, SshHost } from "@neuralagent/protocol";
 import { Button, Empty, Input, List, Row, SearchField, Sheet, Spinner, cn, toast } from "@neuralagent/ui";
-import { ArrowUp, ChevronRight, Clock, Folder, FolderGit2, FolderLock, FolderPlus, Home } from "lucide-react";
+import { ArrowUp, ChevronRight, Clock, Folder, FolderGit2, FolderLock, FolderPlus, Home, Server } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useClient, useDaemon, usePlatform } from "../lib/store";
@@ -18,12 +18,17 @@ const FDA_HINT = "macOS would first ask on the Mac's screen, and nobody can answ
 const locked = () => toast(`${NEEDS_FDA}. Turn it on once at the Mac: Settings → System.`, { tone: "neutral" });
 
 /** Opens the host folder browser; resolves with the chosen path, or null when closed. */
-const useBrowser = create<{ resolve: ((p: string | null) => void) | null }>(() => ({ resolve: null }));
+const useBrowser = create<{ resolve: ((p: string | null) => void) | null; ssh: SshHost | null }>(() => ({ resolve: null, ssh: null }));
 
-export function pickHostFolder(): Promise<string | null> {
+/** `ssh`: browse that computer (through the daemon) instead of the host itself. */
+export function pickHostFolder(ssh?: SshHost): Promise<string | null> {
   useBrowser.getState().resolve?.(null);
-  return new Promise((resolve) => useBrowser.setState({ resolve }));
+  return new Promise((resolve) => useBrowser.setState({ resolve, ssh: ssh ?? null }));
 }
+
+/** `user@host:port`, for titles. */
+export const sshLabel = (h: SshHost) => `${h.user ? `${h.user}@` : ""}${h.host}${h.port ? `:${h.port}` : ""}`;
+export const sameHost = (a?: SshHost | null, b?: SshHost | null) => !!a && !!b && a.host === b.host && (a.user ?? "") === (b.user ?? "") && (a.port ?? 22) === (b.port ?? 22);
 
 /**
  * Folder picker for clients without a native one (phones, browsers): browses the folders of the
@@ -31,6 +36,8 @@ export function pickHostFolder(): Promise<string | null> {
  */
 export function FolderBrowserSheet() {
   const resolve = useBrowser((s) => s.resolve);
+  const ssh = useBrowser((s) => s.ssh);
+  const [failed, setFailed] = useState<string | null>(null);
   const client = useClient();
   const platform = usePlatform();
   const workspaces = useDaemon((c) => c.state?.workspaces);
@@ -47,7 +54,7 @@ export function FolderBrowserSheet() {
   const go = (path: string) => {
     setLoading(true);
     setFilter("");
-    client.req<Listing>({ m: "fs_list", p: { path } }).then(
+    client.req<Listing>({ m: "fs_list", p: { path, ...(ssh && { ssh }) } }).then(
       (l) => {
         setShut(null);
         setDir(l);
@@ -55,6 +62,7 @@ export function FolderBrowserSheet() {
       (e) => {
         const msg = (e as Error).message;
         if (msg.startsWith(NEEDS_FDA)) setShut(path);
+        else if (ssh) setFailed(msg);
         else toast(msg, { tone: "danger" });
       },
     ).finally(() => setLoading(false));
@@ -65,22 +73,24 @@ export function FolderBrowserSheet() {
     setCreating(false);
     setDir(null);
     setShut(null);
-    client.req<FsRoots>({ m: "fs_roots" }).then(
+    setFailed(null);
+    setRoots(null);
+    client.req<FsRoots>({ m: "fs_roots", p: ssh ? { ssh } : {} }).then(
       (r) => {
         setRoots(r);
         go(r.home);
       },
-      (e) => toast((e as Error).message, { tone: "danger" }),
+      (e) => (ssh ? setFailed((e as Error).message) : toast((e as Error).message, { tone: "danger" })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, client]);
+  }, [open, client, ssh]);
 
   const close = (path: string | null) => {
     resolve?.(path);
-    useBrowser.setState({ resolve: null });
+    useBrowser.setState({ resolve: null, ssh: null });
   };
 
-  const recent = useMemo(() => [...(workspaces ?? [])].sort((a, b) => b.created_at - a.created_at).slice(0, 4), [workspaces]);
+  const recent = useMemo(() => [...(workspaces ?? [])].filter((w) => (ssh ? sameHost(w.ssh, ssh) : !w.ssh)).sort((a, b) => b.created_at - a.created_at).slice(0, 4), [workspaces, ssh]);
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
     return (dir?.entries ?? []).filter((e) => e.dir && (!q || e.name.toLowerCase().includes(q)));
@@ -90,7 +100,7 @@ export function FolderBrowserSheet() {
   const mkdir = async () => {
     if (!dir || !name.trim()) return;
     try {
-      const made = await client.req<FsEntry>({ m: "fs_mkdir", p: { path: dir.path, name: name.trim() } });
+      const made = await client.req<FsEntry>({ m: "fs_mkdir", p: { path: dir.path, name: name.trim(), ...(ssh && { ssh }) } });
       setCreating(false);
       setName("");
       go(made.path);
@@ -103,7 +113,7 @@ export function FolderBrowserSheet() {
   const crumbs = useMemo(() => {
     if (!dir || !roots) return [];
     const home = roots.home.replace(/\/$/, "");
-    const inHome = dir.path === home || dir.path.startsWith(`${home}/`);
+    const inHome = !!home && (dir.path === home || dir.path.startsWith(`${home}/`));
     const base = inHome ? home : "";
     const rest = dir.path.slice(base.length).split("/").filter(Boolean);
     const out = [{ name: inHome ? "Home" : "/", path: inHome ? home : "/" }];
@@ -122,15 +132,27 @@ export function FolderBrowserSheet() {
       open={open}
       onClose={() => close(null)}
       title="Choose a folder"
-      eyebrow="On the host computer"
+      eyebrow={ssh ? `On ${sshLabel(ssh)}` : "On the host computer"}
       size="lg"
       footer={
-        <Button variant="primary" size="lg" className="w-full" disabled={!dir} onClick={() => dir && close(dir.path)}>
+        <Button variant="primary" size="lg" className="w-full" disabled={!dir || !!failed} onClick={() => dir && close(dir.path)}>
           {dir ? `Use “${here}”` : "Choose"}
         </Button>
       }
     >
       <div className="flex flex-col gap-4 pb-4">
+        {failed && (
+          <Empty
+            Icon={Server}
+            title="Could not look at that computer"
+            detail={`${failed} If it asks for a password, add it anyway: the first terminal there asks once, then everything works.`}
+            action={
+              <Button variant="primary" onClick={() => close("~")}>
+                Add anyway
+              </Button>
+            }
+          />
+        )}
         {roots && (
           <div className="scroll-x -mx-4 flex gap-2 px-4" data-no-swipe>
             <button type="button" className={chip} onClick={() => go(roots.home)}>
@@ -195,7 +217,7 @@ export function FolderBrowserSheet() {
               </Button>
             </div>
           )}
-          {dir?.parent && (platform.kind === "desktop" || dir.path !== roots?.home) && <Row Icon={ArrowUp} tile="gray" title="Up one level" onClick={() => go(dir.parent!)} />}
+          {dir?.parent && (platform.kind === "desktop" || !!ssh || dir.path !== roots?.home) && <Row Icon={ArrowUp} tile="gray" title="Up one level" onClick={() => go(dir.parent!)} />}
           {!shut &&
             shown.map((e) =>
               e.needs_fda ? (
@@ -205,7 +227,7 @@ export function FolderBrowserSheet() {
               ),
             )}
         </List>
-        {loading && <Spinner label="Loading" />}
+        {loading && !failed && <Spinner label="Loading" />}
         {!loading && shut && <Empty Icon={FolderLock} title={NEEDS_FDA} detail={FDA_HINT} />}
         {!loading && !shut && dir && shown.length === 0 && <Empty Icon={Folder} title={filter ? "No match" : "No subfolders"} detail="Use this folder, or create a new one." />}
       </div>

@@ -5,10 +5,12 @@
 //! `neuralagentd info`       print where the daemon listens (no secrets)
 
 mod audit;
+mod autopilot;
 mod awake;
 mod call;
 mod catalog;
 mod claude_view;
+mod connectors;
 mod core;
 mod cv_action;
 mod cv_commands;
@@ -40,7 +42,7 @@ mod secrets;
 mod server;
 mod service;
 mod speech;
-mod swarm;
+mod ssh;
 mod telemetry;
 mod usage;
 
@@ -65,10 +67,6 @@ fn main() -> Result<()> {
         }
         Some("hook") => {
             hooks::client_main(args.get(1).map(String::as_str).unwrap_or(""), args.get(2).map(String::as_str));
-            Ok(())
-        }
-        Some("swarm-mcp") => {
-            swarm::bridge_main();
             Ok(())
         }
         Some("info") => {
@@ -115,6 +113,7 @@ fn serve() -> Result<()> {
         telemetry::start(&core);
         core.orch_status();
         tokio::spawn(neural::watch(core.clone()));
+        autopilot::start(&core);
         {
             let core = core.clone();
             std::thread::spawn(move || core.refresh_catalog());
@@ -158,7 +157,6 @@ fn serve() -> Result<()> {
                 loop {
                     tick.tick().await;
                     core.tick();
-                    core.swarm_tick();
                     n += 1;
                     if n.is_multiple_of(3) {
                         let (setting, working) = core

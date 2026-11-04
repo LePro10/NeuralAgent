@@ -3,6 +3,7 @@
 //! account. The relay never sees what is inside an envelope.
 
 pub mod admin;
+pub mod apikeys;
 pub mod auth;
 pub mod config;
 pub mod db;
@@ -234,6 +235,7 @@ pub fn router(relay: Arc<Relay>) -> Router {
         .route("/auth/refresh", post(auth::refresh))
         .route("/auth/logout", post(auth::logout))
         .route("/me", get(auth::me))
+        .route("/me/reports", get(apikeys::mine))
         .route("/me/device", put(auth::update_device))
         .route("/me/push", put(auth::set_push))
         .route("/devices", get(auth::devices))

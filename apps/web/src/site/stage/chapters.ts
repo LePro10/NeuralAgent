@@ -93,22 +93,6 @@ export const CHAPTERS: readonly Chapter[] = [
     alt: { desk: "The Neural page of the desktop app: a conversation about what the agents are doing.", phone: "The Neural tab of the phone app with a conversation and a question waiting." },
   },
   {
-    id: "team",
-    scene: "team",
-    title: "Hand it to a team.",
-    body: [
-      "Give one goal to several agents. In a race, two to four agents try the same job in separate worktrees, Neural compares them and you keep the best. Build and review pairs a builder with a reviewer until the reviewer approves.",
-    ],
-    lede: "Give one goal to several agents. In a race Neural compares their attempts and you keep the best.",
-    poster: "team",
-    phone: false,
-    try: "Pick a winner.",
-    short: "teams",
-    mark: "waiting",
-    where: "teams",
-    alt: { desk: "The Teams page: three agents racing on one goal, waiting for you to pick one.", phone: "The Teams page on the phone: three attempts at one goal." },
-  },
-  {
     id: "files",
     scene: "files",
     title: "Files, changes, history.",

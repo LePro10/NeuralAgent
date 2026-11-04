@@ -87,9 +87,29 @@ export interface Report {
   note?: string | null;
 }
 
+export interface ReportAnswer {
+  at: number;
+  text: string;
+  author?: string;
+}
+
 export interface ReportDetail {
   report: Report & { diagnostics?: unknown };
   account: null | { user: User; devices: Device[] };
+  answers: ReportAnswer[];
+}
+
+export type KeyScope = "reports:read" | "reports:reply";
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** First characters of the key, to recognise it. */
+  hint: string;
+  scopes: KeyScope[];
+  created_at: number;
+  created_by: string;
+  last_used?: number | null;
 }
 
 export interface AuditEntry {
@@ -327,6 +347,11 @@ export const api = {
   report: (id: string) => call<ReportDetail>("GET", `/api/admin/reports/${encodeURIComponent(id)}`),
   updateReport: (id: string, patch: { status?: ReportStatus; note?: string }) =>
     call<{ report: Report }>("POST", `/api/admin/reports/${encodeURIComponent(id)}`, patch).then((r) => r.report),
+  replyReport: (id: string, text: string, status?: ReportStatus) =>
+    call<{ answers: ReportAnswer[] }>("POST", `/api/admin/reports/${encodeURIComponent(id)}/reply`, { text, status }),
+  keys: () => call<{ keys: ApiKey[] }>("GET", "/api/admin/keys").then((r) => r.keys),
+  createKey: (name: string, scopes: KeyScope[]) => call<{ id: string; key: string }>("POST", "/api/admin/keys", { name, scopes }),
+  revokeKey: (id: string) => call<unknown>("DELETE", `/api/admin/keys/${encodeURIComponent(id)}`),
   deleteReport: (id: string) => call<unknown>("DELETE", `/api/admin/reports/${encodeURIComponent(id)}`),
   audit: () => call<{ audit: AuditEntry[] }>("GET", "/api/admin/audit").then((r) => r.audit),
 };

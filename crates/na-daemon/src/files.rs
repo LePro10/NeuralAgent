@@ -82,7 +82,7 @@ pub fn roots(state: &State, client: &ClientInfo, home: &Path, gate: &Gate) -> Ve
         }
     };
     for w in &state.workspaces {
-        if desktop || w.approved {
+        if w.ssh.is_none() && (desktop || w.approved) {
             add(Path::new(&w.path), &w.name, true);
         }
     }

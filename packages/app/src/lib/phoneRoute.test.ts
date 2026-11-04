@@ -75,7 +75,7 @@ test("links parse to their tab and print back", () => {
   assert.deepEqual(parseHash("#/neural"), { tab: "neural", stack: [] });
   assert.equal(parseHash("#/nonsense/x"), null);
   assert.equal(parseHash(""), null);
-  for (const h of ["#/agent/a%2Fb", "#/project/p1", "#/swarm/s", "#/swarms", "#/usage", "#/settings/mcp", "#/history", "#/projects"]) {
+  for (const h of ["#/agent/a%2Fb", "#/project/p1", "#/autopilot", "#/connectors", "#/connector/discord", "#/usage", "#/settings/mcp", "#/history", "#/projects"]) {
     assert.equal(hashOf(parseHash(h)!), h);
   }
 });

@@ -1,9 +1,9 @@
 // What Neural knows and owns, beside the conversation: how proactive it is, its tasks, what it
 // noticed about the agents, and what it remembers (D61–D63, docs/notes/neural-v2.md).
 // Desktop: a rail beside the conversation (or a side panel); phones: a sheet.
-import type { NeuralMode, NeuralTask, NeuralTaskStatus, Request } from "@neuralagent/protocol";
+import type { NeuralMode, NeuralTaskStatus, Request } from "@neuralagent/protocol";
 import { Empty, IconButton, List, Menu, Row, Segmented, cn, toast } from "@neuralagent/ui";
-import { Brain, Check, CircleSlash, Eye, ListChecks, Plus, Trash2, Users, X } from "lucide-react";
+import { Brain, Check, CircleSlash, Eye, ListChecks, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { OBS_WORD, neuralOf, obsActivity, obsDetail, taskActivity, taskWord } from "../../lib/neural";
 import { shortAgo, useNow } from "../../lib/agentui";
@@ -23,11 +23,11 @@ const MODE_HELP: Record<NeuralMode, string> = {
   off: "Neural only answers when you write. It still keeps its tasks.",
 };
 
-export function NeuralPanel({ onOpenTask, className }: { onOpenTask?: (t: NeuralTask) => void; className?: string }) {
+export function NeuralPanel({ className }: { className?: string }) {
   return (
     <div className={cn("flex flex-col gap-6", className)}>
       <ModeBlock />
-      <TasksBlock onOpenTask={onOpenTask} />
+      <TasksBlock />
       <WatchingBlock />
       <MemoryBlock />
     </div>
@@ -52,7 +52,7 @@ function ModeBlock() {
   );
 }
 
-function TasksBlock({ onOpenTask }: { onOpenTask?: (t: NeuralTask) => void }) {
+function TasksBlock() {
   const client = useClient();
   const open = useOpenAgent();
   const tasks = useDaemon((c) => neuralOf(c.state).tasks);
@@ -75,21 +75,20 @@ function TasksBlock({ onOpenTask }: { onOpenTask?: (t: NeuralTask) => void }) {
     <List label="Tasks">
       {shown.map((t) => {
         const ws = workspaces?.find((w) => w.id === t.workspace_id)?.name;
-        const sub = [taskWord(t), t.team ? (t.team.pattern === "race" ? "Race" : "Build + review") : null, ws].filter(Boolean).join(" · ");
+        const sub = [taskWord(t), ws].filter(Boolean).join(" · ");
         const finished = t.status === "done" || t.status === "failed";
         return (
           <Menu
             key={t.id}
             title={t.title}
             items={[
-              ...(t.team && onOpenTask ? [{ label: "Show the team", Icon: Users, onSelect: () => onOpenTask(t) }] : []),
               ...(t.agents.length ? [{ label: "Open the agent", Icon: Eye, onSelect: () => open(t.agents.at(-1)!) }] : []),
               ...(!finished ? [{ label: "Mark done", Icon: Check, onSelect: () => edit(t.id, "done") }] : []),
               ...(!finished ? [{ label: "Drop it", Icon: CircleSlash, onSelect: () => edit(t.id, "failed") }] : []),
               { label: "Remove", Icon: Trash2, destructive: true, divider: true, onSelect: () => edit(t.id, undefined, true) },
             ]}
             trigger={(show) => (
-              <Row Icon={t.team ? Users : ListChecks} title={t.title} detail={t.note ? `${sub} — ${t.note}` : sub} activity={taskActivity(t)} wrap onClick={show} chevron={false} />
+              <Row Icon={ListChecks} title={t.title} detail={t.note ? `${sub} — ${t.note}` : sub} activity={taskActivity(t)} wrap onClick={show} chevron={false} />
             )}
           />
         );

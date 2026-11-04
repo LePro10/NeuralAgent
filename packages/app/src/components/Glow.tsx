@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
 const TINTS = {
   neural: ["--color-accent-deep", "--color-sys-purple", "--color-sys-teal"],
   agents: ["--color-accent-deep", "--color-sys-indigo", "--color-sys-teal"],
-  swarm: ["--color-sys-purple", "--color-sys-pink", "--color-accent-deep"],
+  autopilot: ["--color-sys-purple", "--color-sys-pink", "--color-accent-deep"],
   history: ["--color-sys-teal", "--color-accent-deep", "--color-sys-indigo"],
   usage: ["--color-sys-green", "--color-sys-teal", "--color-accent-deep"],
   mcp: ["--color-sys-orange", "--color-sys-purple", "--color-accent-deep"],

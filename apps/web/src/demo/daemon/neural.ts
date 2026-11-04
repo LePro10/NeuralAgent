@@ -1,17 +1,15 @@
 // Neural, the orchestrator: the conversation (streamed word by word), what it noticed, its notes,
-// questions waiting for you, and teams of agents racing on one goal.
+// questions waiting for you.
 
-import type { NeuralAttempt, NeuralObs, NeuralState, NeuralTask, ObsKind, OrchMessage, Session, Tab } from "@neuralagent/protocol";
+import type { NeuralObs, NeuralState, NeuralTask, ObsKind, OrchMessage, Session } from "@neuralagent/protocol";
 import { counts } from "./diff.ts";
-import { closeSession, createSession, taskFor } from "./agents/spawn.ts";
-import type { Beat } from "./agents/run.ts";
-import { RACE_GOAL, REVIEW_GOAL, buildRound1, buildRound2, raceBeats, reviewRound1, reviewRound2, verdicts } from "./agents/team.ts";
+import { createSession, taskFor } from "./agents/spawn.ts";
 import { replyTo, testOutput } from "./agents/scripts.ts";
 import { strip as stripAnsi } from "./ansi.ts";
 import { matchIntent } from "./claude/intent.ts";
 import { matchNeural } from "./neural-brain.ts";
 import type { Sim } from "./sim.ts";
-import { basename, join } from "./vfs.ts";
+import { join } from "./vfs.ts";
 
 const MIN = 60_000;
 
@@ -81,7 +79,7 @@ export class Neural {
     sim.signal({ type: "neural-message", role: "assistant", text });
   }
 
-  /** Neural speaks first (an agent finished, a team is ready). No typing: the message arrives whole. */
+  /** Neural speaks first (an agent finished, a task is ready). No typing: the message arrives whole. */
   private proactive(text: string, extra: Partial<OrchMessage> = {}) {
     if (this.n.mode !== "active") return;
     this.message("assistant", text, { proactive: true, ok: true, ...extra });
@@ -188,7 +186,6 @@ export class Neural {
             "- **Start Codex in web-shop to add a wishlist**",
             "- **Stop Claude in billing-api**",
             "- **Summarise billing-api**, or **run the tests in web-shop**",
-            "- **Race three agents on the wishlist** (they compete, you pick)",
             "- **Remember that we use pnpm**, or **catch me up**",
           ].join("\n"),
         );
@@ -254,22 +251,8 @@ export class Neural {
       case "mode":
         this.setMode(it.mode);
         return this.say(it.mode === "active" ? "Back to speaking up when something finishes or needs you." : it.mode === "quiet" ? "I will stay quiet. I still watch, and I will collect what happens for when you ask." : "I am off. I will not act or report until you turn me on again in Settings.");
-      case "team": {
-        // The races and reviews are scripted for web-shop; the reply says so instead of pretending the goal was parsed.
-        const ws = sim.state.workspaces.find((w) => w.name === "web-shop")!;
-        if (it.pattern === "race") {
-          const own = /wish ?list|heart|favou?rite/i.test(text);
-          await this.say(`${own ? "" : "The demo has one race prepared, so the goal is the wishlist. "}I will start a race in **${ws.name}**: Claude, Codex and OpenCode each get their own copy of the project and the same goal. When all three pass the tests you pick one.`);
-          this.startTeam({ workspaceId: ws.id, goal: RACE_GOAL, pattern: "race", profiles: ["claude", "codex", "opencode"], check: "pnpm test" });
-          return;
-        }
-        const own = /shipping/i.test(text);
-        await this.say(`${own ? "" : "The demo has one build and review prepared, so the goal is the free-shipping hint. "}**Claude** builds in its own copy of **${ws.name}**, **Codex** reviews, and they go back and forth until the reviewer approves. I will tell you when it is ready.`);
-        this.startTeam({ workspaceId: ws.id, goal: REVIEW_GOAL, pattern: "review", profiles: ["claude", "codex"], check: "pnpm test" });
-        return;
-      }
       case "unknown":
-        return this.say(pickPhrase(text, "I can see every agent on this computer. Ask me what is going on, tell me to start one (\"ask Codex in billing-api to add pagination\"), or let me run three of them against one goal.", "I did not follow that. Try \"what is going on?\", \"start Claude in web-shop to fix the footer\" or \"race three agents on the wishlist\".") + "\n\n" + this.summary());
+        return this.say(pickPhrase(text, "I can see every agent on this computer. Ask me what is going on, tell me to start one (\"ask Codex in billing-api to add pagination\").", "I did not follow that. Try \"what is going on?\", \"start Claude in web-shop to fix the footer\"") + "\n\n" + this.summary());
     }
   }
 
@@ -404,7 +387,7 @@ export class Neural {
 
   /** Does a task of Neural's own follow this session (its observations are then written by the task)? */
   tracks(sid: string): boolean {
-    return !!this.n?.tasks.some((t) => !t.team && t.agents.includes(sid));
+    return !!this.n?.tasks.some((t) => t.agents.includes(sid));
   }
 
   private noteAt = new Map<string, number>();
@@ -412,7 +395,7 @@ export class Neural {
   /** What a followed agent is doing right now, as the note of its task (at most every few seconds). */
   lineChanged(s: Session) {
     if (!this.n) return;
-    const task = this.n.tasks.find((t) => !t.team && t.status === "working" && t.agents.includes(s.id));
+    const task = this.n.tasks.find((t) => t.status === "working" && t.agents.includes(s.id));
     if (!task) return;
     const now = this.sim.now();
     if (now - (this.noteAt.get(s.id) ?? 0) < 4000) return;
@@ -425,7 +408,7 @@ export class Neural {
   sessionChanged(old: Session, next: Session) {
     if (old.status === next.status || !this.n) return;
     const sim = this.sim;
-    const task = this.n.tasks.find((t) => !t.team && t.agents.includes(next.id));
+    const task = this.n.tasks.find((t) => t.agents.includes(next.id));
     if (!task) return;
     const who = this.nameOf(next);
     const ws = this.wsName(next.workspace_id);
@@ -480,265 +463,6 @@ export class Neural {
       this.message("action", `Cancelled: ${p.title.replace(/^Start /, "start ")}`, { ok: false });
       this.observe("allowed", `You said no to "${p.title}"`, { seen: true });
     }
-  }
-
-  // ── teams ──────────────────────────────────────────────────────────────────────────────────
-
-  /** Copy a project into its own folder, with its own git state, for one competing agent. */
-  private worktree(srcRoot: string, slug: string): { path: string; branch: string; base: string } {
-    const sim = this.sim;
-    const vfs = sim.vfs;
-    const src = vfs.repoOf(srcRoot)!;
-    const path = `/Users/demo/code/.worktrees/${basename(srcRoot)}-${slug}`;
-    for (const rel of vfs.walk(srcRoot)) vfs.write(join(path, rel), vfs.read(join(srcRoot, rel)) ?? "");
-    vfs.repos.set(path, { root: path, branch: `na/${slug}`, ahead: 0, behind: 0, head: new Map(src.head), log: [...src.log], staged: new Set() });
-    return { path, branch: `na/${slug}`, base: src.branch };
-  }
-
-  startTeam(o: { workspaceId: string; goal: string; pattern: "race" | "review"; profiles: string[]; check?: string }): NeuralTask {
-    if (o.pattern === "review") return this.startReview(o);
-    const sim = this.sim;
-    const ws = sim.state.workspaces.find((w) => w.id === o.workspaceId)!;
-    const taskId = sim.id("task", 12);
-    const check = o.check ?? "pnpm test";
-    const sessions: Session[] = [];
-    const attempts: NeuralAttempt[] = [];
-    o.profiles.forEach((profileId, i) => {
-      const slug = `${taskId.slice(0, 4)}-${profileId}`;
-      const wt = this.worktree(ws.path, slug);
-      const s = createSession(sim, {
-        workspaceId: ws.id,
-        profileId,
-        title: `${sim.state.profiles.find((p) => p.id === profileId)?.name ?? profileId}: wishlist`,
-        cwd: wt.path,
-        place: false,
-        prompt: o.goal,
-        worktree: wt,
-        beats: raceBeats(i, { k: "run", cmd: check, ms: 2200 + i * 700, out: () => testOutput(sim, wt.path) }),
-      });
-      sessions.push(s);
-      attempts.push({ session_id: s.id, profile_id: profileId, role: "racer", state: "working", files: 0, additions: 0, deletions: 0 });
-    });
-    this.addTab(ws.id, `Race: wishlist`, sessions.map((s) => s.id));
-    const task: NeuralTask = {
-      id: taskId,
-      title: o.goal,
-      done_when: `${check} passes`,
-      status: "working",
-      workspace_id: ws.id,
-      agents: sessions.map((s) => s.id),
-      check,
-      team: { pattern: o.pattern, profiles: o.profiles, attempts, round: 1 },
-      created_at: sim.now(),
-      updated_at: sim.now(),
-    };
-    sim.state.neural = { ...this.n, tasks: [...this.n.tasks, task] };
-    sim.emitNeural();
-    this.observe("started", `Started a race in ${ws.name}: ${sessions.length} agents on "${o.goal.slice(0, 50)}…"`, { task_id: taskId });
-    void this.watchTeam(taskId);
-    return task;
-  }
-
-  /** Build + review: a builder works in its own copy, a reviewer reads the diff and asks for changes until it is happy. */
-  private startReview(o: { workspaceId: string; goal: string; profiles: string[]; check?: string }): NeuralTask {
-    const sim = this.sim;
-    const ws = sim.state.workspaces.find((w) => w.id === o.workspaceId)!;
-    const taskId = sim.id("task", 12);
-    const check = o.check ?? "pnpm test";
-    const [bp = "claude", rp = "codex"] = o.profiles;
-    const wt = this.worktree(ws.path, `${taskId.slice(0, 4)}-build`);
-    const run = (): Beat => ({ k: "run", cmd: check, ms: 2400, out: () => testOutput(sim, wt.path) });
-    const label = (id: string) => sim.state.profiles.find((p) => p.id === id)?.name ?? id;
-    const builder = createSession(sim, { workspaceId: ws.id, profileId: bp, title: `${label(bp)}: build`, cwd: wt.path, place: false, prompt: o.goal, worktree: wt, beats: buildRound1(run()) });
-    const reviewer = createSession(sim, { workspaceId: ws.id, profileId: rp, title: `${label(rp)}: review`, cwd: wt.path, place: false });
-    this.addTab(ws.id, "Build + review", [builder.id, reviewer.id]);
-    const task: NeuralTask = {
-      id: taskId,
-      title: o.goal,
-      done_when: `The reviewer approves and ${check} passes`,
-      status: "working",
-      workspace_id: ws.id,
-      agents: [builder.id, reviewer.id],
-      check,
-      note: `${label(bp)} is building`,
-      team: {
-        pattern: "review",
-        profiles: [bp, rp],
-        attempts: [
-          { session_id: builder.id, profile_id: bp, role: "builder", state: "working", files: 0, additions: 0, deletions: 0 },
-          { session_id: reviewer.id, profile_id: rp, role: "reviewer", state: "working", files: 0, additions: 0, deletions: 0 },
-        ],
-        round: 1,
-      },
-      created_at: sim.now(),
-      updated_at: sim.now(),
-    };
-    this.set({ tasks: [...this.n.tasks, task] });
-    this.observe("started", `Started build and review in ${ws.name}: ${label(bp)} builds, ${label(rp)} reviews`, { task_id: taskId, seen: true });
-    void this.watchReview(taskId, builder.id, reviewer.id, wt.path, run);
-    return task;
-  }
-
-  private async watchReview(taskId: string, builder: string, reviewer: string, wt: string, check: () => Beat) {
-    const sim = this.sim;
-    const patchTask = (f: (t: NeuralTask) => NeuralTask) => this.set({ tasks: this.n.tasks.map((t) => (t.id === taskId ? { ...f(t), updated_at: sim.now() } : t)) });
-    const attempt = (sid: string, patch: Partial<NeuralAttempt>) => patchTask((t) => ({ ...t, team: { ...t.team!, attempts: t.team!.attempts.map((a) => (a.session_id === sid ? { ...a, ...patch } : a)) } }));
-    const diff = () => {
-      const repo = sim.vfs.repoOf(wt);
-      const st = repo ? sim.vfs.status(repo) : [];
-      let additions = 0;
-      let deletions = 0;
-      for (const e of st) {
-        const c = counts(repo!.head.get(e.path) ?? "", sim.vfs.read(join(repo!.root, e.path)) ?? "");
-        additions += c.additions;
-        deletions += c.deletions;
-      }
-      return { files: st.length, additions, deletions, rows: st.map((e) => ` ${e.path}`) };
-    };
-    const stat = () => {
-      const d = diff();
-      return [...d.rows, ` ${d.files} file${d.files === 1 ? "" : "s"} changed, ${d.additions} insertions(+), ${d.deletions} deletions(-)`];
-    };
-    const until = async (sid: string) => {
-      await sim.clock.sleep(1500, sim.scope);
-      while (sim.session(sid)?.status !== "done") {
-        const d = diff();
-        const cur = this.n.tasks.find((t) => t.id === taskId)?.team?.attempts.find((a) => a.session_id === builder);
-        if (cur && (cur.files !== d.files || cur.additions !== d.additions || cur.deletions !== d.deletions)) attempt(builder, { files: d.files, additions: d.additions, deletions: d.deletions });
-        await sim.clock.sleep(1000, sim.scope);
-      }
-    };
-    const turn = (sid: string, prompt: string, beats: Beat[]) => {
-      const run = sim.runs.get(sid);
-      sim.patch(sid, { prompt: prompt.slice(0, 160), status: "working", last_line: "Starting…" });
-      void run?.turn(prompt, beats).catch(() => {});
-    };
-    try {
-      for (const round of [1, 2]) {
-        if (round === 2) {
-          turn(builder, "Address the reviewer's comments.", buildRound2(check()));
-          patchTask((t) => ({ ...t, status: "working", note: "Builder is addressing the review (round 2)", team: { ...t.team!, round: 2 } }));
-        }
-        await until(builder);
-        const d = diff();
-        attempt(builder, { state: "checking", files: d.files, additions: d.additions, deletions: d.deletions });
-        await sim.clock.sleep(1800, sim.scope);
-        const tests = testOutput(sim, wt).map(stripAnsi).join("\n").match(/Tests\s+(\d+) passed/)?.[1] ?? "";
-        attempt(builder, { state: "done", check_ok: true, check_out: `Tests  ${tests} passed (${tests})` });
-        attempt(reviewer, { state: "working" });
-        patchTask((t) => ({ ...t, status: "review", note: "Reviewer is reading the diff" }));
-        turn(reviewer, round === 1 ? "Review the builder's changes." : "Review the second version.", round === 1 ? reviewRound1(stat) : reviewRound2(stat));
-        await until(reviewer);
-        if (round === 1) {
-          attempt(reviewer, { state: "done", verdict: "changes" });
-          attempt(builder, { state: "working" });
-          patchTask((t) => ({ ...t, status: "working", note: "Reviewer asked for changes (round 1)" }));
-          this.observe("team", "Build and review: the reviewer asked for changes in round 1", { task_id: taskId });
-        } else {
-          attempt(reviewer, { state: "done", verdict: "approved" });
-          this.mergeWorktree(taskId, builder);
-          attempt(builder, { state: "merged" });
-          patchTask((t) => ({ ...t, status: "done", note: "Approved in round 2", team: { ...t.team!, winner: builder } }));
-          this.observe("team", "Build and review: approved in round 2 and merged", { task_id: taskId, seen: true });
-          this.proactive("The reviewer approved the free-shipping change in round 2 and I merged it into **web-shop**. The first version used floats; the second compares in minor units and has a test.", { session_id: builder });
-        }
-      }
-    } catch {
-      /* the world was reset */
-    }
-  }
-
-  /** Copy what a worktree changed into the project itself. */
-  private mergeWorktree(taskId: string, sessionId: string) {
-    const sim = this.sim;
-    const task = this.n.tasks.find((t) => t.id === taskId);
-    const s = sim.session(sessionId);
-    const repo = s?.worktree ? sim.vfs.repoOf(s.worktree.path) : undefined;
-    const ws = sim.state.workspaces.find((w) => w.id === task?.workspace_id);
-    if (!repo || !ws) return;
-    for (const e of sim.vfs.status(repo)) {
-      if (e.status === "deleted") sim.vfs.remove(join(ws.path, e.path));
-      else sim.vfs.write(join(ws.path, e.path), sim.vfs.read(join(repo.root, e.path)) ?? "");
-    }
-    sim.refreshGit(ws.id);
-  }
-
-  private addTab(workspaceId: string, title: string, sids: string[]) {
-    const sim = this.sim;
-    const lay = sim.layoutOf(workspaceId);
-    const panes = sids.map((sid) => ({ type: "pane" as const, id: sim.id("pane"), content: { kind: "terminal" as const, session: sid } }));
-    const tab: Tab = { id: sim.id("tab"), title, root: { type: "split", id: sim.id("split"), dir: "row", sizes: panes.map(() => 1 / panes.length), children: panes }, focused: panes[0]!.id };
-    sim.emit({ e: "layout_set", workspace_id: workspaceId, layout: { tabs: [...lay.tabs, tab], active_tab: lay.active_tab || tab.id } });
-  }
-
-  private async watchTeam(taskId: string) {
-    const sim = this.sim;
-    try {
-      for (;;) {
-        await sim.clock.sleep(1000, sim.scope);
-        const task = this.n.tasks.find((t) => t.id === taskId);
-        if (!task?.team) return;
-        let changed = false;
-        const attempts = task.team.attempts.map((a): NeuralAttempt => {
-          const s = sim.session(a.session_id);
-          if (!s || a.state === "ready" || a.state === "merged" || a.state === "dropped") return a;
-          const repo = s.worktree ? sim.vfs.repoOf(s.worktree.path) : undefined;
-          const st = repo ? sim.vfs.status(repo) : [];
-          let additions = 0;
-          let deletions = 0;
-          for (const e of st) {
-            const c = counts(repo!.head.get(e.path) ?? "", sim.vfs.read(join(repo!.root, e.path)) ?? "");
-            additions += c.additions;
-            deletions += c.deletions;
-          }
-          const next: NeuralAttempt = { ...a, files: st.length, additions, deletions };
-          if (s.status === "done" && a.state === "working") {
-            next.state = "ready";
-            next.check_ok = true;
-            next.check_out = `${task.check}: all tests passed`;
-          }
-          if (next.files !== a.files || next.additions !== a.additions || next.deletions !== a.deletions || next.state !== a.state) changed = true;
-          return next;
-        });
-        if (changed) {
-          const all = attempts.every((a) => a.state === "ready");
-          const tasks = this.n.tasks.map((t) => (t.id === taskId ? { ...t, team: { ...t.team!, attempts }, status: all ? ("review" as const) : t.status, updated_at: sim.now() } : t));
-          sim.state.neural = { ...this.n, tasks };
-          sim.emitNeural();
-          if (all) {
-            this.observe("team", `All ${attempts.length} attempts passed ${task.check}. Pick one.`, { task_id: taskId });
-            this.message("assistant", `The race is over: all ${attempts.length} agents passed \`${task.check}\`. ${verdicts.slice(0, attempts.length).map((v, i) => `Attempt ${i + 1}: ${v}.`).join(" ")} It is your call: open the team and use one.`, { proactive: true });
-            return;
-          }
-        }
-      }
-    } catch {
-      /* reset */
-    }
-  }
-
-  pick(taskId: string, sessionId: string) {
-    const sim = this.sim;
-    const task = this.n.tasks.find((t) => t.id === taskId);
-    const win = task?.team?.attempts.find((a) => a.session_id === sessionId);
-    if (!task?.team || !win) return;
-    const ws = sim.state.workspaces.find((w) => w.id === task.workspace_id);
-    this.mergeWorktree(taskId, sessionId);
-    const attempts = task.team.attempts.map((a): NeuralAttempt => ({ ...a, state: a.session_id === sessionId ? "merged" : "dropped" }));
-    for (const a of attempts) if (a.state === "dropped") closeSession(sim, a.session_id);
-    const tasks = this.n.tasks.map((t) => (t.id === taskId ? { ...t, status: "done" as const, team: { ...t.team!, attempts, winner: sessionId }, agents: [sessionId], updated_at: sim.now() } : t));
-    sim.state.neural = { ...this.n, tasks };
-    sim.emitNeural();
-    const name = sim.profileOf(sessionId)?.name ?? "the winner";
-    this.observe("team", `Merged ${name}'s version into ${ws?.name ?? "the project"}`, { task_id: taskId });
-    sim.signal({ type: "team-picked", task: taskId, winner: sessionId });
-  }
-
-  cleanup(taskId: string) {
-    const task = this.n.tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    for (const a of task.team?.attempts ?? []) if (a.state !== "merged") closeSession(this.sim, a.session_id);
-    this.editTask(taskId, { remove: true });
   }
 
   /** A minute ago: used by seeds. */

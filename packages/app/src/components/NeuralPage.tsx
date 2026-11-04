@@ -1,4 +1,4 @@
-import type { OrchMessage, Session, Swarm } from "@neuralagent/protocol";
+import type { OrchMessage, Session } from "@neuralagent/protocol";
 import {
   AssistantMessage,
   AssistantOrb,
@@ -32,12 +32,11 @@ import { useOpenAgent } from "../lib/openAgent";
 import { humanError } from "../lib/agentReason";
 import { NOTICE, byDay, clock, plainText, shortAgo, useNow } from "../lib/agentui";
 import { activityOf } from "../lib/status";
-import { useClient, useDaemon, useUi } from "../lib/store";
+import { useClient, useDaemon } from "../lib/store";
 import { awayOf, neuralOf } from "../lib/neural";
 import type { State } from "@neuralagent/protocol";
 import { AwayCard, PendingCards, ProactiveHeader } from "./neural/NeuralBits";
 import { NeuralPanel } from "./neural/NeuralPanel";
-import { TeamDetail } from "./swarm/TeamDetail";
 import { EngineTile, QuietTile, tileGlyph } from "./EngineTile";
 import { Glow } from "./Glow";
 
@@ -83,8 +82,6 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
   const v2 = useDaemon((c) => c.status === "open" && c.has("neural"));
   const onPlan = v2 ? () => setPlan(true) : undefined;
   const [plan, setPlan] = useState(false);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const team = neural?.tasks.find((t) => t.id === teamId);
   const now = useNow();
   const away = useMemo(() => (orch ? awayOf({ orchestrator: orch, neural } as State, now) : null), [orch, neural, now]);
   const openTasks = neuralOf({ neural } as State).tasks.filter((t) => t.status !== "done" && t.status !== "failed").length;
@@ -178,16 +175,13 @@ export function NeuralPage({ onSettings }: { onSettings?: () => void }) {
       </div>
       {!phone && v2 && (
         <aside aria-label="What Neural knows" className="scroller hidden w-80 shrink-0 overflow-y-auto border-l border-line px-4 pt-2 pb-6 xl:block">
-          <NeuralPanel onOpenTask={(t) => setTeamId(t.id)} />
+          <NeuralPanel />
         </aside>
       )}
       </div>
 
       <Sheet open={plan} onClose={() => setPlan(false)} title="Neural" eyebrow="Tasks and memory" size="md">
-        <NeuralPanel className="pb-4" onOpenTask={(t) => setTeamId(t.id)} />
-      </Sheet>
-      <Sheet open={!!team} onClose={() => setTeamId(null)} title={team?.team?.pattern === "race" ? "Race" : "Build + review"} eyebrow="Team" size="lg">
-        {team && <TeamDetail task={team} />}
+        <NeuralPanel className="pb-4" />
       </Sheet>
 
       <ConfirmSheet
@@ -452,13 +446,11 @@ export const useOpenSession = useOpenAgent;
 
 type Chip = { key: string; title: string; sub: string; engine?: string; activity?: Activity; onOpen: () => void };
 
-/** The live agents, one chip each (a swarm is one chip): what Neural talks about, one tap away. */
+/** The live agents, one chip each what Neural talks about, one tap away. */
 function LiveAgents() {
   const sessions = useDaemon((c) => c.state?.sessions);
   const profiles = useDaemon((c) => c.state?.profiles);
   const workspaces = useDaemon((c) => c.state?.workspaces);
-  const swarms = useDaemon((c) => c.state?.swarms);
-  const setWorkspace = useUi((u) => u.setWorkspace);
   const open = useOpenSession();
   const chips = useMemo(() => {
     const engine = (id: string) => profiles?.find((p) => p.id === id)?.engine ?? "shell";
@@ -466,29 +458,12 @@ function LiveAgents() {
     const live = Object.values(sessions ?? {}).filter(
       (s): s is Session => !!s && s.alive && engine(s.profile_id) !== "shell" && !s.profile_id.startsWith("install:"),
     );
-    const inSwarm = new Map<string, Swarm>();
-    for (const w of swarms ?? []) if (!w.ended) for (const m of w.members) inSwarm.set(m.session_id, w);
     const out: Chip[] = [];
-    const seen = new Set<string>();
     for (const s of live.sort((a, b) => b.started_at - a.started_at)) {
-      const w = inSwarm.get(s.id);
-      if (w) {
-        if (seen.has(w.id)) continue;
-        seen.add(w.id);
-        const team = w.members.map((m) => sessions?.[m.session_id]).filter((x): x is Session => !!x?.alive);
-        out.push({
-          key: w.id,
-          title: "Swarm",
-          sub: `${wsName(w.workspace_id)} · ${team.length}`,
-          activity: activityOf(team.map((x) => x.status)),
-          onOpen: () => setWorkspace("__swarm"),
-        });
-      } else {
-        out.push({ key: s.id, title: s.title, sub: wsName(s.workspace_id), engine: engine(s.profile_id), activity: activityOf([s.status]), onOpen: () => open(s.id) });
-      }
+      out.push({ key: s.id, title: s.title, sub: wsName(s.workspace_id), engine: engine(s.profile_id), activity: activityOf([s.status]), onOpen: () => open(s.id) });
     }
     return out;
-  }, [sessions, profiles, workspaces, swarms, setWorkspace, open]);
+  }, [sessions, profiles, workspaces, open]);
   const ref = useRef<HTMLDivElement>(null);
   const fade = useEdgeFade(ref, chips.length);
   if (chips.length === 0) return null;

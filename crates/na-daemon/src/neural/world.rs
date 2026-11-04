@@ -85,27 +85,6 @@ pub fn render(st: &State, cx: &Ctx) -> String {
             let _ = write!(o, " · note: {}", clip(&t.note, 160));
         }
         o.push('\n');
-        if let Some(team) = &t.team {
-            let _ = write!(o, "  team {:?}", team.pattern);
-            if team.round > 0 {
-                let _ = write!(o, ", review round {}", team.round);
-            }
-            o.push(':');
-            for a in &team.attempts {
-                let _ = write!(o, " [{}] {} {} {:?}", short(&a.session_id), a.role, a.profile_id, a.state);
-                if let Some(ok) = a.check_ok {
-                    let _ = write!(o, " check {}", if ok { "passed" } else { "FAILED" });
-                }
-                if a.files > 0 {
-                    let _ = write!(o, " {} files +{}/-{}", a.files, a.additions, a.deletions);
-                }
-                if let Some(v) = &a.verdict {
-                    let _ = write!(o, " verdict {v}");
-                }
-                o.push(';');
-            }
-            o.push('\n');
-        }
     }
     if more_open > 0 {
         let _ = writeln!(o, "- … and {more_open} older open tasks (close what is finished with update_task)");

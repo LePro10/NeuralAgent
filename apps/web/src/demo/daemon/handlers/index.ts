@@ -231,26 +231,6 @@ function dispatch(sim: Sim, conn: Conn, req: Request): unknown {
     case "neural_confirm":
       sim.neural.confirm(req.p.id, req.p.allow);
       return null;
-    case "neural_team_start": {
-      const ws = sim.state.workspaces.find((w) => w.id === req.p.workspace_id);
-      if (!ws) throw new ApiErr("not_found", "Unknown project");
-      if (req.p.pattern !== "race" && req.p.pattern !== "review") throw new ApiErr("bad_request", "Unknown team pattern");
-      return sim.neural.startTeam({ workspaceId: ws.id, goal: req.p.goal, pattern: req.p.pattern, profiles: req.p.profiles, ...(req.p.check ? { check: req.p.check } : {}) });
-    }
-    case "neural_team_pick":
-      sim.neural.pick(req.p.task_id, req.p.session_id);
-      return null;
-    case "neural_team_cleanup":
-      sim.neural.cleanup(req.p.task_id);
-      return null;
-    case "swarm_start":
-      return M.swarmStart(sim, req.p, conn);
-    case "swarm_send":
-      return M.swarmSend(sim, req.p);
-    case "swarm_stop":
-      return M.swarmStop(sim, req.p);
-    case "swarm_remove":
-      return M.swarmRemove(sim, req.p);
 
     // ── voice (hidden in the demo) and the host ──
     case "call_preview":
@@ -285,8 +265,14 @@ function dispatch(sim: Sim, conn: Conn, req: Request): unknown {
       );
       return { report, bytes: report.length };
     }
+    case "ssh_hosts":
+      return [];
     case "diagnostics_send":
       throw new ApiErr("bad_request", "The live demo does not send reports. Install NeuralAgent to report a problem.");
+    case "reports_mine":
+      return [];
+    case "autopilot":
+      return null; // the demo shows a small fixed autopilot; requests change nothing
   }
   const never: never = req;
   throw new ApiErr("bad_request", `Unknown request ${(never as { m?: string }).m ?? ""}`);

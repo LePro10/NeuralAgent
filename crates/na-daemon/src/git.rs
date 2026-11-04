@@ -38,6 +38,12 @@ pub fn is_repo(dir: &Path) -> bool {
 /// Branch, number of changed files, ahead/behind upstream. `None` if not a repository.
 pub fn summary(dir: &Path) -> Option<GitSummary> {
     let out = git(dir, &["status", "--porcelain=v2", "--branch", "-z"]).ok()?;
+    parse_summary(&out, || git(dir, &["rev-parse", "--short", "HEAD"]).ok())
+}
+
+/// The summary from `git status --porcelain=v2 --branch -z` (also run on another computer over
+/// SSH). `head` names a detached HEAD.
+pub fn parse_summary(out: &str, head: impl FnOnce() -> Option<String>) -> Option<GitSummary> {
     let mut s = GitSummary { branch: String::new(), changed: 0, ahead: 0, behind: 0 };
     let mut fields = out.split('\0');
     while let Some(f) = fields.next() {
@@ -56,7 +62,7 @@ pub fn summary(dir: &Path) -> Option<GitSummary> {
         }
     }
     if s.branch == "(detached)" {
-        s.branch = git(dir, &["rev-parse", "--short", "HEAD"]).map(|h| h.trim().to_string()).unwrap_or(s.branch);
+        s.branch = head().map(|h| h.trim().to_string()).unwrap_or(s.branch);
     }
     Some(s)
 }

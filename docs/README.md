@@ -37,3 +37,4 @@ Start with [`../AGENTS.md`](../AGENTS.md) (entry point, per-change routine, rule
 | [`notes/files.md`](notes/files.md) | Files explorer: desktop pane and phone pages, the daemon's `file_*` requests, roots and the home switch, path checks, audit, viewer and hand-offs (D67, D68). |
 | [`notes/performance.md`](notes/performance.md) | Memory: speech models on demand, one Parakeet per daemon, `MallocSpaceEfficient`, `ProcessType`, the lean HUD bundle, measurements and open points (D74, D75). |
 | [`notes/insights.md`](notes/insights.md) | Admin dashboard, anonymous usage ping, problem reports, cookieless site counts, downloads per platform/country, admin push, retention (D81). |
+| [`notes/autopilot.md`](notes/autopilot.md) | Autopilot: a project agent per workspace with playbook, inbox and chat; connectors (manifest + MCP, generated UI, built-ins, agent-built ones), the Chrome extension, report answers; Teams removed (D87-D89, D91). |

@@ -57,7 +57,7 @@ export async function createWorld(opts: WorldOptions = {}): Promise<DemoWorld> {
 
   const resolve = (name: string): string | null => {
     if (!name) return null;
-    for (const k of [`agent.${name}`, `project.${name}`, `team.${name}`, name]) if (handles[k]) return handles[k]!;
+    for (const k of [`agent.${name}`, `project.${name}`, name]) if (handles[k]) return handles[k]!;
     if (sim.state.sessions[name] || sim.state.workspaces.some((w) => w.id === name) || sim.state.neural?.tasks.some((t) => t.id === name)) return name;
     const w = sim.state.workspaces.find((x) => x.name === name);
     return w?.id ?? null;

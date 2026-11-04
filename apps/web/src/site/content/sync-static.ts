@@ -40,7 +40,7 @@ export function noscriptBlock(): string {
   return `<noscript>
       <main style="max-width:46rem;margin:0 auto;padding:40px 24px 64px;color:${TEXT};font:17px/1.6 system-ui,sans-serif">
         <h1 style="margin:0 0 12px;font-size:34px;line-height:1.15;color:${INK}">Thirteen coding agents. One calm place.</h1>
-        <p style="margin:0 0 16px">NeuralAgent runs Claude Code, Codex and eleven more coding agents side by side on your own computer. Talk to Neural, hand work to a team, and answer your agents from your phone, end-to-end encrypted. Open source, for macOS, Windows, Linux and Android.</p>
+        <p style="margin:0 0 16px">NeuralAgent runs Claude Code, Codex and eleven more coding agents side by side on your own computer. Talk to Neural, hand work to an autopilot, and answer your agents from your phone, end-to-end encrypted. Open source, for macOS, Windows, Linux and Android.</p>
         <p style="margin:0 0 32px"><a href="/download/" style="color:${LINK}">Download</a> · <a href="/demo/" style="color:${LINK}">Live demo</a> · <a href="/changelog/" style="color:${LINK}">Changelog</a> · <a href="/privacy/" style="color:${LINK}">Privacy</a> · <a href="https://github.com/LePro10/NeuralAgent" style="color:${LINK}">GitHub</a></p>
         <h2 style="margin:0;font-size:24px;color:${INK}">Questions</h2>
 ${qa}

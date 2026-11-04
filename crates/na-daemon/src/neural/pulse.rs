@@ -19,7 +19,7 @@ pub fn wakes(kind: ObsKind, tracked: bool, mode: NeuralMode) -> bool {
         return false;
     }
     match kind {
-        ObsKind::Done | ObsKind::Waiting | ObsKind::Error | ObsKind::CheckFailed | ObsKind::Team => true,
+        ObsKind::Done | ObsKind::Waiting | ObsKind::Error | ObsKind::CheckFailed => true,
         ObsKind::Stuck => mode == NeuralMode::Active,
         ObsKind::Started | ObsKind::Exited | ObsKind::CheckPassed | ObsKind::Allowed => false,
     }

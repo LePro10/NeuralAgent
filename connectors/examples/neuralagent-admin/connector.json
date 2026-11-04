@@ -1,0 +1,27 @@
+{
+  "name": "NeuralAgent reports",
+  "icon": "life-buoy",
+  "description": "Reads the problem reports sent from the NeuralAgent app and answers them (admin API, scoped key).",
+  "kind": "api",
+  "version": "1.0.0",
+  "guide": [
+    "Sign in to the admin area of your relay (for example `https://agent.neuralhub.dev/admin/`) and open **API keys**.",
+    "Create a key. Tick **Read reports** and, if the autopilot may answer, **Answer reports**. Copy the key; it is shown only once.",
+    "Paste the key below and press **Test connection**. New reports then arrive as events every few minutes."
+  ],
+  "setup": [
+    { "key": "base_url", "label": "Relay address", "type": "url", "required": true, "default": "https://agent.neuralhub.dev", "placeholder": "https://agent.neuralhub.dev" },
+    { "key": "api_key", "label": "API key", "type": "secret", "required": true, "help": "Starts with nak_. Created in the admin area under API keys." }
+  ],
+  "tools": {
+    "check_connection": "read",
+    "list_reports": "read",
+    "get_report": "read",
+    "poll": "read",
+    "set_status": "write",
+    "reply_report": "external"
+  },
+  "events": ["report"],
+  "check": "check_connection",
+  "poll": { "tool": "poll", "minutes": 10 }
+}

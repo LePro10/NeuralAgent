@@ -17,7 +17,7 @@ world.play("permission");
 
 Signals: `ready` (first world built), `reset`, `scene` (a scene was built), **`scene-ready`** (built, snapshot
 sent, frames on their start route), `client`, `agent-status`, `prompt-opened`, `prompt-answered` (`by`),
-`neural-message`, `team-picked`, `agent-started`, `team-step`.
+`neural-message`, `agent-started`.
 
 ## Frames
 
@@ -33,7 +33,7 @@ sent, frames on their start route), `client`, `agent-status`, `prompt-opened`, `
 - **billing-api Claude** has a morning behind it (seven earlier prompts: signature check, retries, refunds, health check,
   tests), so scrolling up in its chat pages in older messages (`cv_history`, 48 messages per attach).
 - **web-shop** has a finished Claude session (cart quantity, permission asked and allowed), a finished Codex session
-  (the winner of a race Neural ran yesterday) and a done Neural task for each.
+  (a task Neural ran yesterday) and a done Neural task for each.
 - **Neural memory**: two notes ("Prefer pnpm over npm", "Money is always integer minor units").
 - Every agent Neural "follows" has a task (Tasks rail on Neural) with a live note taken from what the agent does.
 
@@ -41,7 +41,7 @@ sent, frames on their start route), `client`, `agent-status`, `prompt-opened`, `
 
 Handles (for `navigate`, `resolve`, `focus`): `agent.claude-billing`, `agent.codex-billing`, `agent.opencode-billing`,
 `agent.gemini-billing`, `agent.claude-shop`, `agent.claude-shop-totals` and `agent.gemini-docs` (agents scene),
-`agent.shell-billing`, `project.{billing-api,web-shop,docs-site}`, `team.wishlist` and `team.shipping` (team scene).
+`agent.shell-billing`, `project.{billing-api,web-shop,docs-site}`.
 The four billing agents exist in grid, permission, phone, neural, idle (three in agents, one in files).
 
 ### grid (hero)
@@ -76,25 +76,13 @@ The four billing agents exist in grid, permission, phone, neural, idle (three in
 - The brain (`neural-brain.ts`) understands: "what are my agents doing" / "what is going on", "who is waiting",
   "start codex in web-shop to ...", "ask gemini in docs-site to ...", "stop claude in billing-api", "summarise
   billing-api", "run the tests in web-shop", "approve" / "deny", "remember that ...", "forget", "be quiet" /
-  "speak up" / "turn yourself off", "catch me up", "race three agents ...", "build and review ...", greetings, thanks,
+  "speak up" / "turn yourself off", "catch me up", greetings, thanks,
   help. Replies stream word by word, action pills open the agent. Starting an agent really starts one (pane or row,
   working ring) and Neural tracks it: a task, then a proactive report when it finishes or needs you, and a check run
   when the task is about tests. What it does not understand gets one honest line and the live summary.
 - Allow on the pending card starts Gemini for real; Deny leaves a "Cancelled" pill and nothing starts.
 - Races and build + review are scripted for web-shop: the reply says so when the goal is not the wishlist /
   the free-shipping hint.
-
-### team (chapter 5: hand it to a team)
-- **Desk and phone**: `"teams"`. Teams: a **build + review** team in round 2 (builder working, reviewer finished with
-  "Changes asked"), a **race** "Add a wishlist" at **Pick one** (three attempts, check passed, "Use this"), and a
-  finished race "Show the stock count" (winner merged, others dropped). Classic swarms: one running (docs-site, four
-  agents, a live feed with one message still "Queued" that is delivered after 9 s) and one ended.
-- Alive: the build + review team hands over by itself (builder -> reviewer -> verdict -> round 2 -> Approved and merged)
-  about 15 to 20 s after the scene, with a Neural report.
-- Visitor: "Use this" on an attempt -> "Keep this version?" -> Winner pill, the others dropped, an observation and a
-  Neural note (`team-picked`). `frame.navigate({ team: "wishlist" })` opens the race detail.
-- Neural can start both patterns too ("race three agents ...", "build and review ..."): attempts get their own copy of
-  the project, work for real on the virtual clock and end in Pick one or Approved.
 
 ### files (chapter 6: files, changes, history)
 - **Desk**: `{ files: "billing-api" }`: the project with the changes sheet open (files, git status, a real diff of what

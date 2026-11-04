@@ -1,9 +1,7 @@
-import type { Event, NeuralState, State } from "./gen/index.ts";
+import type { AutopilotState, Event, NeuralState, State } from "./gen/index.ts";
 
 /** Messages kept in the conversation with Neural (`KEEP` in crates/na-daemon/src/orch.rs). */
 const ORCH_KEEP = 100;
-// Same as the daemon (`swarm::KEEP`).
-const SWARM_KEEP = 300;
 
 /**
  * Applies a daemon event to a client's copy of the state, immutably (new references for what
@@ -52,26 +50,11 @@ export function apply(s: State, ev: Event): State {
       return { ...s, orchestrator: { ...s.orchestrator, ready: ev.ready, keys: ev.keys, busy: ev.busy } };
     case "orch_cleared":
       return { ...s, orchestrator: { ...s.orchestrator, messages: [] } };
-    case "swarm_upsert": {
-      const i = s.swarms.findIndex((w) => w.id === ev.swarm.id);
-      return { ...s, swarms: i < 0 ? [...s.swarms, ev.swarm] : s.swarms.map((w, j) => (j === i ? ev.swarm : w)) };
-    }
-    case "swarm_removed":
-      return { ...s, swarms: s.swarms.filter((w) => w.id !== ev.id), swarm_messages: s.swarm_messages.filter((m) => m.swarm_id !== ev.id) };
-    case "swarm_message": {
-      const old = s.swarm_messages;
-      const i = old.findIndex((m) => m.id === ev.message.id);
-      let msgs = i < 0 ? [...old, ev.message] : old.map((m, j) => (j === i ? ev.message : m));
-      const mine = msgs.filter((m) => m.swarm_id === ev.message.swarm_id);
-      if (mine.length > SWARM_KEEP) {
-        const drop = new Set(mine.slice(0, mine.length - SWARM_KEEP).map((m) => m.id));
-        msgs = msgs.filter((m) => !drop.has(m.id));
-      }
-      return { ...s, swarm_messages: msgs };
-    }
     case "host_notice":
       // Neural's own state (tasks, memory, observations) travels as a host notice (D64).
       if (ev.topic === "neural" && ev.data && typeof ev.data === "object") return { ...s, neural: ev.data as NeuralState };
+      // Autopilot: the full state (pilots, inbox, chat, connectors) replaces the old one (D87).
+      if (ev.topic === "autopilot" && ev.data && typeof ev.data === "object") return { ...s, autopilot: ev.data as AutopilotState };
       return s;
     case "attention":
       return s;

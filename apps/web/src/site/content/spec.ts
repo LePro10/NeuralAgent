@@ -1,11 +1,11 @@
 // The spec sheet: everything the product does, grouped. Facts only (research-local/site-overhaul/site-audit.md Part B).
 // One plain line each. No version badges here: the page ships together with the release that has all of it.
 import {
-  Activity, ArrowDownToLine, AudioLines, Bell, BellRing, BrainCircuit, Command, Coins, Download, Ear, Eye, FileCode, FileDiff, FilePen,
-  Flag, FolderLock, FolderTree, GitBranch, GitCompare, GitMerge, Globe, Gauge, History, Image, Inbox, KeyRound, Keyboard, LayoutGrid, ListChecks,
+  Activity, ArrowDownToLine, AudioLines, Bell, BellRing, BrainCircuit, Command, Coins, Download, Ear, FileCode, FileDiff, FilePen,
+  FolderLock, FolderTree, GitBranch, GitCompare, Globe, Gauge, History, Image, Inbox, KeyRound, Keyboard, LayoutGrid, ListChecks,
   ListPlus, ListTodo, LogIn, MessageCircle, MessageSquare, MessageSquareMore, Mic, MonitorSmartphone, Navigation, PanelTop, Palette,
-  PhoneCall, Plug, Plus, Power, QrCode, Radio, RefreshCw, Scale, Server, Settings2, ShieldAlert, ShieldCheck, Slash, Smartphone, Target,
-  Terminal, Upload, Users, Volume1, Volume2, HardDrive, ZoomIn, Monitor, type LucideIcon,
+  PhoneCall, Plug, Plus, Power, QrCode, Radio, RefreshCw, Scale, Server, Settings2, ShieldAlert, ShieldCheck, Slash, Smartphone,
+  Plane, Terminal, Upload, Users, Volume1, Volume2, HardDrive, ZoomIn, Monitor, type LucideIcon,
 } from "./icons";
 
 export interface SpecItem { icon: LucideIcon; term: string; line: string }
@@ -68,15 +68,13 @@ export const SPEC: SpecGroup[] = [
     ],
   },
   {
-    id: "teams",
-    label: "Teams",
-    icon: Users,
+    id: "autopilot",
+    label: "Autopilot",
+    icon: Plane,
     items: [
-      { icon: Target, term: "One goal, several agents", line: "Give a goal to a team instead of one agent." },
-      { icon: Flag, term: "Race", line: "Two to four agents try the same job, each in its own worktree. Neural compares, you keep the best." },
-      { icon: GitMerge, term: "Build and review", line: "A reviewer checks the builder until it approves." },
-      { icon: Eye, term: "Watch it", line: "Each team shows its goal, status and attempts. You pick the winner." },
-      { icon: MessageCircle, term: "Earlier swarms", line: "Swarms with a message bus stay available: agents write into each other's terminal when they finish a turn, the whole conversation is readable and you can write into it." },
+      { icon: Inbox, term: "An inbox for the project", line: "The autopilot reads Discord, GitHub, mail and feeds you connect, and sorts what needs you." },
+      { icon: ShieldCheck, term: "You decide what it may do", line: "Reading is automatic. Anything that changes something waits for your Allow." },
+      { icon: MessageCircle, term: "Drafts, not sends", line: "Replies are drafted for you to edit and send." },
     ],
   },
   {
@@ -104,7 +102,7 @@ export const SPEC: SpecGroup[] = [
       { icon: QrCode, term: "Pair by QR", line: "The code also pins your computer's key fingerprint." },
       { icon: LayoutGrid, term: "Four tabs", line: "Agents, Neural, Projects, Settings. Every screen has its own address, so Back always goes one step." },
       { icon: Navigation, term: "Floating bar", line: "One floating bar on the agent screen. Tap it for project, other agents and actions; swipe it for the next agent." },
-      { icon: Plus, term: "New agent sheet", line: "Pick project, agent and first prompt. Optionally give it its own worktree, or start a team." },
+      { icon: Plus, term: "New agent sheet", line: "Pick project, agent and first prompt. Optionally give it its own worktree, ." },
       { icon: Inbox, term: "Inbox", line: "Needs you, Working, Done." },
       { icon: Keyboard, term: "Phone terminals", line: "One compact key row above the keyboard." },
       { icon: Bell, term: "Push", line: "Web Push in the browser (on iPhone after Add to Home Screen), FCM on Android. Tap a notification to open that agent." },

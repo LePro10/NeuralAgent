@@ -22,7 +22,6 @@ export type NeuralIntent =
   | { k: "remember"; note: string }
   | { k: "forget" }
   | { k: "mode"; mode: Mode }
-  | { k: "team"; pattern: "race" | "review"; project: string | null }
   | { k: "unknown" };
 
 const ENGINES: [string, RegExp][] = [
@@ -79,8 +78,6 @@ export function matchNeural(raw: string, projects: string[]): NeuralIntent {
   if (has(t, /\b(turn (yourself )?off|switch (yourself )?off|disable (yourself|neural))\b/)) return { k: "mode", mode: "off" };
   if (has(t, /\b(on its own|go active|speak up|be active|resume|talk to me again)\b/)) return { k: "mode", mode: "active" };
 
-  if (has(t, /\b(race|compete|competition|three agents|3 agents)\b/)) return { k: "team", pattern: "race", project };
-  if (has(t, /\bbuild (and|\+|&) review\b/) || has(t, /\b(builder and (a )?reviewer|reviewer loop)\b/)) return { k: "team", pattern: "review", project };
 
   if (has(t, /\b(stop|cancel|kill|interrupt|halt|abort)\b/)) return { k: "stop", engine, project };
   if (has(t, /\b(run|rerun|re-run|execute)\b.*\b(tests?|suite)\b/) || has(t, /\bare the tests (passing|green|failing)\b/)) return { k: "tests", project };

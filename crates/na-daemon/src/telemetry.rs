@@ -371,6 +371,27 @@ pub async fn send_report(
     Ok(id)
 }
 
+/// The signed-in account's own problem reports with the answers they got:
+/// `{ "reports": [{ id, created_at, updated_at, status, summary, answers: [{ at, text }] }] }`.
+/// Request `reports_mine` (no params, feature `reports_mine`) returns this value as is.
+pub async fn reports_mine(core: &Arc<Core>) -> Result<Value, ApiError> {
+    let Some(token) = crate::remote::access_token(core).await else {
+        return Err(err(ErrorCode::BadRequest, "sign in to NeuralAgent Remote to see your reports and their answers"));
+    };
+    let url = format!("{}/api/me/reports", crate::remote::relay_url(core));
+    let res = crate::remote::http(core)
+        .get(url)
+        .bearer_auth(token)
+        .timeout(Duration::from_secs(20))
+        .send()
+        .await
+        .map_err(|e| err(ErrorCode::Internal, format!("could not reach the NeuralAgent server ({})", e.without_url())))?;
+    if !res.status().is_success() {
+        return Err(err(ErrorCode::Internal, format!("the server answered {}", res.status().as_u16())));
+    }
+    res.json().await.map_err(|e| err(ErrorCode::Internal, e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

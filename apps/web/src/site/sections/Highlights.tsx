@@ -3,7 +3,7 @@
 // the pointer across the grid. Facts only (content/spec.ts).
 import "./Highlights.css";
 import { useRef, type PointerEvent } from "react";
-import { ArrowRight, AudioLines, Gauge, ShieldAlert, Server, Trophy } from "lucide-react";
+import { ArrowRight, AudioLines, Gauge, ShieldAlert, Server, Plane } from "lucide-react";
 import { Icon, Reveal, Section, SlotLines, useScrollProgress } from "../ui";
 import { SPEC } from "../content/spec";
 
@@ -21,9 +21,9 @@ function Wave() {
 
 function Race() {
   const lanes = [
-    { who: "claude", w: 1 },
-    { who: "codex", w: 0.78 },
-    { who: "gemini", w: 0.62 },
+    { who: "discord", w: 1 },
+    { who: "github", w: 0.78 },
+    { who: "email", w: 0.62 },
   ];
   return (
     <ol className="hl-race" aria-hidden>
@@ -31,7 +31,7 @@ function Race() {
         <li key={l.who} style={{ "--w": l.w, "--n": i } as React.CSSProperties} data-win={i === 0 ? "" : undefined}>
           <span>{l.who}</span>
           <b><i /></b>
-          <em>{i === 0 ? "kept" : ""}</em>
+          <em>{i === 0 ? "sorted" : ""}</em>
         </li>
       ))}
     </ol>
@@ -72,7 +72,7 @@ function Memory() {
 
 const CARDS = [
   { id: "voice", wide: true, icon: AudioLines, title: "Say “Hey Neural”.", text: "Talk to an orchestrator that starts agents, answers their prompts and reports back. Wake word, speech to text and the voice all run on your own computer.", art: <Wave />, chip: "local voice · calls · dictation" },
-  { id: "race", icon: Trophy, title: "Let agents race.", text: "Two to four agents try the same job, each in its own worktree. Neural compares, you keep the best.", art: <Race />, chip: "teams · worktrees" },
+  { id: "autopilot", icon: Plane, title: "Let an autopilot mind the project.", text: "It reads your Discord, GitHub and mail, sorts what comes in and drafts the answers. You decide what it may do.", art: <Race />, chip: "autopilot · connectors" },
   { id: "ask", icon: ShieldAlert, title: "Risky steps wait for you.", text: "Deleting files, force pushing, publishing: Neural asks Allow or Deny first, even behind quotes or semicolons.", art: <Ask />, chip: "guardrails" },
   { id: "svc", icon: Server, title: "Agents never stop.", text: "One background service owns every agent. Close or update the app: they keep working.", art: <Pulse />, chip: "always on" },
   { id: "mem", icon: Gauge, title: "Light as air.", text: "Idle memory on a Mac fell from about 1.3 GB to well under 100 MB.", art: <Memory />, chip: "< 100 MB" },

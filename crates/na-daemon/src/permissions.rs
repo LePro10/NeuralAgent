@@ -274,16 +274,23 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
     if client.kind == ClientKind::Desktop || full_disk_access(&core.env.home) != Some(false) {
         return Ok(());
     }
-    let ws = |id: &String| core.read(|s| s.workspaces.iter().find(|w| &w.id == id).map(|w| w.path.clone()));
-    let cwd = |id: &String| core.read(|s| s.sessions.get(id).map(|x| x.cwd.clone()));
+    // Folders on other computers (SSH) are not this computer's to guard.
+    let ws = |id: &String| core.read(|s| s.workspaces.iter().find(|w| &w.id == id && w.ssh.is_none()).map(|w| w.path.clone()));
+    let cwd = |id: &String| {
+        core.read(|s| {
+            s.sessions.get(id).filter(|x| s.workspaces.iter().any(|w| w.id == x.workspace_id && w.ssh.is_none())).map(|x| x.cwd.clone())
+        })
+    };
     let ws_of = |id: &String| {
-        core.read(|s| s.sessions.get(id).and_then(|x| s.workspaces.iter().find(|w| w.id == x.workspace_id)).map(|w| w.path.clone()))
+        core.read(|s| {
+            s.sessions.get(id).and_then(|x| s.workspaces.iter().find(|w| w.id == x.workspace_id && w.ssh.is_none())).map(|w| w.path.clone())
+        })
     };
     let paths: Vec<String> = match req {
+        Request::WorkspaceAdd { ssh: Some(_), .. } => return Ok(()),
         Request::WorkspaceAdd { path, .. } => vec![crate::fsbrowse::expand_lexical(&core.env.home, path).to_string_lossy().into_owned()],
-        Request::SessionStart(st) => st.cwd.clone().or_else(|| ws(&st.workspace_id)).into_iter().collect(),
+        Request::SessionStart(st) => ws(&st.workspace_id).map(|w| st.cwd.clone().unwrap_or(w)).into_iter().collect(),
         Request::SessionRestart { id } => cwd(id).into_iter().collect(),
-        Request::SwarmStart { workspace_id, .. } => ws(workspace_id).into_iter().collect(),
         Request::GitChanges { workspace_id, session_id } | Request::GitDiff { workspace_id, session_id, .. } => {
             ws(workspace_id).into_iter().chain(session_id.as_ref().and_then(cwd)).collect()
         }

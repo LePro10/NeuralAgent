@@ -1098,3 +1098,65 @@ it really recognizes it every time".
 **Alternatives:** a lower keyword score (more false wakes on the corpus); a bigger KWS model (download
 size); a system notification sound (cannot be made quiet enough, not in the call's audio path).
 
+
+
+## D90 — Workspaces over SSH (2026-11-03)
+A workspace may carry `ssh: {host, user?, port?}`; its `path` is then a path on that computer.
+- **The daemon runs the system `ssh`**, so keys, agent, `~/.ssh/config`, jump hosts and `known_hosts` all
+  apply. No ports are opened or forwarded, nothing is installed there, and phones and browsers
+  add and use such a workspace through the host they already reach (the host does the connecting).
+  Alternatives: an SSH library in Rust (re-implements config/agent/auth, more bugs) and a remote
+  helper binary (install step, version drift). Both rejected for "never problems with ports".
+- **ControlMaster** (`/tmp/na-ssh-<uid>/%C`, 10 min) shares one connection per host: browsing is
+  instant, and a password typed once in a terminal pane also serves the folder browser. Not on Windows.
+- **Browsing is `BatchMode`** (never asks). If the host needs a password the sheet offers "Add anyway";
+  the terminal pane then asks in the pane itself. Add `unchecked` skips the check.
+- **Agents** start as `ssh -t host 'cd dir && exec $SHELL -l -i -c "<agent>"'` (their PATH, nvm and so
+  on). Hooks and MCP servers stay on this computer, so status comes from the terminal output only;
+  no Claude chat view, no worktrees, no Changes/Files for these yet (guards say so).
+- **Neural cannot add a host** (needs approval); remote files/usage/history ignore SSH workspaces.
+- "Change folder…" is `workspace_update {path}`; running agents keep their folder.
+Code: `crates/na-daemon/src/ssh.rs`, `packages/app/src/components/AddWorkspace.tsx`.
+
+## D87 — Autopilot: one project agent per workspace, separate from Neural (2026-11-03)
+An autopilot belongs to one workspace, has its own playbook (mission, how to work, tone, routines,
+sources, permissions, notifications), inbox and chat, and works only in that project. Neural stays
+the user's global copilot; it may later ask an autopilot for its state. Why separate: an autopilot
+reads text from strangers (Discord, Reddit, reports), so it must not hold Neural's reach over every
+agent and project on the computer; and each project needs its own instructions and inbox. Same
+engine (`llm.rs`, the model settings) and the same Core path for starting agents. Safety rails:
+outside text first goes through a triage call without tools and later appears only inside
+`<untrusted>`; the playbook is changed only by the user (the pilot can propose a full new one);
+tools have classes (read / write / external) with defaults auto / auto-for-agents-else-ask / ask and
+per-tool rules; a pilot cannot confirm its own pending actions or read connector secrets. No
+built-in rate limits: the user sets routines or asks in the chat. The playbook lives in the daemon
+home, not the project folder, so a coding agent working in the project cannot edit its own
+instructions. Alternatives: a mode of Neural (mixes projects, too much reach), GPT-style
+assistant templates (the owner wants exact per-project instructions plus a setup interview).
+Notes: `docs/notes/autopilot.md`.
+
+## D88 — Teams and swarms are removed (2026-11-03)
+Race, build + review (`NeuralTeam*`, `start_team`), the classic swarm (`swarm.rs`, `Swarm*`) and
+the Teams page are gone; the sidebar slot goes to Autopilot. The owner did not use them and the
+autopilot can start a reviewer agent when its playbook says so. Alternative: keep them read-only
+(more code to carry for a feature nobody starts).
+
+## D89 — Connectors are MCP servers with a manifest; the app draws their UI (2026-11-03)
+A connector is a folder with `connector.json` (setup fields, guide, tool classes, events, check,
+poll) and an MCP server over stdio. The app generates the setup form, the "Test connection"
+checklist, status and permissions from the manifest, so a connector an agent builds looks as good
+as a built-in one and nobody writes UI for it. Events from outside travel as the notification
+`notifications/neuralagent/event` (MCP has no push of its own); polling sources name a tool. Built-in
+connectors are plain Node 22 files without npm dependencies, embedded in the daemon, so there is no
+build step and nothing to install. New connectors are built by a coding agent from a template with
+a `CLAUDE.md` of rules, then checked automatically. The browser is the user's normal Chrome via an
+extension using only `chrome.tabs`/`chrome.scripting` (no CDP, no `chrome.debugger`, no test
+browser), because automated test browsers get blocked or asked for captchas. Alternatives: our own
+plugin format (no reuse of the MCP ecosystem), Playwright (detected as automation), connectors with
+hand-written UI (uneven quality).
+
+## D91 — Answers to problem reports, scoped admin API keys (2026-11-03)
+The relay stores answers to signed-in reports, pushes them to the reporter's devices and lists
+them under Settings → Privacy and support → Your reports. Anonymous reports cannot be answered.
+Automation (our own autopilot) uses admin API keys with scopes (`reports:read`, `reports:reply`),
+shown once, stored hashed, revocable, instead of the owner's Google sign-in.

@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
+mod autopilot;
 mod claude;
 mod neural;
+pub use autopilot::*;
 pub use claude::*;
 pub use neural::*;
 
@@ -23,7 +25,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// newer messages and requests only to daemons that list them: over the relay an older daemon
 /// closes the session on a message it cannot parse. Add a name with every new client message or
 /// request a new web remote might send to an older computer.
-pub const DAEMON_FEATURES: &[&str] = &["call_warm", "files", "neural", "host_system", "cv_stop_task", "neural_cleanup"];
+pub const DAEMON_FEATURES: &[&str] = &["call_warm", "files", "neural", "host_system", "cv_stop_task", "neural_cleanup", "autopilot", "reports_mine"];
 
 /// [`DAEMON_FEATURES`] as sent in `HelloOk`.
 pub fn daemon_features() -> Vec<String> {
@@ -289,63 +291,14 @@ pub struct State {
     /// Neural, the orchestrator: conversation and whether it can answer.
     #[serde(default)]
     pub orchestrator: OrchState,
-    /// Teams of agents handing work to each other.
-    #[serde(default)]
-    pub swarms: Vec<Swarm>,
-    /// Their messages, oldest first (the most recent ones of each swarm only).
-    #[serde(default)]
-    pub swarm_messages: Vec<SwarmMessage>,
     /// Neural's tasks, memory, observations and confirmations (absent from older daemons).
     #[serde(default)]
     #[ts(as = "Option<NeuralState>", optional)]
     pub neural: NeuralState,
-}
-
-/// A team of agents working on one goal. They talk through the `send_message` tool the daemon
-/// gives them (MCP); a message reaches an agent as a prompt once it is idle.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct Swarm {
-    pub id: Id,
-    pub workspace_id: Id,
-    pub goal: String,
-    pub members: Vec<SwarmMember>,
-    #[ts(type = "number")]
-    pub started_at: Millis,
-    /// Stopped by the user, or every member has exited.
-    pub ended: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct SwarmMember {
-    /// "Coordinator", "Scout", "Builder", "Reviewer" or the user's own; unique in the team.
-    pub role: String,
-    pub session_id: Id,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct SwarmMessage {
-    pub id: Id,
-    pub swarm_id: Id,
-    /// A role, or "You" for the user.
-    pub from: String,
-    /// A role, or "all".
-    pub to: String,
-    pub text: String,
-    #[ts(type = "number")]
-    pub at: Millis,
-    /// Typed into the recipients' terminals (they were busy until then).
-    pub delivered: bool,
-}
-
-/// One member of a swarm to start.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct SwarmRole {
-    pub role: String,
-    pub profile_id: Id,
+    /// Autopilot: project agents, their inboxes and connectors (absent from older daemons).
+    #[serde(default)]
+    #[ts(as = "Option<AutopilotState>", optional)]
+    pub autopilot: AutopilotState,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
@@ -592,6 +545,40 @@ pub struct Workspace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub git: Option<GitSummary>,
+    /// The folder lives on another computer, reached over SSH (D87). `path` is then a path there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ssh: Option<SshHost>,
+}
+
+/// A computer reached with the system `ssh` (so `~/.ssh/config`, keys and the agent all apply).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SshHost {
+    /// Host name, address or an alias from `~/.ssh/config`.
+    pub host: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub port: Option<u16>,
+}
+
+/// A host the user already has in `~/.ssh/config` (answer of `SshHosts`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SshKnown {
+    pub alias: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub user: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -1143,16 +1130,6 @@ pub enum Event {
         busy: bool,
     },
     OrchCleared,
-    SwarmUpsert {
-        swarm: Swarm,
-    },
-    SwarmRemoved {
-        id: Id,
-    },
-    /// A new message, or one that was delivered (same id).
-    SwarmMessage {
-        message: SwarmMessage,
-    },
     /// Something the user should notice (agent done / needs input / error).
     Attention {
         session_id: Id,
@@ -1189,6 +1166,14 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         name: Option<String>,
+        /// The folder is on this computer (see `SshHost`); `path` may be `~` or empty for its home.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        ssh: Option<SshHost>,
+        /// Add without looking at the folder first (a host that needs a password cannot be checked).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        unchecked: Option<bool>,
     },
     WorkspaceUpdate {
         id: Id,
@@ -1205,6 +1190,10 @@ pub enum Request {
         #[ts(optional)]
         #[ts(type = "number")]
         order: Option<i64>,
+        /// Switch the workspace to another folder (on the same computer).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        path: Option<String>,
     },
     WorkspaceRemove {
         id: Id,
@@ -1351,14 +1340,27 @@ pub enum Request {
     // filesystem (read-only browsing, for picking folders)
     FsList {
         path: String,
+        /// Browse that computer instead (needs a working key login; D87).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        ssh: Option<SshHost>,
     },
     /// Starting points for the folder browser → `FsRoots`.
-    FsRoots,
+    FsRoots {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        ssh: Option<SshHost>,
+    },
     /// Creates `name` inside `path` (one level, no slashes) → `FsEntry`.
     FsMkdir {
         path: String,
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        ssh: Option<SshHost>,
     },
+    /// The hosts in `~/.ssh/config` → `Vec<SshKnown>`.
+    SshHosts,
     // files explorer (D67): only inside workspace folders (and the home folder where allowed)
     /// One folder's entries with git badges → `FileListing`.
     FileList {
@@ -1563,30 +1565,12 @@ pub enum Request {
         #[ts(type = "unknown")]
         data: Value,
     },
-    // swarms
-    /// Start a team on `goal` in the workspace. `members` defaults to Coordinator, Scout,
-    /// Builder and Reviewer with the default agent. Returns `Swarm`.
-    SwarmStart {
-        workspace_id: Id,
-        goal: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        members: Option<Vec<SwarmRole>>,
+    /// Autopilot (D87): every operation of project agents and connectors. Feature "autopilot".
+    Autopilot {
+        op: AutopilotOp,
     },
-    /// A message from the user to one member (role) or "all".
-    SwarmSend {
-        swarm_id: Id,
-        to: String,
-        text: String,
-    },
-    /// Stop every member; the conversation stays.
-    SwarmStop {
-        swarm_id: Id,
-    },
-    /// Forget the swarm and its messages (the agents' panes stay).
-    SwarmRemove {
-        swarm_id: Id,
-    },
+    /// The problem reports this device sent, with their status (feature "reports_mine").
+    ReportsMine,
     // Neural's own state (D61-D64)
     /// How much Neural speaks on its own.
     NeuralMode {
@@ -1611,28 +1595,6 @@ pub enum Request {
     NeuralConfirm {
         id: Id,
         allow: bool,
-    },
-    /// A team run by Neural on `goal`: a race of `profiles` (2-4, each in its own worktree) or a
-    /// build + review (`profiles[0]` builds, `profiles[1]` reviews). Returns the `NeuralTask`.
-    NeuralTeamStart {
-        workspace_id: Id,
-        goal: String,
-        pattern: TeamPattern,
-        profiles: Vec<Id>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        check: Option<String>,
-    },
-    /// Race: keep this attempt (merge its worktree) and throw the others away.
-    NeuralTeamPick {
-        task_id: Id,
-        session_id: Id,
-    },
-    /// A race that ended without a pick (dropped, failed, cut off by a restart): throw away the
-    /// worktrees its attempts made (never a kept one). Only on the user's explicit OK. Returns how
-    /// many were removed. Feature "neural_cleanup".
-    NeuralTeamCleanup {
-        task_id: Id,
     },
     /// What phones, browsers and the orchestrator did here, newest first.
     AuditList {

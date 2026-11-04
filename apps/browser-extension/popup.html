@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NeuralAgent Browser</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <img src="icons/icon-48.png" width="28" height="28" alt="" />
+    <h1>NeuralAgent Browser</h1>
+  </header>
+
+  <section id="state" aria-live="polite">
+    <span id="dot" class="dot"></span>
+    <div>
+      <strong id="title"></strong>
+      <p id="detail"></p>
+    </div>
+  </section>
+
+  <form id="pair" hidden>
+    <label for="code">Pairing code</label>
+    <input id="code" autocomplete="off" spellcheck="false" placeholder="NA-1234-ABCDEF" />
+    <p class="hint">Open NeuralAgent, go to the Autopilot page, Connectors, Browser, and press Pair. Paste the code here.</p>
+    <p id="error" class="error" role="alert" hidden></p>
+    <button type="submit" id="pairBtn">Pair</button>
+  </form>
+
+  <div id="actions" hidden>
+    <button id="retry" class="ghost" hidden>Try again</button>
+    <button id="unpair" class="ghost">Unpair</button>
+  </div>
+
+  <p class="foot">Pages open in a tab group called NeuralAgent. Use a second Chrome profile for this.</p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

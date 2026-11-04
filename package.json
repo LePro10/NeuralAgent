@@ -8,6 +8,7 @@
     "dev:web": "pnpm --filter @neuralagent/web dev",
     "build:web": "pnpm --filter @neuralagent/web build",
     "typecheck": "pnpm -r --parallel typecheck",
+    "test:connectors": "node --test \"connectors/**/*.test.mjs\"",
     "test": "pnpm -r --parallel test && node --test scripts/changelog.test.mjs",
     "lint:tokens": "node scripts/check-tokens.mjs",
     "changelog": "node scripts/changelog.mjs",

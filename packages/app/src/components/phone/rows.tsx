@@ -1,12 +1,11 @@
 // Phones: the rows of the Agents inbox and a project's page. One row per agent (quiet engine tile,
 // title, "project · 3m", one status word), and for an agent that waits for you the question with
 // an answer right in the row: Allow / Deny for a permission, a reply field when it waits for the
-// next prompt. A running swarm is one row with its members' glyphs.
+// next prompt.
 import type { AgentStatus, CvPrompt, Session } from "@neuralagent/protocol";
 import { SwipeRow, cn, haptic, toast, type SwipeAction } from "@neuralagent/ui";
 import { ArrowUp, ChevronDown, ChevronRight, RotateCw, Square, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import type { InboxItem } from "../../lib/inbox";
 import { humanError } from "../../lib/agentReason";
 import { agentSays, shortAgo } from "../../lib/agentui";
 import { activityOf } from "../../lib/status";
@@ -188,27 +187,6 @@ function Chip({ children, onClick, primary, quiet }: { children: ReactNode; onCl
       )}
     >
       {children}
-    </button>
-  );
-}
-
-/** A running swarm: its goal, how many members, and who waits. */
-export function SwarmInboxRow({ item, engineOf, project, now, onOpen }: { item: Extract<InboxItem, { kind: "swarm" }>; engineOf: (s: Session) => string; project?: string; now: number; onOpen: () => void }) {
-  const { swarm, members, waiting } = item;
-  const word = waiting.length ? { label: `${waiting.length} need${waiting.length === 1 ? "s" : ""} you`, tone: "text-accent" } : members.some((m) => m.alive && m.status === "working") ? { label: "Working", tone: "text-dim" } : { label: "Idle", tone: "text-faint" };
-  return (
-    <button type="button" onClick={onOpen} data-lead="" className="press-row flex min-h-row-2 w-full min-w-0 items-center gap-3 py-2.5 pl-4 text-left">
-      <span className="flex shrink-0 -space-x-2">
-        {members.slice(0, 3).map((m) => (
-          <EngineTile key={m.id} engine={engineOf(m)} size="sm" round className="ring-2 ring-bg" activity={m.alive ? activityOf([m.status]) : undefined} />
-        ))}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-body text-bright">{swarm.goal || "Swarm"}</span>
-        <Line>{[`Swarm of ${members.length}`, project, shortAgo(item.since, now)].filter(Boolean).join(" · ")}</Line>
-      </span>
-      <span className={cn("shrink-0 text-footnote", word.tone)}>{word.label}</span>
-      <ChevronRight strokeWidth={2.2} className="mr-3 size-icon-sm shrink-0 text-faint" />
     </button>
   );
 }

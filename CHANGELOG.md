@@ -11,6 +11,18 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-04
+
+### New
+- **Autopilot looks after your project.** Give a project an autopilot and tell it exactly what to do: read your Discord, GitHub issues, Reddit or your own app, sort what comes in, let an agent look at a bug and write the answer for you to send. It asks you first before it speaks for you, and it can set itself up in a short conversation if you are not sure what it should do. Run it on a schedule or just ask it ("look at all new Discord messages").
+- **Connectors**: Discord, GitHub, Browser, Reddit, RSS feeds and any web API are built in. Need another one? Describe it and an agent builds it for you, with a setup form and a "Test connection" button. Existing MCP servers can be added too.
+- **Browser extension for Chrome**: the autopilot reads pages in your normal Chrome, so sites see a normal browser.
+- **Answers to your problem reports** arrive as a notification and under Settings → Privacy and support → Your reports.
+- Workspaces on other computers over SSH: "Add workspace" now asks "This computer" or an SSH host (your `~/.ssh/config` hosts are listed, or type `user@host`). You browse its folders, and terminals and agents there work like any other workspace, also from your phone. Right-click a workspace → "Change folder…" switches it to another folder.
+
+### Improved
+- **Autopilot replaces Teams**: race, build + review and the older swarms are gone. The autopilot can still let one agent review another's work.
+
 ## [0.5.2] - 2026-11-02
 
 ### New

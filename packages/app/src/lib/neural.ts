@@ -48,19 +48,13 @@ export const TASK_WORD: Record<NeuralTaskStatus, string> = {
   failed: "Dropped",
 };
 
-/** A race whose attempts are all in: the user picks one (not "checking" any more). */
-export function racePick(t: NeuralTask): boolean {
-  return t.status === "review" && t.team?.pattern === "race" && !t.team.winner && t.team.attempts.some((a) => a.state === "ready");
-}
-
 /** The word for a task's status. */
 export function taskWord(t: NeuralTask): string {
-  return racePick(t) ? "Pick one" : TASK_WORD[t.status];
+  return TASK_WORD[t.status];
 }
 
 /** The activity mark of a task (same vocabulary as agents). */
 export function taskActivity(t: NeuralTask): Activity | undefined {
-  if (racePick(t)) return "waiting";
   switch (t.status) {
     case "working":
     case "review":
@@ -84,7 +78,6 @@ export const OBS_WORD: Record<ObsKind, string> = {
   check_passed: "Check passed",
   check_failed: "Check failed",
   allowed: "Allowed",
-  team: "Team",
 };
 
 export function obsActivity(k: ObsKind): Activity | undefined {

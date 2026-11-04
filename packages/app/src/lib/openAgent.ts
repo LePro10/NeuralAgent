@@ -1,5 +1,5 @@
 // "Open this agent", one function for every place that has an agent to show (the Agents list,
-// Neural's feed, a swarm, History, a notification). Phones push the agent's own screen through the
+// Neural's feed, History, a notification). Phones push the agent's own screen through the
 // phone router and never touch the computer's layout. Desktop switches to the agent's workspace
 // and brings its tab and pane to the front (that layout is the desktop's own business).
 import type { DaemonClient } from "@neuralagent/protocol";

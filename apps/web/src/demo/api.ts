@@ -32,8 +32,6 @@ export type DemoScene =
   | "phone"
   /** Neural has a conversation and a question waiting for you. */
   | "neural"
-  /** A race between three agents on one goal, ending at "Pick one". */
-  | "team"
   /** Files, git changes and the diff of what an agent edited. */
   | "files"
   /** The overview: every agent of every project, one needing you, some working, some done. */
@@ -41,7 +39,7 @@ export type DemoScene =
   /** Everything calm: nobody working, nobody waiting. */
   | "idle";
 
-export const SCENES: readonly DemoScene[] = ["grid", "permission", "phone", "neural", "team", "files", "agents", "idle"];
+export const SCENES: readonly DemoScene[] = ["grid", "permission", "phone", "neural", "files", "agents", "idle"];
 
 /** The version the simulated computer and its app report (the site ships with this release). */
 export const DEMO_VERSION = "0.4.0";
@@ -65,10 +63,7 @@ export type DemoSignal =
   /** `by`: the device that answered. */
   | { type: "prompt-answered"; agent: string; allow: boolean; by: DemoActor }
   | { type: "neural-message"; role: string; text: string }
-  | { type: "team-picked"; task: string; winner: string }
-  | { type: "agent-started"; agent: string; name: string }
-  /** A team moved on: a hand-off, a verdict, a check result. */
-  | { type: "team-step"; task: string; step: string };
+  | { type: "agent-started"; agent: string; name: string };
 
 // ── the world ────────────────────────────────────────────────────────────────────────────────
 
@@ -148,7 +143,6 @@ export type SettingsSection =
 export type DemoRoute =
   | "agents"
   | "neural"
-  | "teams"
   | "projects"
   | "history"
   | "usage"
@@ -158,9 +152,7 @@ export type DemoRoute =
   | { project: string }
   | { settings: SettingsSection }
   /** The files and changes of a project (`files` is a name, handle or id): the Files page on the phone, the changes sheet on desktop. */
-  | { files: string; path?: string }
-  /** The detail page of a team (a Neural task id, or a swarm id). */
-  | { team: string };
+  | { files: string; path?: string };
 
 export type DemoAppearance = "dark" | "light";
 export type DemoScheme = "night" | "graphite" | "midnight" | "black" | "dusk" | "forest";
@@ -204,8 +196,6 @@ export function sceneRoute(scene: DemoScene, view: DemoView): DemoRoute {
       return view === "desk" ? { project: "billing-api" } : "agents";
     case "neural":
       return "neural";
-    case "team":
-      return "teams";
     case "files":
       return { files: "billing-api" };
     case "agents":
@@ -221,7 +211,7 @@ export const sceneChat = (scene: DemoScene): boolean => scene === "permission" |
 const enc = encodeURIComponent;
 
 /** The phone router's hash for a route (`resolve` maps handles and names to ids). */
-export function phoneHash(to: DemoRoute, resolve: (kind: "agent" | "project" | "team", name: string) => string): string {
+export function phoneHash(to: DemoRoute, resolve: (kind: "agent" | "project", name: string) => string): string {
   if (typeof to === "string") {
     switch (to) {
       case "agents":
@@ -231,25 +221,19 @@ export function phoneHash(to: DemoRoute, resolve: (kind: "agent" | "project" | "
       case "history":
       case "usage":
         return `#/${to}`;
-      case "teams":
-        return "#/swarms";
     }
   }
   if ("agent" in to) return `#/agent/${enc(resolve("agent", to.agent))}`;
   if ("project" in to) return `#/project/${enc(resolve("project", to.project))}`;
   if ("settings" in to) return `#/settings/${to.settings}`;
-  if ("files" in to) {
-    const ws = resolve("project", to.files);
-    return to.path ? `#/files/${enc(ws)}/${to.path.split("/").map(enc).join("/")}` : `#/files/${enc(ws)}`;
-  }
-  return `#/swarm/${enc(resolve("team", to.team))}`;
+  const ws = resolve("project", to.files);
+  return to.path ? `#/files/${enc(ws)}/${to.path.split("/").map(enc).join("/")}` : `#/files/${enc(ws)}`;
 }
 
 /** The desktop sidebar page ids (`useUi().workspace`) of the string routes. */
 export const DESKTOP_PAGE: Readonly<Record<string, string>> = {
   agents: "__agents",
   neural: "__neural",
-  teams: "__swarm",
   history: "__history",
   usage: "__usage",
   settings: "__settings",

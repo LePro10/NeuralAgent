@@ -1,4 +1,4 @@
-// Small shared helpers for the agent-facing pages (Neural, Agents, Swarm, History):
+// Small shared helpers for the agent-facing pages (Neural, Agents, History):
 // plain-text previews, short relative times, day groups.
 import { useEffect, useState } from "react";
 import { isNoiseLine } from "./agentReason.ts";

@@ -346,3 +346,79 @@ async fn insights_reach_the_admin() {
     let d = t.relay.db.device(&user.device).unwrap().unwrap();
     assert_eq!((d.version.as_deref(), d.os.as_deref(), d.country.as_deref()), (Some("0.4.1"), Some("macos 15.1"), Some("--")));
 }
+
+/// Scoped API keys: shown once, scopes enforced, replies reach the reporter, anonymous ones refused.
+#[tokio::test]
+async fn api_keys_and_report_answers() {
+    let t = T::start().await;
+    let boss = t.sign_in("boss@example.com", "client", None).await;
+    let user = t.sign_in("ann@example.com", "host", Some("hi")).await;
+    let send = |m: reqwest::Method, path: &str, body: Option<Value>, bearer: &str| {
+        let mut req = t.http.request(m, format!("{}{path}", t.base)).bearer_auth(bearer.to_string());
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        async move {
+            let res = req.send().await.unwrap();
+            (res.status().as_u16(), res.json::<Value>().await.unwrap_or(Value::Null))
+        }
+    };
+    use reqwest::Method as M;
+    let report =
+        json!({ "app": "desktop", "version": "0.5.2", "os": "macos", "summary": "Agents hang", "details": "d", "diagnostics": {} });
+    let signed: Value =
+        t.http.post(format!("{}/api/reports", t.base)).bearer_auth(&user.access).json(&report).send().await.unwrap().json().await.unwrap();
+    let anon: Value = t.http.post(format!("{}/api/reports", t.base)).json(&report).send().await.unwrap().json().await.unwrap();
+    let (sid, aid) = (signed["id"].as_str().unwrap().to_string(), anon["id"].as_str().unwrap().to_string());
+
+    // Only admins make keys; the secret is in the create answer only, stored hashed.
+    assert_eq!(send(M::POST, "/api/admin/keys", Some(json!({ "name": "x", "scopes": ["reports:read"] })), &user.access).await.0, 403);
+    assert_eq!(send(M::POST, "/api/admin/keys", Some(json!({ "name": "x", "scopes": ["nope"] })), &boss.access).await.0, 400);
+    let (st, k) = send(M::POST, "/api/admin/keys", Some(json!({ "name": "bot", "scopes": ["reports:read"] })), &boss.access).await;
+    assert_eq!(st, 200);
+    let (ro, ro_id) = (k["key"].as_str().unwrap().to_string(), k["id"].as_str().unwrap().to_string());
+    let (_, k2) =
+        send(M::POST, "/api/admin/keys", Some(json!({ "name": "answerer", "scopes": ["reports:read", "reports:reply"] })), &boss.access)
+            .await;
+    let rw = k2["key"].as_str().unwrap().to_string();
+    let (_, list) = send(M::GET, "/api/admin/keys", None, &boss.access).await;
+    assert_eq!(list["keys"].as_array().unwrap().len(), 2);
+    assert!(!list.to_string().contains(&ro), "the key is never listed again");
+    assert_eq!(send(M::GET, "/api/admin/keys", None, &ro).await.0, 401, "a key cannot manage keys");
+
+    // Scopes per route.
+    let (st, l) = send(M::GET, "/api/admin/reports", None, &ro).await;
+    assert_eq!((st, l["reports"].as_array().unwrap().len()), (200, 2));
+    let (_, d) = send(M::GET, &format!("/api/admin/reports/{sid}"), None, &ro).await;
+    assert!(d.get("account").is_none(), "a key does not see the account");
+    assert_eq!(send(M::POST, &format!("/api/admin/reports/{sid}/reply"), Some(json!({ "text": "hi" })), &ro).await.0, 403);
+    assert_eq!(send(M::POST, &format!("/api/admin/reports/{sid}"), Some(json!({ "status": "seen" })), &ro).await.0, 403);
+    assert_eq!(send(M::DELETE, &format!("/api/admin/reports/{sid}"), None, &rw).await.0, 401, "no deleting with a key");
+    assert_eq!(send(M::GET, "/api/admin/users", None, &rw).await.0, 401);
+
+    // Reply: anonymous refused with a clear message, signed-in stored and visible to the owner only.
+    let (st, e) = send(M::POST, &format!("/api/admin/reports/{aid}/reply"), Some(json!({ "text": "hi" })), &rw).await;
+    assert_eq!(st, 400);
+    assert!(e.to_string().contains("without signing in"));
+    assert_eq!(send(M::POST, &format!("/api/admin/reports/{sid}/reply"), Some(json!({ "text": "  " })), &rw).await.0, 400);
+    let (st, _) =
+        send(M::POST, &format!("/api/admin/reports/{sid}/reply"), Some(json!({ "text": "Fixed in 0.5.3", "status": "solved" })), &rw).await;
+    assert_eq!(st, 200);
+    let (_, mine) = send(M::GET, "/api/me/reports", None, &user.access).await;
+    assert_eq!(mine["reports"].as_array().unwrap().len(), 1);
+    assert_eq!(mine["reports"][0]["status"], "solved");
+    assert_eq!(mine["reports"][0]["answers"][0]["text"], "Fixed in 0.5.3");
+    assert!(mine["reports"][0].get("note").is_none());
+    let (_, other) = send(M::GET, "/api/me/reports", None, &boss.access).await;
+    assert!(other["reports"].as_array().unwrap().is_empty());
+    let (_, d) = send(M::GET, &format!("/api/admin/reports/{sid}"), None, &boss.access).await;
+    assert_eq!(d["answers"][0]["author"], "key:answerer");
+    let (_, a) = send(M::GET, "/api/admin/audit", None, &boss.access).await;
+    assert!(a["audit"].as_array().unwrap().iter().any(|e| e["action"] == "report reply" && e["actor"] == "key:answerer"));
+    let (_, list) = send(M::GET, "/api/admin/keys", None, &boss.access).await;
+    assert!(list["keys"].as_array().unwrap().iter().all(|k| k["last_used"].is_number()), "last use is recorded");
+
+    // Revoking works at once.
+    assert_eq!(send(M::DELETE, &format!("/api/admin/keys/{ro_id}"), None, &boss.access).await.0, 200);
+    assert_eq!(send(M::GET, "/api/admin/reports", None, &ro).await.0, 401);
+}

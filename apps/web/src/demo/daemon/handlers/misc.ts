@@ -1,11 +1,10 @@
 // Everything that is not a terminal, a file or a conversation: settings, profiles, tool servers,
 // usage numbers, the Discord card, the remote account, the model check, host maintenance, history.
 
-import type { AuditEntry, DiscordCard, DiscordPreview, HistoryEntry, HostSystem, HostUpdate, LlmCheck, McpServer, ModelInfo, Profile, RemoteDevice, Request, Settings, Swarm, SwarmMessage, UsageReport, UsageRow } from "@neuralagent/protocol";
-import { createSession } from "../agents/spawn.ts";
+import type { AuditEntry, DiscordCard, DiscordPreview, HistoryEntry, HostSystem, HostUpdate, LlmCheck, McpServer, ModelInfo, Profile, RemoteDevice, Request, Settings, UsageReport, UsageRow } from "@neuralagent/protocol";
 import { toBase64 } from "../ansi.ts";
 import { catalog } from "../seed.ts";
-import { ApiErr, type Conn } from "../server.ts";
+import { ApiErr } from "../server.ts";
 import { DEMO_VERSION } from "../../api.ts";
 import { HOST, type Sim } from "../sim.ts";
 import { join } from "../vfs.ts";
@@ -352,56 +351,6 @@ export function historySearch(sim: Sim, p: P<"history_search">): HistoryEntry[] 
   return HISTORY.map((h, i) => ({ engine: h.engine, id: sim.rng.fork(`hist${i}`).hex(32), cwd: join(HOST.home, `code/${h.project}`), title: h.title, snippet: h.snippet, prompts: h.prompts, updated_at: now - h.ago * 3_600_000 }))
     .filter((h) => !q || `${h.title} ${h.snippet} ${h.cwd}`.toLowerCase().includes(q))
     .slice(0, p.limit ?? 30);
-}
-
-// ── classic swarms (the older free-form team) ──
-
-export function swarmStart(sim: Sim, p: P<"swarm_start">, conn: Conn): Swarm {
-  const ws = sim.state.workspaces.find((w) => w.id === p.workspace_id);
-  if (!ws) throw new ApiErr("not_found", "Unknown project");
-  const roles = p.members?.length
-    ? p.members
-    : [
-        { role: "Coordinator", profile_id: "claude" },
-        { role: "Builder", profile_id: "codex" },
-        { role: "Reviewer", profile_id: "claude" },
-      ];
-  const id = sim.id("swarm");
-  const members = roles.map((r) => ({
-    role: r.role,
-    session_id: createSession(sim, { workspaceId: ws.id, profileId: r.profile_id, title: `${r.role}: ${p.goal.slice(0, 32)}`, prompt: `${r.role}: ${p.goal}`, place: false }).id,
-  }));
-  const swarm: Swarm = { id, workspace_id: ws.id, goal: p.goal, members, started_at: sim.now(), ended: false };
-  sim.emit({ e: "swarm_upsert", swarm });
-  sim.record(conn.kind, conn.name, "swarm_start", p.goal);
-  const say = (from: string, to: string, text: string, ms: number) =>
-    void sim.clock.sleep(ms, sim.scope).then(() => {
-      const m: SwarmMessage = { id: sim.id("swm"), swarm_id: id, from, to, text, at: sim.now(), delivered: true };
-      sim.emit({ e: "swarm_message", message: m });
-    }).catch(() => {});
-  const [a, b, c] = roles;
-  say("You", a?.role ?? "all", p.goal, 200);
-  if (a && b) say(a.role, b.role, `Take the implementation: ${p.goal.slice(0, 80)}`, 4000);
-  if (b && c) say(b.role, c.role, "First version is in the working tree. Please review the diff.", 12_000);
-  if (c && a) say(c.role, a.role, "Looks fine. One nit about naming, otherwise ready.", 20_000);
-  return swarm;
-}
-
-export function swarmSend(sim: Sim, p: P<"swarm_send">) {
-  const m: SwarmMessage = { id: sim.id("swm"), swarm_id: p.swarm_id, from: "You", to: p.to, text: p.text, at: sim.now(), delivered: true };
-  sim.emit({ e: "swarm_message", message: m });
-  return null;
-}
-
-export function swarmStop(sim: Sim, p: P<"swarm_stop">) {
-  const s = sim.state.swarms.find((x) => x.id === p.swarm_id);
-  if (s) sim.emit({ e: "swarm_upsert", swarm: { ...s, ended: true } });
-  return null;
-}
-
-export function swarmRemove(sim: Sim, p: P<"swarm_remove">) {
-  sim.emit({ e: "swarm_removed", id: p.swarm_id });
-  return null;
 }
 
 export const transcribe = () => ({ text: "Run the tests again and tell me what failed." });

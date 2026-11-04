@@ -1,15 +1,17 @@
 // Phones: the Agents tab, the app's home. Every agent across all projects, sorted by what it needs
-// from you: "Needs you" (answer it right in the row), "Working", "Done". A running swarm is one row.
+// from you: "Needs you" (answer it right in the row), "Working", "Done".
 import type { Session } from "@neuralagent/protocol";
 import { Button, ConfirmSheet, Empty, IconButton, List, Page, Row, toast } from "@neuralagent/ui";
-import { Bot, Download, History, Plus, Trash2, Users } from "lucide-react";
+import { Bot, Download, History, Plane, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { buildInbox, type Inbox, type InboxItem } from "../../lib/inbox";
 import { useOpenAgent } from "../../lib/openAgent";
 import { phoneRouter, usePhoneNav } from "../../lib/phoneRoute";
 import { useNow } from "../../lib/agentui";
+import { attentionCount } from "../../lib/autopilot";
+import { useAutopilotSupported } from "../autopilot/hooks";
 import { useCatalogSheet, useClient, useDaemon } from "../../lib/store";
-import { AgentInboxRow, LIVE_ANSWERS, SwarmInboxRow } from "./rows";
+import { AgentInboxRow, LIVE_ANSWERS } from "./rows";
 import { NewSheet } from "./NewSheet";
 import { useHasState, Waiting } from "./Waiting";
 
@@ -17,8 +19,7 @@ import { useHasState, Waiting } from "./Waiting";
 export function useInbox(project?: string): Inbox {
   const sessions = useDaemon((c) => c.state?.sessions);
   const profiles = useDaemon((c) => c.state?.profiles);
-  const swarms = useDaemon((c) => c.state?.swarms);
-  return useMemo(() => buildInbox(sessions, profiles, swarms, { project }), [sessions, profiles, swarms, project]);
+  return useMemo(() => buildInbox(sessions, profiles, { project }), [sessions, profiles, project]);
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -35,8 +36,8 @@ export function AgentsInbox() {
   const retap = usePhoneNav((s) => (s.tab === "agents" ? s.retap : 0));
   const openCatalog = useCatalogSheet((c) => c.setOpen);
   const [adding, setAdding] = useState(false);
-  // With a Neural daemon the swarm page is "Teams" (D64).
-  const teams = useDaemon((c) => c.status === "open" && c.has("neural"));
+  const autopilot = useAutopilotSupported();
+  const attention = useDaemon((c) => attentionCount(c.state?.autopilot));
   const add = (
     <IconButton label="New agent" variant="glass" onClick={() => setAdding(true)}>
       <Plus />
@@ -68,7 +69,7 @@ export function AgentsInbox() {
         )}
         <div className="mt-7">
           <List>
-            <Row Icon={Users} title={teams ? "Teams" : "Swarms"} onClick={() => phoneRouter().push({ k: "swarms" })} />
+            {autopilot && <Row Icon={Plane} title="Autopilot" detail="A project agent with its inbox" value={attention > 0 ? String(attention) : undefined} onClick={() => phoneRouter().push({ k: "autopilot" })} />}
             <Row Icon={History} title="History" detail="Past conversations on this computer" onClick={() => phoneRouter().push({ k: "history" })} />
           </List>
         </div>
@@ -89,21 +90,18 @@ export function InboxSections({ inbox, showProject = true, empty }: { inbox: Inb
   const engineOf = (s: Session) => profiles?.find((p) => p.id === s.profile_id)?.engine ?? "shell";
   const projectOf = (id: string) => (showProject ? workspaces?.find((w) => w.id === id)?.name : undefined);
   let live = 0;
-  const row = (i: InboxItem) =>
-    i.kind === "swarm" ? (
-      <SwarmInboxRow key={i.id} item={i} engineOf={engineOf} project={projectOf(i.swarm.workspace_id)} now={now} onOpen={() => phoneRouter().push({ k: "swarm", id: i.id })} />
-    ) : (
-      <AgentInboxRow
-        key={i.id}
-        s={i.s}
-        engine={engineOf(i.s)}
-        project={projectOf(i.s.workspace_id)}
-        now={now}
-        live={i.s.status === "waiting" && live++ < LIVE_ANSWERS}
-        onOpen={() => openAgent(i.s.id)}
-        onClose={() => setClosing(i.s)}
-      />
-    );
+  const row = (i: InboxItem) => (
+    <AgentInboxRow
+      key={i.id}
+      s={i.s}
+      engine={engineOf(i.s)}
+      project={projectOf(i.s.workspace_id)}
+      now={now}
+      live={i.s.status === "waiting" && live++ < LIVE_ANSWERS}
+      onOpen={() => openAgent(i.s.id)}
+      onClose={() => setClosing(i.s)}
+    />
+  );
   const sections: [string, InboxItem[]][] = [
     ["Needs you", inbox.needs],
     ["Working", inbox.working],

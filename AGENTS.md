@@ -7,14 +7,14 @@ The single entry point for anyone (human or agent) working in this repo. Read th
 ## The project
 NeuralAgent is a desktop app for running many AI coding agents side by side (Claude Code, Codex,
 Gemini and more in a grid of persistent terminals). It has a dashboard, local voice control, an
-orchestrator called **Neural**, a Claude view over the real CLI, swarms, and a phone remote (web +
+orchestrator called **Neural**, a Claude view over the real CLI, Autopilot, and a phone remote (web +
 Android) that reaches the computer end-to-end encrypted through a relay at
 `agent.neuralhub.dev`. Open source (AGPL-3.0, `LICENSE`), © Leandro Probst; outside contributions arrive as pull requests (`CONTRIBUTING.md`). The owner works only through AI agents.
 
 ## Repo map
 | Path | What |
 |---|---|
-| `crates/na-daemon` | `neuralagentd`, the background service: PTYs, sessions, Neural, swarm, voice, remote link. Keeps agents running while the app window restarts. |
+| `crates/na-daemon` | `neuralagentd`, the background service: PTYs, sessions, Neural, Autopilot, voice, remote link. Keeps agents running while the app window restarts. |
 | `crates/na-protocol` | Shared message types (generates `packages/protocol/src/gen/*.ts` on `cargo test`). |
 | `crates/na-relay` | Relay on agent.neuralhub.dev: accounts, sealed tunnel, push, releases/updates, serves `apps/web/dist`. |
 | `crates/na-crypto`, `crates/na-voice` | E2E crypto; speech (STT/TTS/wake word). |
@@ -25,7 +25,7 @@ Android) that reaches the computer end-to-end encrypted through a relay at
 | `packages/ui` | Design system `@neuralagent/ui`: components and tokens. |
 | `packages/protocol`, `packages/remote`, `packages/crypto` | TS client for the daemon; remote account/relay link/transport; crypto. |
 | `scripts/` | Release (`set-version`, `changelog`, `stage-daemon`, `release-*`), token lint, docs guard, codemap, CI E2E/smoke tests. |
-| `scripts/dev/` | Interactive test tools: test daemon + UI in a browser, screenshots, web remote, Neural/call/swarm kits. [README](scripts/dev/README.md). |
+| `scripts/dev/` | Interactive test tools: test daemon + UI in a browser, screenshots, web remote, Neural/call kits. [README](scripts/dev/README.md). |
 | `deploy/relay` | Relay Dockerfile and compose. |
 | `.claude/skills/` | Project skills: `release`, `deploy-web`, `ui-check`. |
 | `research-local/` | Git-ignored scratch: briefs, screenshots, reports. Never commit it. |
@@ -66,7 +66,7 @@ pnpm typecheck && pnpm test && pnpm lint:tokens && pnpm check:docs
 cargo test --workspace        # also regenerates the protocol TS types
 pnpm --filter @neuralagent/web build
 ```
-Everything interactive (test daemon, screenshots, web remote, push, Neural, calls, swarm,
+Everything interactive (test daemon, screenshots, web remote, push, Neural, calls,
 Android WebView, update test): [`scripts/dev/README.md`](scripts/dev/README.md). Android emulator
 recipe: `docs/HANDOFF.md` → "How to run".
 

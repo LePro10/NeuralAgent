@@ -1,5 +1,5 @@
 // Tour of the main pages. Seed first (env.mjs up --seed [--llm]).
-// Usage: node scripts/dev/shot.mjs pages [neural agents workspaces swarm history usage mcp settings]
+// Usage: node scripts/dev/shot.mjs pages [neural agents workspaces autopilot history usage mcp settings]
 // Phones have four tabs (Agents, Neural, Projects, Settings); `more` finds the rest (shot.mjs).
 // History shows the machine's real past conversations: keep those shots private.
 export default async ({ p, shot, sleep, go, more, tap, phone, args }) => {
@@ -18,10 +18,10 @@ export default async ({ p, shot, sleep, go, more, tap, phone, args }) => {
       if (await ws.count()) { await ws.click(); await sleep(1500); await shot("04-workspace"); }
     }
   }
-  if (want("swarm")) {
-    if (phone) await more("Swarms");
-    else await go("Swarm");
-    await shot("05-swarm");
+  if (want("autopilot")) {
+    if (phone) await more("Autopilot");
+    else await go("Autopilot");
+    await shot("05-autopilot");
   }
   if (want("history")) { await more("History"); await sleep(800); await shot("06-history"); }
   if (want("usage")) { await more("Usage"); await sleep(800); await shot("07-usage"); }

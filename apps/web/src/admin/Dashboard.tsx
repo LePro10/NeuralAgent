@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Brand } from "../brand";
 import { Activity } from "./Activity";
+import { ApiKeys } from "./ApiKeys";
 import { api, type Session } from "./api";
 import { Downloads } from "./Downloads";
 import { usePolled } from "./hooks";
@@ -12,8 +13,8 @@ import { Requests } from "./Requests";
 import { Usage } from "./Usage";
 import { Users } from "./Users";
 
-export type Tab = "overview" | "requests" | "users" | "reports" | "usage" | "downloads" | "activity";
-const TABS: Tab[] = ["overview", "requests", "users", "reports", "usage", "downloads", "activity"];
+export type Tab = "overview" | "requests" | "users" | "reports" | "usage" | "downloads" | "activity" | "keys";
+const TABS: Tab[] = ["overview", "requests", "users", "reports", "usage", "downloads", "activity", "keys"];
 export type Period = 7 | 30 | 90;
 
 /** `#reports/R-ABC123` -> tab + sub path. */
@@ -73,6 +74,7 @@ export function Dashboard({ session, onSignOut }: { session: Session; onSignOut:
             { value: "usage", label: "Usage" },
             { value: "downloads", label: "Downloads & Website" },
             { value: "activity", label: "Activity" },
+            { value: "keys", label: "API keys" },
           ]}
         />
       </div>
@@ -97,6 +99,7 @@ export function Dashboard({ session, onSignOut }: { session: Session; onSignOut:
       {tab === "usage" && stats.data && <Usage stats={stats.data} days={days} />}
       {tab === "downloads" && stats.data && <Downloads stats={stats.data} days={days} />}
       {tab === "activity" && <Activity />}
+      {tab === "keys" && <ApiKeys />}
     </div>
   );
 }

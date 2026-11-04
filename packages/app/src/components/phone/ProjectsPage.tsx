@@ -2,7 +2,7 @@
 // project's page: its agents, a new agent, its git changes, its past conversations.
 import type { Workspace } from "@neuralagent/protocol";
 import { Button, ConfirmSheet, Empty, IconButton, List, Menu, Page, Row, toast, type MenuEntry } from "@neuralagent/ui";
-import { Copy, Ellipsis, FileDiff, Folder, FolderGit2, FolderOpen, FolderPlus, History, Pin, PinOff, Plus, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, FileDiff, Folder, FolderGit2, FolderOpen, FolderPlus, History, Pin, PinOff, Plus, Server, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { writeClipboard } from "../../lib/clipboard";
 import { phoneRouter, usePhoneNav } from "../../lib/phoneRoute";
@@ -10,7 +10,7 @@ import { STATUS, activityOf, mostUrgent } from "../../lib/status";
 import { useChanges, useClient, useDaemon, usePlatform } from "../../lib/store";
 import { HomeFolderRow } from "../files/HomeAccess";
 import { useFilesSupported } from "../files/support";
-import { pickHostFolder } from "../FolderBrowser";
+import { addWorkspaceFlow, changeFolderFlow } from "../AddWorkspace";
 import { InboxSections, inboxEyebrow, useInbox } from "./AgentsInbox";
 import { NewSheet } from "./NewSheet";
 import { useHasState, Waiting } from "./Waiting";
@@ -25,14 +25,8 @@ function useAddProject() {
   const client = useClient();
   const platform = usePlatform();
   return async () => {
-    const path = await (platform.pickFolder ?? pickHostFolder)();
-    if (!path) return;
-    try {
-      const w = (await client.req({ m: "workspace_add", p: { path } })) as Workspace;
-      phoneRouter().push({ k: "project", id: w.id });
-    } catch (e) {
-      toast((e as Error).message, { tone: "danger" });
-    }
+    const w = await addWorkspaceFlow(client, platform);
+    if (w) phoneRouter().push({ k: "project", id: w.id });
   };
 }
 
@@ -78,7 +72,7 @@ export function ProjectsPage() {
               return (
                 <Row
                   key={w.id}
-                  Icon={w.git ? FolderGit2 : Folder}
+                  Icon={w.ssh ? Server : w.git ? FolderGit2 : Folder}
                   activity={activityOf(own.map((s) => s.status))}
                   title={w.name}
                   detail={[gitLine(w), alive ? `${alive} ${alive === 1 ? "agent" : "agents"}` : "No agents"].filter(Boolean).join(" · ")}
@@ -119,6 +113,7 @@ export function ProjectPage({ id }: { id: string }) {
   const update = (p: { pinned?: boolean }) => client.req({ m: "workspace_update", p: { id: w.id, ...p } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
   const menu: MenuEntry[] = [
     { label: w.pinned ? "Unpin" : "Pin to top", Icon: w.pinned ? PinOff : Pin, onSelect: () => void update({ pinned: !w.pinned }) },
+    { label: "Change folder…", Icon: FolderOpen, onSelect: () => void changeFolderFlow(client, platform, w) },
     { label: "Copy folder path", Icon: Copy, onSelect: () => void writeClipboard(w.path, platform).then((ok) => toast(ok ? "Path copied" : "Could not copy the path", ok ? undefined : { tone: "danger" })) },
     { label: "Remove…", Icon: Trash2, destructive: true, divider: true, onSelect: () => setRemoving(true) },
   ];
@@ -156,7 +151,7 @@ export function ProjectPage({ id }: { id: string }) {
           />
           <List>
             {inbox.counts.all > 0 && <Row Icon={Plus} title="New agent" onClick={() => setAdding(true)} />}
-            {files && (w.approved || platform.kind === "desktop") && <Row Icon={FolderOpen} title="Files" onClick={() => phoneRouter().push({ k: "files", ws: w.id })} />}
+            {files && !w.ssh && (w.approved || platform.kind === "desktop") && <Row Icon={FolderOpen} title="Files" onClick={() => phoneRouter().push({ k: "files", ws: w.id })} />}
             {w.git && <Row Icon={FileDiff} title="Changes" value={w.git.changed ? String(w.git.changed) : "None"} onClick={() => showChanges(w.id)} />}
             <Row Icon={History} title="Past conversations" onClick={() => phoneRouter().push({ k: "history", project: w.id })} />
           </List>

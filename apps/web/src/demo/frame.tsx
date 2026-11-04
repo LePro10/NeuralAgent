@@ -86,7 +86,7 @@ export async function bootFrame(q: URLSearchParams): Promise<void> {
   let client: DaemonClient | undefined;
 
   // The control surface exists before the world does, so a parent never races it.
-  const resolveId = (kind: "agent" | "project" | "team", name: string) => frameWorld?.resolve(`${kind}.${name}`) ?? frameWorld?.resolve(name) ?? name;
+  const resolveId = (kind: "agent" | "project", name: string) => frameWorld?.resolve(`${kind}.${name}`) ?? frameWorld?.resolve(name) ?? name;
   const navigate = (to: DemoRoute) => {
     void ready.then(() => go(to));
   };
@@ -112,13 +112,11 @@ export async function bootFrame(q: URLSearchParams): Promise<void> {
     } else if ("settings" in to) {
       ui.setWorkspace(DESKTOP_PAGE.settings!);
       requestSettingsSection(to.settings);
-    } else if ("files" in to) {
+    } else {
       // Desktop: the project, with its changes (files, git, diff) open over it.
       const ws = resolveId("project", to.files);
       ui.setWorkspace(ws);
       useChanges.getState().show(ws);
-    } else {
-      ui.setWorkspace(DESKTOP_PAGE.teams!);
     }
   };
 
@@ -137,7 +135,7 @@ export async function bootFrame(q: URLSearchParams): Promise<void> {
   frameWorld = world;
 
   // Where this scene starts the layout. The phone router reads its first page from the URL hash, which
-  // is fine for the tab roots and one agent, but pages like Teams and Files read the daemon state while
+  // is fine for the tab roots and one agent, but pages like Files read the daemon state while
   // it is still empty and loop; those are opened with the router once the first state is in.
   const start = sceneRoute(scene, view);
   const early = view === "phone" && (typeof start === "string" ? ["agents", "neural", "projects", "settings"].includes(start) : "agent" in start);

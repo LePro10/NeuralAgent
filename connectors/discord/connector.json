@@ -1,0 +1,41 @@
+{
+  "name": "Discord",
+  "icon": "discord",
+  "description": "Reads messages in the channels you choose and lets the autopilot answer as your bot.",
+  "kind": "service",
+  "version": "1.0.0",
+  "guide": [
+    "Open the [Discord Developer Portal](https://discord.com/developers/applications) and press **New Application**. Give it a name, for example the name of your project.",
+    "In the left menu open **Bot**. Press **Reset Token**, copy the token and paste it below. Anyone with this token can act as your bot, so keep it private.",
+    "Still on the **Bot** page, scroll to **Privileged Gateway Intents** and switch on **Message Content Intent**. Without it the bot sees empty messages. Save.",
+    "Paste the token below and press **Test connection**. The result shows an **invite link**. Open it, choose your server and press **Authorize**.",
+    "Come back, press **Reload** on the channel list and tick the channels the autopilot should listen to."
+  ],
+  "setup": [
+    {
+      "key": "bot_token",
+      "label": "Bot token",
+      "type": "secret",
+      "required": true,
+      "help": "From the Bot page of your application in the Developer Portal.",
+      "link": "https://discord.com/developers/applications"
+    },
+    {
+      "key": "channels",
+      "label": "Channels to listen to",
+      "type": "pick",
+      "from": "list_channels",
+      "help": "The autopilot only reacts to new messages in these channels. Needs the bot invited to your server first."
+    }
+  ],
+  "tools": {
+    "whoami": "read",
+    "list_channels": "read",
+    "read_messages": "read",
+    "reply": "external",
+    "send_message": "external",
+    "add_reaction": "write"
+  },
+  "events": ["message"],
+  "check": "whoami"
+}

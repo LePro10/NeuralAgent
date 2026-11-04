@@ -226,13 +226,8 @@ Hinweis zu Begriffen, die mehrfach vorkommen: **Workspace** = ein Projektordner 
 - Du rufst vom Handy an: "Starte einen Agent in Japan Map und lass ihn die UI fixen."
 - Du fragst während der Autofahrt "Ist Japan Map fertig?" und bekommst eine kurze gesprochene Antwort.
 
-### 2.24 Swarms
-**Was:** Ein **Swarm** ist ein Team aus 1–8 Agents (Standard: Coordinator, Scout, Builder, Reviewer) in einem Workspace mit einem Ziel. Er bekommt einen eigenen Tab mit einem Pane pro Mitglied. Die Mitglieder schreiben sich über einen eingebauten MCP-Server (`neuralagent-swarm`) Nachrichten, die sichtbar sind (D37). Nur der Coordinator startet, die anderen warten. Als "fertig" meldet nur eine Nachricht an dich; Zwischenstände lösen keine Pushes aus.
-**Bedienung:** Seitenleiste → "Swarm" → "New swarm", Projekt und Ziel wählen. Stop beendet alle Mitglieder.
-**Stand:** Mit Stellvertreter-Agents im CI-Test und einmal mit echten Claude-Haiku-Agents geprüft (24 s, 7 Nachrichten). Verbraucht dein Claude-Kontingent.
-**Beispiele:**
-- "Füge eine --name-Option zum Skript hinzu": Builder setzt um, Reviewer testet, Coordinator meldet.
-- Neural startet einen Swarm per Zuruf, du hörst die Fertig-Meldung.
+### 2.24 Swarms (entfernt)
+Swarm und Teams wurden entfernt, siehe D88; Autopilot ersetzt sie (`docs/notes/autopilot.md`).
 
 ### 2.25 Themes
 **Was:** Sechs Farbschemata plus Akzentfarbe, **pro Gerät** gespeichert (Handy schwarz, Desktop graphit möglich). Das Terminal und das Sprach-Fenster folgen live (D38). Einstellungen → Themes.
@@ -371,7 +366,6 @@ Dies ist der wichtigste Abschnitt. Er vergleicht den Auftrag mit dem, was gebaut
 | Handy: Orchestrator im Mittelpunkt, großer Anruf-Button, Agents darunter | Eine App mit zwei Navigationen: Desktop-Seitenleiste, Handy mit Tab-Leiste (Agents, Workspaces) und "More"; Terminals mit Sondertasten-Leiste und eigener Eingabezeile | Eine Codebasis, Layout nach Breite; xterm.js verschluckt auf Android Tastatureingaben (D33, D35) |
 | Push-Inhalt "nur das Nötigste" | Nur Art und Sitzungs-ID; kein Push an Geräte, die verbunden und sichtbar sind; Limit 30/Min. pro Konto | D34 |
 | APK mit Capacitor, lädt Remote live | Wie gefordert, `www/` nur als Offline-Seite; Release-Signatur mit eigenem Keystore; Versionscode aus der Versionsnummer | D35 |
-| Swarm: Nachrichten sichtbar | Über einen eingebauten MCP-Server `neuralagent-swarm` (`send_message`, `team`, `messages`); Zustellung erst, wenn der Empfänger bereit ist; Fertig-Meldungen von Mitgliedern unterdrückt, nur Bericht an dich meldet | Funktioniert für jede Engine mit MCP; Agents bestätigten sich sonst gegenseitig endlos (D37) |
 | Themes auf NeuralHub-Tokens | Sechs Farbschemata plus Akzent, pro Gerät | D38 |
 | Update-Ablage | Upload mit Bearer-Token, Manifest, drei Versionen behalten, Vorabversionen nur für Tester | D38 |
 | Daemon beim Update | Daemon läuft aus versionierter Kopie, wird erst ersetzt, wenn keine Session lebt | Agents laufen beim Update weiter (D38) |
@@ -423,7 +417,6 @@ Dies ist der wichtigste Abschnitt. Er vergleicht den Auftrag mit dem, was gebaut
 | "Add phone"-QR | Einmalig, 2 Minuten, nur gleiches Konto, trägt den Fingerabdruck des Rechners | D28 |
 | Admin-Konto | Adressen in `ADMIN_EMAILS`, automatisch freigegeben | D39 |
 | Mehrdeutige Ordner | In den Dokumenten nicht ausdrücklich belegt (Ordner-Finden ist per Test belegt: "Japan Map") | STATUS M7 |
-| Wie der Swarm entscheidet, wer wann spricht | Nur der Coordinator startet, alle bekommen Briefings ohne Bestätigungen; Warteschlange pro Empfänger, Zustellung erst bei "bereit" | D37 |
 | Update-Ablauf bei laufenden Agents | Versionierte Daemon-Kopie, Tausch erst ohne laufende Session | D38 |
 | Versionsnummer | Eine Version im Cargo-Workspace für alles; APK-Versionscode aus Major/Minor/Patch | D38 |
 | Was auf Android nativ passiert und was auf der Seite | FCM, Widget, Kachel, Custom-Tab-Login nativ; alles andere Webseite | D35 |
@@ -448,6 +441,5 @@ Direkt aus `docs/STATUS.md` (Stand 2026-10-30). Schon erledigt auf deiner Seite:
 - [ ] **Discord-Präsenz prüfen** (1 Min): Discord öffnen, einen Agent starten, Profil prüfen.
 - [ ] **Veröffentlichte App installieren** (5 Min): macOS mit dem `curl`-Befehl aus 2.27; Android-APK von der Download-Seite über die CI-Version installieren (gleicher Schlüssel).
 - [ ] **Optional: signierte Builds.** Apple Developer ID (99 $/Jahr) für Notarisierung, Windows-Zertifikat gegen SmartScreen. Die CI braucht dann nur die Secrets.
-- [ ] **Optional: Swarm ausprobieren** (5 Min). Verbraucht Claude-Kontingent, ein Haiku-Profil hält es günstig.
 
 **Bekannte Lücken (STATUS):** kein iOS-Simulator; Windows und Linux nur CI-gebaut; Anzeige "Last seen" bei nie verbundenem Gerät zeigt das Erstelldatum; das Dashboard sagt "No agents running", solange nur eine Shell läuft (HANDOFF).

@@ -1,4 +1,4 @@
-import { Avatar, Button, Callout, ConfirmButton, Empty, Field, List, Pill, Row, SearchField, Segmented, Spinner, TextArea, toast } from "@neuralagent/ui";
+import { Avatar, Button, Callout, Check, ConfirmButton, Empty, Field, List, Pill, Row, SearchField, Segmented, Spinner, TextArea, toast } from "@neuralagent/ui";
 import { ArrowLeft, LifeBuoy, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type Report, type ReportDetail, type ReportStatus } from "./api";
@@ -17,6 +17,8 @@ function Detail({ id, reload, go }: { id: string; reload: () => Promise<void>; g
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [answer, setAnswer] = useState("");
+  const [solve, setSolve] = useState(true);
   const marked = useRef<string | null>(null);
 
   useEffect(() => {
@@ -64,6 +66,22 @@ function Detail({ id, reload, go }: { id: string; reload: () => Promise<void>; g
     }
   };
 
+  const sendAnswer = async () => {
+    setBusy(true);
+    try {
+      const status: ReportStatus = solve ? "solved" : "seen";
+      const res = await api.replyReport(id, answer.trim(), status);
+      setD((cur) => (cur ? { ...cur, answers: res.answers, report: { ...cur.report, status } } : cur));
+      setAnswer("");
+      toast("Answer sent to the reporter");
+      await reload();
+    } catch (e) {
+      toast((e as Error).message, { tone: "danger" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const back = <Button size="sm" variant="glass" Icon={ArrowLeft} onClick={() => go("reports")}>All reports</Button>;
   if (error) return <div className="flex flex-col gap-3">{back}<Callout tone="danger" title="Could not load the report">{error}</Callout></div>;
   if (!d) return <div className="flex flex-col gap-3">{back}<div className="flex justify-center py-10"><Spinner label="Loading report" /></div></div>;
@@ -95,6 +113,30 @@ function Detail({ id, reload, go }: { id: string; reload: () => Promise<void>; g
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {r.email ? <Button size="sm" Icon={Mail} href={`mailto:${r.email}?subject=${subject}`}>Reply to {r.email}</Button> : <span className="text-detail text-dim">Anonymous, no contact address.</span>}
         </div>
+      </div>
+
+      <div className="card !rounded-list flex flex-col gap-3 p-4">
+        <h3 className="text-footnote uppercase tracking-wide text-dim">Answers</h3>
+        {d.answers.map((a) => (
+          <div key={`${a.at}-${a.text.slice(0, 12)}`} className="well rounded-field px-3 py-2">
+            <p className="whitespace-pre-wrap break-words text-body text-ink">{a.text}</p>
+            <p className="mt-1 text-footnote text-dim">{a.author ?? "admin"} · {ago(a.at)}</p>
+          </div>
+        ))}
+        {r.user_id ? (
+          <>
+            <Field label="Answer to the reporter (shown in their app, with a push)">
+              <TextArea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="What should they know?" />
+            </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="sm" busy={busy} disabled={!answer.trim()} onClick={() => void sendAnswer()}>Send answer</Button>
+              <Check checked={solve} onChange={setSolve} label="Mark as solved" />
+              <span className="text-detail text-dim">Mark as solved</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-detail text-dim">Sent without signing in: it cannot be answered in the app.</p>
+        )}
       </div>
 
       <div className="card !rounded-list flex flex-col gap-3 p-4">

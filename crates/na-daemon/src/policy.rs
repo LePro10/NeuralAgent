@@ -26,6 +26,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         | Request::RemoteEnable { .. }
         | Request::RemotePair
         | Request::RemoteRevoke { .. } => needs("changing remote access"),
+        Request::WorkspaceAdd { ssh: Some(_), .. } if client.kind == ClientKind::Orchestrator => needs("connecting to another computer"),
         Request::SessionStart(st) if st.profile_id.starts_with(crate::profiles::INSTALL_PREFIX) => needs("installing a CLI"),
         Request::SessionStart(st) if !approved(&st.workspace_id) => needs("starting an agent outside an approved workspace"),
         Request::SessionStart(st) if st.profile_id == "shell" && client.kind == ClientKind::Orchestrator => needs("opening a raw shell"),
@@ -34,14 +35,6 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Some(_) => needs("controlling an agent outside an approved workspace"),
             None => Err(err(ErrorCode::NotFound, "no such session")),
         },
-        Request::SwarmStart { workspace_id, .. } if !approved(workspace_id) => needs("starting a swarm outside an approved workspace"),
-        Request::SwarmSend { swarm_id, .. } | Request::SwarmStop { swarm_id } | Request::SwarmRemove { swarm_id } => {
-            match core.read(|s| s.swarms.iter().find(|w| &w.id == swarm_id).map(|w| w.workspace_id.clone())) {
-                Some(ws) if approved(&ws) => Ok(()),
-                Some(_) => needs("controlling a swarm outside an approved workspace"),
-                None => Err(err(ErrorCode::NotFound, "no such swarm")),
-            }
-        }
         Request::Upload { sid, .. } | Request::CvFiles { sid, .. } | Request::CvFile { sid, .. } | Request::CvTaskOutput { sid, .. } => {
             match ws_of_session(sid) {
                 Some((ws, _)) if approved(&ws) => Ok(()),
@@ -100,7 +93,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         Request::McpSave { .. } | Request::McpDelete { .. } | Request::McpImport => needs("changing MCP servers"),
         Request::LlmKeySet { .. } => needs("changing model keys"),
         // Reports and what they contain are for people, not for Neural.
-        Request::DiagnosticsPreview { .. } | Request::DiagnosticsSend { .. } if client.kind == ClientKind::Orchestrator => {
+        Request::DiagnosticsPreview { .. } | Request::DiagnosticsSend { .. } | Request::ReportsMine if client.kind == ClientKind::Orchestrator => {
             Err(err(ErrorCode::Forbidden, "only the user can do this"))
         }
         // Neural does not talk to itself.
@@ -108,10 +101,25 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Err(err(ErrorCode::BadRequest, "not available to the orchestrator"))
         }
         // Only a person answers Neural's confirmations or changes how it works (D63).
-        Request::NeuralConfirm { .. } | Request::NeuralMode { .. } | Request::NeuralTeamPick { .. } | Request::NeuralTeamCleanup { .. }
+        Request::NeuralConfirm { .. } | Request::NeuralMode { .. }
             if client.kind == ClientKind::Orchestrator =>
         {
             Err(err(ErrorCode::Forbidden, "only the user can do this"))
+        }
+        // Neural never drives the autopilot; phones answer and decide, but setup stays on the desktop.
+        Request::Autopilot { .. } if client.kind == ClientKind::Orchestrator => Err(err(ErrorCode::Forbidden, "only the user can do this")),
+        Request::Autopilot { op } => {
+            use na_protocol::AutopilotOp as Op;
+            match op {
+                Op::PilotSend { .. }
+                | Op::PilotRun { .. }
+                | Op::PilotStop { .. }
+                | Op::ItemUpdate { .. }
+                | Op::ItemSend { .. }
+                | Op::Confirm { .. }
+                | Op::SuggestionDecide { .. } => Ok(()),
+                _ => needs("setting up the autopilot or its connectors"),
+            }
         }
         Request::CatalogRefresh => Ok(()),
         _ => Ok(()),

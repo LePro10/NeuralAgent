@@ -1,0 +1,25 @@
+{
+  "name": "Web API",
+  "icon": "globe",
+  "description": "Calls the HTTP API of your own app or service. Reads freely, changes only with your OK.",
+  "kind": "api",
+  "version": "1.0.0",
+  "guide": [
+    "Enter the base address of your API, for example `https://api.example.com/v1`. Every call stays under this address.",
+    "If your API needs a key, enter the header name (often `Authorization`, with a value like `Bearer abc123`, or `X-Api-Key`) and the secret value. Leave both empty if it is open.",
+    "Press **Test connection**. It sends a GET request to the test path (the base address itself if you leave it empty)."
+  ],
+  "setup": [
+    { "key": "base_url", "label": "Base address", "type": "url", "required": true, "placeholder": "https://api.example.com/v1", "help": "Calls can only go to this address and below." },
+    { "key": "auth_header", "label": "Key header name", "type": "text", "placeholder": "Authorization", "help": "The name of the header that carries your key. Leave empty if none." },
+    { "key": "auth_value", "label": "Key value", "type": "secret", "help": "The full header value, for example: Bearer abc123" },
+    { "key": "test_path", "label": "Test path", "type": "text", "placeholder": "/health", "help": "A path that answers when everything works." }
+  ],
+  "tools": {
+    "check": "read",
+    "get": "read",
+    "send": "write"
+  },
+  "events": [],
+  "check": "check"
+}

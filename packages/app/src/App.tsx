@@ -1,6 +1,6 @@
 import type { Workspace } from "@neuralagent/protocol";
 import { AppShell, Button, CommandPalette, ConfirmSheet, ConnectionPill, Empty, NavPage, Page, Sidebar, Toaster, toast, useLayoutMode, ACTIVITY_LABEL, type CommandGroup, type NavItem } from "@neuralagent/ui";
-import { ArrowDownToLine, Copy, Folder, FolderGit2, FolderPlus, Gauge, History, LayoutDashboard, Palette, Pencil, Pin, PinOff, Plug, Settings, Smartphone, Sparkles, Trash2, Users } from "lucide-react";
+import { ArrowDownToLine, Copy, Folder, FolderGit2, FolderOpen, FolderPlus, Gauge, History, LayoutDashboard, Palette, Pencil, Pin, PinOff, Plug, Server, Settings, Smartphone, Sparkles, Trash2, Plane } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountRow } from "./components/AccountRow";
 import { LaunchScreen } from "./components/LaunchScreen";
@@ -15,9 +15,12 @@ import { ChangesSheet } from "./components/ChangesSheet";
 import { HistoryPage } from "./components/HistoryPage";
 import { UsagePage } from "./components/UsagePage";
 import { SettingsPage } from "./components/SettingsPage";
-import { FolderBrowserSheet, pickHostFolder } from "./components/FolderBrowser";
+import { AddWorkspaceSheet, addWorkspaceFlow, changeFolderFlow } from "./components/AddWorkspace";
+import { FolderBrowserSheet } from "./components/FolderBrowser";
 import { NeuralPage } from "./components/NeuralPage";
-import { SwarmPage } from "./components/SwarmPage";
+import { AutopilotPage } from "./components/autopilot/AutopilotPage";
+import { useAutopilotSupported, usePilotUi } from "./components/autopilot/hooks";
+import { attentionCount } from "./lib/autopilot";
 import { WorkspaceView } from "./components/WorkspaceView";
 import { ZoomControl } from "./components/ZoomControl";
 import { endCall, holdCall, startCall, useCall } from "./lib/call";
@@ -38,7 +41,7 @@ startTheme();
 const ADD = "__add";
 const NEURAL = "__neural";
 const AGENTS = "__agents";
-const SWARM = "__swarm";
+const AUTOPILOT = "__autopilot";
 const HISTORY = "__history";
 const USAGE = "__usage";
 const SETTINGS = SETTINGS_PAGE;
@@ -124,7 +127,7 @@ export function App() {
   // The old phone tabs (Workspaces, More) are not desktop pages: Neural stands in.
   const neural = workspace === NEURAL || workspace === null || workspace === WORKSPACES || workspace === MORE;
   const dashboard = workspace === AGENTS;
-  const swarmPage = workspace === SWARM;
+  const autopilotPage = workspace === AUTOPILOT;
   // Old routes of pages that moved into Settings (remembered from an earlier run, links) open their section.
   const moved = workspace ? MOVED_TO_SETTINGS[workspace] : undefined;
   useEffect(() => {
@@ -135,7 +138,7 @@ export function App() {
   const settingsOpen = workspace === SETTINGS || !!moved;
   const history = workspace === HISTORY;
   const usage = workspace === USAGE;
-  const current = neural || dashboard || swarmPage || settingsOpen || history || usage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
+  const current = neural || dashboard || autopilotPage || settingsOpen || history || usage ? undefined : (workspaces.find((w) => w.id === workspace) ?? workspaces[0]);
 
   // "Hey Neural": the same call as "Call Neural" (the call screen stays over any page, and the
   // window plays the answers while it is hidden). What was said with the wake word comes first.
@@ -254,22 +257,17 @@ export function App() {
   );
 
   const addWorkspace = async () => {
-    // Computers use the system dialog; phones and browsers browse the host's folders.
-    const path = await (platform.pickFolder ?? pickHostFolder)();
-    if (!path) return;
-    try {
-      const w = (await client.req({ m: "workspace_add", p: { path } })) as Workspace;
-      setWorkspace(w.id);
-    } catch (e) {
-      toast((e as Error).message, { tone: "danger" });
-    }
+    // This computer (system dialog) or another one over SSH; phones and browsers browse folders.
+    const w = await addWorkspaceFlow(client, platform);
+    if (w) setWorkspace(w.id);
   };
 
   const allStatuses = Object.values(state?.sessions ?? {}).map((s) => s.status);
   const waiting = allStatuses.filter((s) => s === "waiting").length;
-  // With a Neural daemon the swarm page is "Teams" (D64) and also counts working teams.
-  const teams = status === "open" && client.has("neural");
-  const running = (state?.swarms ?? []).filter((w) => !w.ended).length + (state?.neural?.tasks ?? []).filter((t) => t.team && t.status === "working").length;
+  // Autopilot (D87): shown when the daemon has it; the dot works, the count is what needs you.
+  const autopilotOn = useAutopilotSupported();
+  const pilotsWorking = (state?.autopilot?.pilots ?? []).some((p) => p.status === "working");
+  const pilotCount = attentionCount(state?.autopilot);
   // Remote sign-in waits for approval: shown on Settings → Remote access, the account and the More tab.
   const remoteWaiting = platform.kind === "desktop" && state?.remote.status === "pending" ? ("waiting" as const) : undefined;
   // Workspaces in the sidebar: right-click to rename (the folder stays), pin, copy the path or
@@ -293,6 +291,7 @@ export function App() {
   const wsMenu = (w: Workspace) => [
     { label: "Rename", Icon: Pencil, onSelect: () => setRenaming(w.id) },
     { label: w.pinned ? "Unpin" : "Pin to top", Icon: w.pinned ? PinOff : Pin, onSelect: () => void updateWs(w.id, { pinned: !w.pinned }) },
+    { label: "Change folder…", Icon: FolderOpen, onSelect: () => void changeFolderFlow(client, platform, w) },
     { label: "Copy folder path", Icon: Copy, onSelect: () => void writeClipboard(w.path, platform).then((ok) => toast(ok ? "Path copied" : "Could not copy the path", ok ? undefined : { tone: "danger" })) },
     { label: "Remove…", Icon: Trash2, destructive: true, divider: true, onSelect: () => setRemoving(w) },
   ];
@@ -300,7 +299,7 @@ export function App() {
   const items: NavItem[] = [
     { id: NEURAL, label: "Neural", Icon: Sparkles, activity: state?.orchestrator.busy ? "working" : undefined },
     { id: AGENTS, label: "Agents", Icon: LayoutDashboard, activity: waiting > 0 ? "waiting" : undefined },
-    { id: SWARM, label: teams ? "Teams" : "Swarm", Icon: Users, activity: running > 0 ? "working" : undefined },
+    ...(autopilotOn ? [{ id: AUTOPILOT, label: "Autopilot", Icon: Plane, activity: pilotsWorking ? ("working" as const) : pilotCount > 0 ? ("waiting" as const) : undefined, badge: pilotCount > 0 }] : []),
     { id: HISTORY, label: "History", Icon: History },
     { id: USAGE, label: "Usage", Icon: Gauge },
     ...workspaces.map((w) => {
@@ -310,18 +309,18 @@ export function App() {
       return {
         id: w.id,
         label: w.name,
-        Icon: w.git ? FolderGit2 : Folder,
+        Icon: w.ssh ? Server : w.git ? FolderGit2 : Folder,
         group: "Workspaces",
         activity: act,
         menu: wsMenu(w),
         reorder: true,
-        title: w.path,
+        title: w.ssh ? `${w.ssh.host}:${w.path}` : w.path,
       };
     }),
     { id: ADD, label: "Add workspace", Icon: FolderPlus, groupStart: workspaces.length > 0 },
   ];
 
-  const selected = neural ? NEURAL : dashboard ? AGENTS : swarmPage ? SWARM : history ? HISTORY : usage ? USAGE : settingsOpen ? SETTINGS : (current?.id ?? "");
+  const selected = neural ? NEURAL : dashboard ? AGENTS : autopilotPage ? AUTOPILOT : history ? HISTORY : usage ? USAGE : settingsOpen ? SETTINGS : (current?.id ?? "");
   const go = (id: string) => (id === ADD ? void addWorkspace() : setWorkspace(id));
   const openSettings = (section: string) => {
     requestSettingsSection(section);
@@ -346,15 +345,17 @@ export function App() {
       label: "Actions",
       items: [
         { id: "add-workspace", label: "Add workspace…", Icon: FolderPlus, keywords: "folder project open", onSelect: () => void addWorkspace() },
-        { id: "new-swarm", label: teams ? "New team…" : "New swarm…", Icon: Users, keywords: "team agents", onSelect: () => setWorkspace(SWARM) },
+        ...(autopilotOn
+          ? [{ id: "new-connector", label: "New connector…", Icon: Plug, keywords: "autopilot connect discord github email", onSelect: () => { setWorkspace(AUTOPILOT); usePilotUi.getState().askConnectors(true); } }]
+          : []),
       ],
     },
   ];
 
   const body = !state ? (
     <div className="h-full" />
-  ) : swarmPage ? (
-    <SwarmPage />
+  ) : autopilotPage ? (
+    <AutopilotPage />
   ) : neural ? (
     <NeuralPage onSettings={() => setWorkspace(SETTINGS)} />
   ) : settingsOpen ? (
@@ -389,6 +390,7 @@ export function App() {
       {state && <AgentCatalog />}
       {state && <ChangesSheet />}
       {state && <FolderBrowserSheet />}
+      {state && <AddWorkspaceSheet />}
       <UpdateDialog />
       <ConfirmSheet
         open={!!removing}

@@ -73,7 +73,7 @@ const PROVIDERS: [LlmProvider; 4] = [LlmProvider::Neuralhub, LlmProvider::Anthro
 
 impl Core {
     /// The key for the chosen provider. `NEURALAGENT_LLM_KEY` overrides (tests, servers).
-    fn llm_key(&self, p: LlmProvider) -> Option<String> {
+    pub(crate) fn llm_key(&self, p: LlmProvider) -> Option<String> {
         std::env::var("NEURALAGENT_LLM_KEY")
             .ok()
             .filter(|k| !k.trim().is_empty())
@@ -454,7 +454,7 @@ impl Core {
         if !path.is_absolute() || (self.folder_ok(path) && !path.is_dir()) {
             return Err(err(ErrorCode::NotFound, format!("no workspace or folder \"{folder}\"; use find_folder")));
         }
-        let v = self.handle(&me(), Request::WorkspaceAdd { path: folder.to_string(), name: None }).await?;
+        let v = self.handle(&me(), Request::WorkspaceAdd { path: folder.to_string(), name: None, ssh: None, unchecked: None }).await?;
         Ok((v["id"].as_str().unwrap_or("").to_string(), v["name"].as_str().unwrap_or(folder).to_string()))
     }
 
@@ -687,11 +687,6 @@ pub fn system_prompt(voice: bool) -> String {
          precise follow-up (send_to_agent) and keep the task open; mark it done (update_task) only when it is.\n\
          - When an agent asks something: answer it yourself (answer_agent) when the answer clearly follows from \
          the task and is safe; otherwise ask the user in one sentence with the options.\n\
-         - Teams (start_team), only when the user asks or a change is big or risky: \"race\" lets 2 to 4 agents \
-         try the same goal in separate worktrees; you compare the attempts and recommend one, the user picks. \
-         \"review\" pairs a builder with a reviewer who loops until it approves. A team runs its own steps \
-         (checks, the reviewer, feedback to the builder): do not prompt team agents yourself unless the team \
-         is blocked; report its result when it is in.\n\
          - Memory: remember stable facts and preferences the user tells you (remember), in one short line each; \
          forget what turns out wrong. Do not store anything secret.\n\
          - Safety: never instruct agents to delete data, force push, reset, publish or deploy on your own. Tools \

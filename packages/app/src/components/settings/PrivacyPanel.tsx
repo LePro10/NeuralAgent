@@ -8,6 +8,7 @@ import { Check, Copy, Eye, LifeBuoy, Send } from "lucide-react";
 import { useState } from "react";
 import { copyWithToast } from "../../lib/clipboard";
 import { useClient, useDaemon, usePlatform } from "../../lib/store";
+import { YourReports } from "./YourReports";
 
 const fail = (e: unknown) => toast((e as Error).message ?? String(e), { tone: "danger" });
 const SITE = "https://agent.neuralhub.dev";
@@ -45,6 +46,7 @@ export function PrivacyPanel() {
       </List>
       {shown && <Code text={shown} />}
       <ReportForm />
+      <YourReports />
       <List footer="Without an account nothing leaves this computer except the usage ping above and update checks.">
         <Row title="Privacy policy" onClick={() => platform.openExternal(`${SITE}/privacy`)} />
       </List>

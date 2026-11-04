@@ -16,12 +16,17 @@ import java.util.Map;
 public class PushService extends FirebaseMessagingService {
     static final String CHANNEL = "agents";
     static final String ADMIN_CHANNEL = "admin";
+    static final String REPORT_CHANNEL = "reports";
 
     @Override
     public void onMessageReceived(RemoteMessage msg) {
         Map<String, String> d = msg.getData();
         if ("admin".equals(d.get("t"))) {
             admin(d);
+            return;
+        }
+        if ("report".equals(d.get("t"))) {
+            report(d);
             return;
         }
         if (!"attention".equals(d.get("t"))) return;
@@ -46,6 +51,31 @@ public class PushService extends FirebaseMessagingService {
         if ("waiting".equals(kind) || "error".equals(kind)) Status.attention(this);
         try {
             NotificationManagerCompat.from(this).notify(sid.hashCode(), n.build());
+        } catch (SecurityException e) {
+            // Notifications were turned off for the app.
+        }
+    }
+
+    /** The answer to the user's own problem report; a tap opens the app (Settings → Your reports). */
+    private void report(Map<String, String> d) {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm.getNotificationChannel(REPORT_CHANNEL) == null) {
+            NotificationChannel ch = new NotificationChannel(REPORT_CHANNEL, "Report answers", NotificationManager.IMPORTANCE_DEFAULT);
+            ch.setDescription("Answers to problem reports you sent");
+            nm.createNotificationChannel(ch);
+        }
+        String id = d.get("id") != null ? d.get("id") : "";
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        NotificationCompat.Builder n = new NotificationCompat.Builder(this, REPORT_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_agent)
+                .setContentTitle(d.get("title") != null ? d.get("title") : "Answer to your report")
+                .setContentText(d.get("body") != null ? d.get("body") : "")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(d.get("body") != null ? d.get("body") : ""))
+                .setAutoCancel(true);
+        if (open != null)
+            n.setContentIntent(PendingIntent.getActivity(this, ("report-" + id).hashCode(), open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        try {
+            NotificationManagerCompat.from(this).notify(("report-" + id).hashCode(), n.build());
         } catch (SecurityException e) {
             // Notifications were turned off for the app.
         }

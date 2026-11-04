@@ -26,7 +26,7 @@ test("notices come from observations and from older daemons' conversation", () =
 test("observation detail drops who and what", () => {
   assert.equal(obsDetail(obs("o", "done", 0, "Japan Map — Claude finished: Tests pass.")), "Tests pass.");
   assert.equal(obsDetail(obs("o", "done", 0, "Japan Map — Claude finished")), "");
-  assert.equal(obsDetail(obs("o", "team", 0, "Race “x” complete.")), "Race “x” complete.");
+  assert.equal(obsDetail(obs("o", "done", 0, "Build complete.")), "Build complete.");
 });
 
 test("the away card shows only after a break with news", () => {
@@ -40,11 +40,3 @@ test("the away card shows only after a break with news", () => {
   assert.equal(awayLine(a), "1 agent finished · 1 failed");
 });
 
-test("a race with every attempt in asks the user to pick, not 'checking'", () => {
-  const attempt = { session_id: "s1", profile_id: "claude", role: "racer", state: "ready", files: 1, additions: 2, deletions: 0 };
-  const race = { id: "t1", title: "x", done_when: "", status: "review", agents: ["s1"], note: "", created_at: 0, updated_at: 0, team: { pattern: "race", profiles: [], attempts: [attempt], round: 0 } } as unknown as NeuralTask;
-  assert.equal(taskWord(race), "Pick one");
-  assert.equal(taskActivity(race), "waiting");
-  assert.equal(taskWord({ ...race, team: undefined }), "Checking");
-  assert.equal(taskWord({ ...race, status: "done", team: { ...race.team!, winner: "s1" } }), "Done");
-});

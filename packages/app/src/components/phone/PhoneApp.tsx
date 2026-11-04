@@ -1,5 +1,5 @@
 // Phones: four tabs (Agents · Neural · Projects · Settings) in the Dock and the pages the phone
-// router pushes over them (lib/phoneRoute.ts): an agent's screen, a project, a swarm, History,
+// router pushes over them (lib/phoneRoute.ts): an agent's screen, a project, Autopilot, History,
 // Usage, a settings section. Back (button, iOS edge swipe, Android back, the browser's back)
 // walks the browser history; the phone never changes the computer's pane layout.
 import { AppShell, NavPage, openLayerCount, type NavBack, type NavItem } from "@neuralagent/ui";
@@ -13,10 +13,9 @@ import { FilePage, FilesFolderPage } from "../files/PhoneFiles";
 import { HistoryPage } from "../HistoryPage";
 import { NeuralPage } from "../NeuralPage";
 import { PhoneSettingsRoot, PhoneSettingsSection } from "../SettingsPage";
-import { SwarmPage } from "../SwarmPage";
-import { SwarmDetail } from "../swarm/SwarmDetail";
 import { UsagePage } from "../UsagePage";
 import { PhoneAgentScreen } from "../workspace/PhoneWorkspace";
+import { AutopilotPage, PhoneConnector, PhoneConnectors } from "../autopilot/AutopilotPage";
 import { AgentsInbox, useInbox } from "./AgentsInbox";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { NewSheet } from "./NewSheet";
@@ -78,10 +77,8 @@ export function PhoneApp({ disconnected, children }: { disconnected: boolean; ch
     const r = stack.at(-2);
     if (!r) return LABEL[tab];
     if (r.k === "project") return c.state?.workspaces.find((w) => w.id === r.id)?.name ?? "Project";
-    if (r.k === "swarm") return c.state?.swarms.find((w) => w.id === r.id)?.goal || "Swarm";
+    if (r.k === "connector") return c.state?.autopilot?.connectors.find((x) => x.id === r.id)?.manifest.name ?? "Connector";
     if (r.k === "agent") return c.state?.sessions[r.sid]?.title ?? titleOf(r);
-    // With a Neural daemon the swarm page is "Teams" (D64).
-    if (r.k === "swarms" && c.status === "open" && c.has("neural")) return "Teams";
     return titleOf(r);
   });
   const back: NavBack | null = stack.length ? { label: under, onBack: () => phoneRouter().back() } : null;
@@ -104,10 +101,12 @@ function titleOf(r: Route): string {
       return cachedAgent(r.sid)?.title ?? "Agent";
     case "project":
       return "Project";
-    case "swarms":
-      return "Swarms";
-    case "swarm":
-      return "Swarm";
+    case "autopilot":
+      return "Autopilot";
+    case "connectors":
+      return "Connectors";
+    case "connector":
+      return "Connector";
     case "history":
       return r.project ? "Past conversations" : "History";
     case "usage":
@@ -140,10 +139,12 @@ function RoutePage({ route, backLabel }: { route: Route; backLabel: string }) {
       return <AgentRoute sid={route.sid} backLabel={backLabel} />;
     case "project":
       return <ProjectPage id={route.id} />;
-    case "swarms":
-      return <SwarmPage />;
-    case "swarm":
-      return <SwarmDetail id={route.id} />;
+    case "autopilot":
+      return <AutopilotPage />;
+    case "connectors":
+      return <PhoneConnectors />;
+    case "connector":
+      return <PhoneConnector id={route.id} />;
     case "history":
       return <HistoryPage project={route.project} />;
     case "usage":

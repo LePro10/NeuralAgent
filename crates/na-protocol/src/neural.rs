@@ -74,10 +74,6 @@ pub struct NeuralTask {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[ts(as = "Option<String>", optional)]
     pub note: String,
-    /// Set when the task is a team (race or build + review).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub team: Option<NeuralTeam>,
     #[ts(type = "number")]
     pub created_at: Millis,
     #[ts(type = "number")]
@@ -103,80 +99,6 @@ impl NeuralTaskStatus {
     pub fn finished(self) -> bool {
         matches!(self, Self::Done | Self::Failed)
     }
-}
-
-/// A team Neural coordinates (replaces the free-form swarm, D62).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct NeuralTeam {
-    pub pattern: TeamPattern,
-    /// The agent types asked for (race: one per contestant; review: builder, reviewer).
-    #[serde(default)]
-    pub profiles: Vec<Id>,
-    /// One per agent: race contestants, or builder then reviewer.
-    pub attempts: Vec<NeuralAttempt>,
-    /// Build + review: review rounds so far.
-    #[serde(default)]
-    pub round: u32,
-    /// Race: the attempt the user picked (its session id).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub winner: Option<Id>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export)]
-pub enum TeamPattern {
-    /// The same brief to several agents, each in its own worktree; the user picks the best.
-    Race,
-    /// A builder, and a reviewer of another engine that checks every round.
-    Review,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct NeuralAttempt {
-    pub session_id: Id,
-    pub profile_id: Id,
-    /// `builder`, `reviewer` or `racer`.
-    pub role: String,
-    pub state: AttemptState,
-    /// The check's result in this attempt's folder.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub check_ok: Option<bool>,
-    /// Last lines of the check's output.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub check_out: Option<String>,
-    #[serde(default)]
-    pub files: u32,
-    #[serde(default)]
-    pub additions: u32,
-    #[serde(default)]
-    pub deletions: u32,
-    /// Reviewer: the verdict of the last round (`approved`, `changes`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub verdict: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export)]
-pub enum AttemptState {
-    Working,
-    /// Finished its turn; the check may still run.
-    Done,
-    Checking,
-    /// Done and measured (check run if there is one).
-    Ready,
-    Failed,
-    /// Thrown away (race loser, stopped).
-    Dropped,
-    /// Race winner, merged.
-    Merged,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -232,8 +154,6 @@ pub enum ObsKind {
     CheckFailed,
     /// Neural allowed a safe permission prompt of one of its agents.
     Allowed,
-    /// A team moved on (reviewer started, feedback sent, race complete).
-    Team,
 }
 
 /// An action Neural wants to take that needs the user's OK (destructive or unusual).

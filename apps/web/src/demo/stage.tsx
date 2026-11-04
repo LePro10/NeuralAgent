@@ -14,14 +14,13 @@ const SCENE_NAMES: Record<DemoScene, string> = {
   permission: "Permission question",
   phone: "Answer on the phone",
   neural: "Talk to Neural",
-  team: "Team race",
   files: "Files and changes",
   agents: "All agents",
   idle: "Quiet",
 };
 const SCHEME_LIST = ["night", "graphite", "midnight", "black", "dusk", "forest"] as const;
 /** The posters of the landing page, by scene (the still shown while the app starts). */
-const POSTER: Record<DemoScene, string> = { grid: "grid", permission: "permission", phone: "permission", neural: "neural", team: "team", files: "files", agents: "agents", idle: "hero" };
+const POSTER: Record<DemoScene, string> = { grid: "grid", permission: "permission", phone: "permission", neural: "neural", files: "files", agents: "agents", idle: "hero" };
 
 const DESK = { w: 1280, h: 800 };
 const PHONE = { w: 390, h: 844 };

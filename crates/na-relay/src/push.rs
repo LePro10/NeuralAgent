@@ -177,6 +177,18 @@ impl Push {
         }
     }
 
+    /// Tells the reporter that their problem report got an answer
+    /// (`{t: "report", id, title, body}`; the apps open Settings → Your reports on tap).
+    pub async fn notify_report_answer(&self, r: &Relay, user: &str, report: &str, body: &str) {
+        if !self.allow(user) {
+            return;
+        }
+        let fields = json!({ "t": "report", "id": report, "title": "Answer to your report", "body": body });
+        if let Err(e) = self.deliver(r, user, &fields, false).await {
+            tracing::warn!("report answer push failed: {e:#}");
+        }
+    }
+
     async fn deliver(&self, r: &Relay, user: &str, fields: &Value, skip_on_screen: bool) -> Result<usize> {
         let mut sent = 0;
         for (device, target) in r.db.push_targets(user)? {

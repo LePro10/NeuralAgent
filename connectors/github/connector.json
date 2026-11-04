@@ -1,0 +1,44 @@
+{
+  "name": "GitHub",
+  "icon": "github",
+  "description": "Watches issues, comments and failed builds of your repositories and can comment, label and close.",
+  "kind": "api",
+  "version": "1.0.0",
+  "guide": [
+    "Open [GitHub token settings](https://github.com/settings/personal-access-tokens/new) (Fine-grained tokens) and press **Generate new token**.",
+    "Name it \"NeuralAgent\". Under **Repository access** choose the repositories the autopilot may use.",
+    "Under **Permissions → Repository** set **Issues: Read and write**, **Actions: Read-only** and **Metadata: Read-only**. Press **Generate token** and copy it.",
+    "Paste the token below, press **Test connection**, then press **Reload** on the repository list and tick the repositories to watch."
+  ],
+  "setup": [
+    {
+      "key": "token",
+      "label": "GitHub token",
+      "type": "secret",
+      "required": true,
+      "help": "A fine-grained personal access token. It stays on this computer.",
+      "link": "https://github.com/settings/personal-access-tokens/new"
+    },
+    {
+      "key": "repos",
+      "label": "Repositories to watch",
+      "type": "pick",
+      "from": "list_repos",
+      "help": "New issues, comments and failed builds of these repositories reach the autopilot."
+    }
+  ],
+  "tools": {
+    "whoami": "read",
+    "list_repos": "read",
+    "list_issues": "read",
+    "get_issue": "read",
+    "list_runs": "read",
+    "poll": "read",
+    "comment": "external",
+    "label": "write",
+    "close_issue": "write"
+  },
+  "events": ["issue", "comment", "failed_run"],
+  "check": "whoami",
+  "poll": { "tool": "poll", "minutes": 5 }
+}

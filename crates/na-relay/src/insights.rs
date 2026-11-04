@@ -249,7 +249,9 @@ impl Db {
     }
 
     pub fn delete_report(&self, id: &str) -> Result<bool> {
-        Ok(self.0.lock().execute("DELETE FROM reports WHERE id = ?1", [id])? == 1)
+        let c = self.0.lock();
+        c.execute("DELETE FROM report_answers WHERE report_id = ?1", [id])?;
+        Ok(c.execute("DELETE FROM reports WHERE id = ?1", [id])? == 1)
     }
 
     pub fn open_reports(&self) -> Result<i64> {

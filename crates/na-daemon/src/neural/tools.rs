@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use na_protocol::{CvAction, CvAnswer, CvBlock, CvRole, Id, NeuralPending, NeuralTaskStatus, Request, StartSession, TeamPattern};
+use na_protocol::{CvAction, CvAnswer, CvBlock, CvRole, Id, NeuralPending, NeuralTaskStatus, Request, StartSession};
 use serde_json::{Value, json};
 
 use super::observe::clip;
@@ -99,14 +99,6 @@ pub fn list() -> Vec<Tool> {
             params: p(json!({ "type": "object", "properties": {
                 "task": { "type": "string" }, "status": { "type": "string" }, "note": { "type": "string" }, "check": { "type": "string" }, "done_when": { "type": "string" }
             }, "required": ["task"] })),
-        },
-        Tool {
-            name: "start_team",
-            description: "Run a team on one goal. race: the same brief to 2-4 agents (ideally different engines), each in its own worktree; you compare and the user keeps the best. review: agents[0] builds, agents[1] (another engine) reviews every round until it approves. Use when the user wants alternatives, the best solution, or a second opinion.",
-            params: p(json!({ "type": "object", "properties": {
-                "folder": { "type": "string" }, "goal": { "type": "string" }, "pattern": { "type": "string", "enum": ["race", "review"] },
-                "agents": { "type": "array", "items": { "type": "string" }, "description": "Agent type ids" }, "check": { "type": "string" }
-            }, "required": ["folder", "goal", "pattern"] })),
         },
         Tool {
             name: "remember",
@@ -252,42 +244,6 @@ impl Core {
                     }
                     Some(_) => out(json!({ "ok": true }), None, true, None),
                     None => fail("no such task"),
-                }
-            }
-            "start_team" => {
-                let (Some(folder), Some(goal)) = (s("folder"), s("goal")) else { return fail("folder and goal are needed") };
-                // The goal is the brief every team agent gets.
-                if !confirmed && let Some(why) = guard::destructive(&goal) {
-                    return self.ask_user(call, format!("Start a team in {folder} with a goal that {why}"), goal, None);
-                }
-                let pattern = if s("pattern").as_deref() == Some("review") { TeamPattern::Review } else { TeamPattern::Race };
-                let ws = match self.resolve_workspace(&folder).await {
-                    Ok(w) => w,
-                    Err(e) => return fail(&e.message),
-                };
-                let mut profiles = vec![];
-                for p in a["agents"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                    match self.resolve_profile(p) {
-                        Ok(id) => profiles.push(id),
-                        Err(e) => return fail(&e.message),
-                    }
-                }
-                match self.team_start(ws.0, goal, pattern, profiles, s("check")).await {
-                    Ok(t) => {
-                        let what = if pattern == TeamPattern::Race { "a race" } else { "build + review" };
-                        out(
-                            json!({ "ok": true, "task": t.id }),
-                            Some(format!("Started {what} in {}", ws.1)),
-                            true,
-                            t.agents.first().cloned(),
-                        )
-                    }
-                    Err(e) => out(
-                        json!({ "ok": false, "error": e.message }),
-                        Some(format!("Could not start the team: {}", e.message)),
-                        false,
-                        None,
-                    ),
                 }
             }
             "remember" => {
@@ -510,7 +466,7 @@ impl Core {
     }
 
     /// What the agent did and said, compact (inspect_agent).
-    fn agent_report(&self, sid: &Id) -> Value {
+    pub(crate) fn agent_report(&self, sid: &Id) -> Value {
         let (status, prompt_first) =
             self.read(|st| st.sessions.get(sid).map(|s| (format!("{:?}", s.status).to_lowercase(), s.prompt.clone()))).unwrap_or_default();
         let open = self.cv_current_prompt(sid).map(|p| {
@@ -550,7 +506,7 @@ impl Core {
         json!({ "status": status, "first_prompt": prompt_first, "screen": tail(&screen, 3000), "last_message": last, "open_prompt": open })
     }
 
-    async fn agent_changes(&self, sid: &Id, path: Option<String>) -> Value {
+    pub(crate) async fn agent_changes(&self, sid: &Id, path: Option<String>) -> Value {
         let Some((dir, base)) = self.read(|st| {
             st.sessions.get(sid).map(|s| match &s.worktree {
                 Some(w) => (w.path.clone(), Some(w.base.clone())),

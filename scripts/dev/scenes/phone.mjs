@@ -1,6 +1,6 @@
 // Phone shell (components/phone): the four tabs and the pages the phone router pushes.
 // Usage: node scripts/dev/shot.mjs phone --devices phone,small --schemes light,dark
-//   [agents neural projects project settings section history swarms swarm agent new]
+//   [agents neural projects project settings section history agent new]
 // History shows the machine's real past conversations: keep those shots private.
 export default async ({ p, shot, sleep, go, tap, phone, args }) => {
   if (!phone) return;
@@ -24,20 +24,6 @@ export default async ({ p, shot, sleep, go, tap, phone, args }) => {
     await go("Agents");
     const first = p.locator("main button.press-row").first();
     if (await first.count()) { await tap(first); await sleep(1600); await shot("03-agent"); await back(); }
-  }
-  if (want("swarms") || want("swarm")) {
-    await go("Agents");
-    await p.mouse.move(195, 500);
-    await p.mouse.wheel(0, 2000);
-    await sleep(500);
-    await tap(row("^Swarms"));
-    await sleep(1100);
-    if (want("swarms")) await shot("04-swarms");
-    if (want("swarm")) {
-      const s = p.getByText(/Hello, swarm/).first();
-      if (await s.count()) { await tap(s); await sleep(1300); await shot("05-swarm"); await back(); }
-    }
-    await back();
   }
   if (want("neural")) { await go("Neural"); await shot("06-neural"); }
   if (want("projects") || want("project")) {

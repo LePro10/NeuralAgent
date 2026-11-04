@@ -95,7 +95,6 @@ pub fn agent_text(label: &str, kind: ObsKind, detail: &str) -> String {
         ObsKind::CheckPassed => "passed the check",
         ObsKind::CheckFailed => "failed the check",
         ObsKind::Allowed => "was allowed",
-        ObsKind::Team => "moved on",
     };
     let d = detail.trim();
     if d.is_empty() { format!("{label} {what}") } else { format!("{label} {what}: {}", clip(d, 300)) }

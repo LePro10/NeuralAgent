@@ -52,10 +52,6 @@ struct Persisted {
     /// The conversation with Neural.
     #[serde(default)]
     orchestrator: Vec<OrchMessage>,
-    #[serde(default)]
-    swarms: Vec<Swarm>,
-    #[serde(default)]
-    swarm_messages: Vec<SwarmMessage>,
 }
 
 /// Runtime data of a live session that is not part of the shared state.
@@ -98,10 +94,11 @@ pub struct Core {
     pub audit: crate::audit::Audit,
     pub orch: crate::orch::Orch,
     pub calls: crate::call::Calls,
-    pub outbox: crate::swarm::Outbox,
     pub cv: crate::claude_view::ClaudeView,
     pub host_ctl: crate::host::Host,
     pub telemetry: crate::telemetry::Telemetry,
+    pub autopilot: crate::autopilot::Runtime,
+    pub connectors: crate::connectors::Hub,
 }
 
 pub struct Subscription {
@@ -112,6 +109,7 @@ pub struct Subscription {
 
 impl Core {
     pub fn load(paths: Paths, env: LoginEnv) -> Arc<Core> {
+        let (ap_state, ap_extra) = crate::autopilot::load(&paths.root);
         let persisted: Persisted = std::fs::read_to_string(paths.state())
             .ok()
             .and_then(|s| serde_json::from_str(&s).map_err(|e| tracing::error!("state.json unreadable: {e}")).ok())
@@ -128,9 +126,8 @@ impl Core {
             remote: Default::default(),
             orchestrator: OrchState { messages: persisted.orchestrator, ..Default::default() },
             // Their agents stopped with the previous daemon.
-            swarms: persisted.swarms.into_iter().map(|w| Swarm { ended: true, ..w }).collect(),
-            swarm_messages: persisted.swarm_messages,
             neural: crate::neural::load(&paths.root),
+            autopilot: ap_state,
         };
         state.profiles.extend(persisted.profiles.into_iter().filter(|p| !p.builtin));
         // Processes from a previous daemon run are gone (reboot / crash).
@@ -168,10 +165,11 @@ impl Core {
             audit,
             orch: Default::default(),
             calls: Default::default(),
-            outbox: Default::default(),
             cv: Default::default(),
             host_ctl: Default::default(),
             telemetry: Default::default(),
+            autopilot: crate::autopilot::Runtime::with_extra(ap_extra),
+            connectors: Default::default(),
         })
     }
 
@@ -247,8 +245,6 @@ impl Core {
                 limits: s.limits.clone(),
                 busy_days: g.busy_days.clone(),
                 orchestrator: s.orchestrator.messages.iter().filter(|m| !m.text.is_empty()).cloned().collect(),
-                swarms: s.swarms.clone(),
-                swarm_messages: s.swarm_messages.clone(),
             })?
         };
         write_private(&self.paths.state(), &data)
@@ -301,19 +297,6 @@ impl Core {
         crate::policy::check(self, client, &req)?;
         crate::permissions::check(self, client, &req)?;
         match req {
-            Request::SwarmStart { workspace_id, goal, members } => Ok(json!(self.swarm_start(workspace_id, goal, members)?)),
-            Request::SwarmSend { swarm_id, to, text } => {
-                self.swarm_send(&swarm_id, crate::swarm::YOU, &to, &text)?;
-                Ok(Value::Null)
-            }
-            Request::SwarmStop { swarm_id } => {
-                self.swarm_stop(&swarm_id);
-                Ok(Value::Null)
-            }
-            Request::SwarmRemove { swarm_id } => {
-                self.swarm_remove(&swarm_id);
-                Ok(Value::Null)
-            }
             Request::OrchSend { text } => self.orch_send(text, None, false).map(|_| json!(null)),
             Request::OrchStop => {
                 self.orch_stop();
@@ -323,10 +306,9 @@ impl Core {
             | Request::NeuralTaskEdit { .. }
             | Request::NeuralNoteAdd { .. }
             | Request::NeuralNoteRemove { .. }
-            | Request::NeuralConfirm { .. }
-            | Request::NeuralTeamStart { .. }
-            | Request::NeuralTeamPick { .. }
-            | Request::NeuralTeamCleanup { .. }) => Box::pin(self.neural_handle(r)).await,
+            | Request::NeuralConfirm { .. }) => Box::pin(self.neural_handle(r)).await,
+            Request::ReportsMine => crate::telemetry::reports_mine(self).await,
+            Request::Autopilot { op } => Box::pin(crate::autopilot::ops::handle(self, client, op)).await,
             Request::OrchClear => {
                 self.orch_clear();
                 Ok(json!(null))
@@ -353,7 +335,7 @@ impl Core {
                 let wait = std::time::Duration::from_secs(if op == "update.install" { 1800 } else { 130 });
                 self.host_ctl.call(&op, args, wait).await
             }
-            Request::HostNotice { topic, .. } if topic == "neural" => Err(err(ErrorCode::BadRequest, "reserved topic")),
+            Request::HostNotice { topic, .. } if topic == "neural" || topic == "autopilot" => Err(err(ErrorCode::BadRequest, "reserved topic")),
             Request::HostNotice { topic, data } => {
                 self.emit(Event::HostNotice { topic, data });
                 Ok(Value::Null)
@@ -365,8 +347,8 @@ impl Core {
             | Request::RemoteEnable { .. }
             | Request::RemotePair
             | Request::RemoteRevoke { .. }) => crate::remote::handle(self, r).await,
-            Request::WorkspaceAdd { path, name } => self.workspace_add(path, name),
-            Request::WorkspaceUpdate { id, name, approved, pinned, order } => {
+            Request::WorkspaceAdd { path, name, ssh, unchecked } => self.workspace_add(path, name, ssh, unchecked.unwrap_or(false)).await,
+            Request::WorkspaceUpdate { id, name, approved, pinned, order, path } => {
                 let mut ws = self
                     .read(|s| s.workspaces.iter().find(|w| w.id == id).cloned())
                     .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
@@ -381,6 +363,9 @@ impl Core {
                 }
                 if let Some(v) = order {
                     ws.order = v;
+                }
+                if let Some(v) = path {
+                    self.workspace_move(&mut ws, &v).await?;
                 }
                 self.emit(Event::WorkspaceUpsert { workspace: ws.clone() });
                 Ok(json!(ws))
@@ -510,9 +495,13 @@ impl Core {
                 self.orch_status();
                 Ok(Value::Null)
             }
-            Request::FsList { path } => crate::fsbrowse::list(&self.env.home, client, &path, &self.folder_gate(Some(client))),
-            Request::FsRoots => Ok(crate::fsbrowse::roots(&self.env.home, &self.folder_gate(Some(client)))),
-            Request::FsMkdir { path, name } => {
+            Request::FsList { path, ssh: Some(h) } => crate::ssh::list(&h, &path).await,
+            Request::FsRoots { ssh: Some(h) } => crate::ssh::roots(&h).await,
+            Request::FsMkdir { path, name, ssh: Some(h) } => crate::ssh::mkdir(&h, &path, &name).await,
+            Request::SshHosts => Ok(json!(crate::ssh::known_hosts(&self.env.home))),
+            Request::FsList { path, ssh: None } => crate::fsbrowse::list(&self.env.home, client, &path, &self.folder_gate(Some(client))),
+            Request::FsRoots { ssh: None } => Ok(crate::fsbrowse::roots(&self.env.home, &self.folder_gate(Some(client)))),
+            Request::FsMkdir { path, name, ssh: None } => {
                 crate::fsbrowse::mkdir(&self.env.home, client, &path, &name, &self.folder_gate(Some(client)))
             }
             r @ (Request::FileList { .. }
@@ -626,7 +615,9 @@ impl Core {
                 let me = self.clone();
                 tokio::task::spawn_blocking(move || {
                     me.usage.refresh(&me.env.home);
-                    let ws = me.read(|s| s.workspaces.iter().map(|w| (w.id.clone(), w.path.clone())).collect::<Vec<_>>());
+                    let ws = me.read(|s| {
+                        s.workspaces.iter().filter(|w| w.ssh.is_none()).map(|w| (w.id.clone(), w.path.clone())).collect::<Vec<_>>()
+                    });
                     // the workspace with the longest path containing the folder (worktrees are inside theirs)
                     let workspace = |cwd: &str| {
                         ws.iter().filter(|(_, p)| Path::new(cwd).starts_with(p)).max_by_key(|(_, p)| p.len()).map(|(id, _)| id.clone())
@@ -641,8 +632,9 @@ impl Core {
             }
             Request::HistorySearch { query, limit } => {
                 // Phones and the orchestrator only see conversations from approved workspaces.
-                let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop)
-                    .then(|| self.read(|s| s.workspaces.iter().filter(|w| w.approved).map(|w| w.path.clone()).collect()));
+                let approved: Option<Vec<String>> = (client.kind != ClientKind::Desktop).then(|| {
+                    self.read(|s| s.workspaces.iter().filter(|w| w.approved && w.ssh.is_none()).map(|w| w.path.clone()).collect())
+                });
                 let allow = move |cwd: &str| approved.as_ref().is_none_or(|ws| ws.iter().any(|w| Path::new(cwd).starts_with(w)));
                 // The first search reads every transcript once; keep that off the async threads.
                 let me = self.clone();
@@ -669,9 +661,15 @@ impl Core {
                     None => self.git_target(&s.workspace_id, None),
                 }
             }
-            None => self
-                .read(|s| s.workspaces.iter().find(|w| &w.id == ws).map(|w| (w.path.clone(), None)))
-                .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace")),
+            None => {
+                let w = self
+                    .read(|s| s.workspaces.iter().find(|w| &w.id == ws).cloned())
+                    .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
+                if w.ssh.is_some() {
+                    return Err(err(ErrorCode::Unavailable, "Changes are not shown for folders on other computers yet"));
+                }
+                Ok((w.path, None))
+            }
         }
     }
 
@@ -679,7 +677,7 @@ impl Core {
         let s = self.session(sid)?;
         let wt = s.worktree.clone().ok_or_else(|| err(ErrorCode::BadRequest, "this agent does not have its own worktree"))?;
         let repo = self
-            .read(|st| st.workspaces.iter().find(|w| w.id == s.workspace_id).map(|w| w.path.clone()))
+            .read(|st| st.workspaces.iter().find(|w| w.id == s.workspace_id && w.ssh.is_none()).map(|w| w.path.clone()))
             .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
         Ok((s, wt, repo))
     }
@@ -694,6 +692,16 @@ impl Core {
         // dialog nobody answers (D58): only where an agent works or macOS already answered.
         let gate = self.folder_gate(None);
         for w in self.read(|s| s.workspaces.clone()) {
+            if let Some(h) = &w.ssh {
+                // Only while the connection is open or a key works: never a login prompt here.
+                let git = crate::ssh::git_summary(h, &w.path);
+                if git.as_ref().map(|g| (&g.branch, g.changed, g.ahead, g.behind))
+                    != w.git.as_ref().map(|g| (&g.branch, g.changed, g.ahead, g.behind))
+                {
+                    self.emit(Event::WorkspaceUpsert { workspace: Workspace { git, ..w } });
+                }
+                continue;
+            }
             if gate.shut(Path::new(&w.path)).is_some() {
                 continue;
             }
@@ -765,30 +773,87 @@ impl Core {
         self.emit(Event::LimitsSet { limits });
     }
 
-    fn workspace_add(&self, path: String, name: Option<String>) -> ApiResult {
-        let p = std::path::Path::new(&path);
-        let path = crate::fsbrowse::expand(&self.env.home, p);
-        if !path.is_dir() {
-            return Err(err(ErrorCode::NotFound, format!("{} is not a folder", path.display())));
-        }
-        let path_s = path.to_string_lossy().into_owned();
-        if let Some(ws) = self.read(|s| s.workspaces.iter().find(|w| w.path == path_s).cloned()) {
-            return Ok(json!(ws));
-        }
-        let order = self.read(|s| s.workspaces.iter().map(|w| w.order).max().unwrap_or(0) + 1);
-        let ws = Workspace {
-            id: layout::new_id(),
-            name: name.unwrap_or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path_s.clone())),
-            path: path_s,
-            approved: true,
-            pinned: false,
-            order,
-            created_at: now_ms(),
-            git: crate::git::summary(&path),
+    async fn workspace_add(&self, path: String, name: Option<String>, ssh: Option<SshHost>, unchecked: bool) -> ApiResult {
+        let (path_s, name, ssh) = match ssh {
+            Some(h) => {
+                crate::ssh::validate(&h)?;
+                // The folder as the other computer spells it. A host that needs a password cannot
+                // be asked from here: with `unchecked` it is added as typed and opens in a terminal.
+                let path_s = match crate::ssh::resolve(&h, &path).await {
+                    Ok(p) => p,
+                    Err(e) if unchecked && e.code != ErrorCode::NotFound => {
+                        if path.is_empty() {
+                            "~".to_string()
+                        } else {
+                            path.clone()
+                        }
+                    }
+                    Err(e) => return Err(e),
+                };
+                if let Some(ws) = self.read(|s| s.workspaces.iter().find(|w| w.path == path_s && w.ssh.as_ref() == Some(&h)).cloned()) {
+                    return Ok(json!(ws));
+                }
+                let base = path_s.trim_end_matches('/').rsplit('/').next().filter(|n| !n.is_empty() && *n != "~").map(str::to_string);
+                let name = name.unwrap_or_else(|| match base {
+                    Some(b) => format!("{b} · {}", h.host),
+                    None => h.host.clone(),
+                });
+                (path_s, name, Some(h))
+            }
+            None => {
+                let p = std::path::Path::new(&path);
+                let path = crate::fsbrowse::expand(&self.env.home, p);
+                if !path.is_dir() {
+                    return Err(err(ErrorCode::NotFound, format!("{} is not a folder", path.display())));
+                }
+                let path_s = path.to_string_lossy().into_owned();
+                if let Some(ws) = self.read(|s| s.workspaces.iter().find(|w| w.path == path_s && w.ssh.is_none()).cloned()) {
+                    return Ok(json!(ws));
+                }
+                let name =
+                    name.unwrap_or_else(|| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path_s.clone()));
+                (path_s, name, None)
+            }
         };
+        let order = self.read(|s| s.workspaces.iter().map(|w| w.order).max().unwrap_or(0) + 1);
+        let git = match &ssh {
+            Some(h) => {
+                let (h, p) = (h.clone(), path_s.clone());
+                tokio::task::spawn_blocking(move || crate::ssh::git_summary(&h, &p)).await.ok().flatten()
+            }
+            None => crate::git::summary(std::path::Path::new(&path_s)),
+        };
+        let ws =
+            Workspace { id: layout::new_id(), name, path: path_s, approved: true, pinned: false, order, created_at: now_ms(), git, ssh };
         self.emit(Event::WorkspaceUpsert { workspace: ws.clone() });
         self.emit(Event::LayoutSet { workspace_id: ws.id.clone(), layout: layout::default_layout() });
         Ok(json!(ws))
+    }
+
+    /// Switches a workspace to another folder (same computer). Running agents keep theirs.
+    async fn workspace_move(&self, ws: &mut Workspace, to: &str) -> std::result::Result<(), ApiError> {
+        let new = match &ws.ssh {
+            Some(h) => crate::ssh::resolve(h, to).await?,
+            None => {
+                let p = crate::fsbrowse::expand(&self.env.home, std::path::Path::new(to));
+                if !p.is_dir() {
+                    return Err(err(ErrorCode::NotFound, format!("{} is not a folder", p.display())));
+                }
+                p.to_string_lossy().into_owned()
+            }
+        };
+        if self.read(|s| s.workspaces.iter().any(|w| w.id != ws.id && w.path == new && w.ssh == ws.ssh)) {
+            return Err(err(ErrorCode::Conflict, "That folder is already a workspace"));
+        }
+        ws.path = new;
+        ws.git = match &ws.ssh {
+            Some(h) => {
+                let (h, p) = (h.clone(), ws.path.clone());
+                tokio::task::spawn_blocking(move || crate::ssh::git_summary(&h, &p)).await.ok().flatten()
+            }
+            None => crate::git::summary(std::path::Path::new(&ws.path)),
+        };
+        Ok(())
     }
 
     /// Stops the process; its exit is not an error.
@@ -806,13 +871,14 @@ impl Core {
         self.session_start_as(start, None)
     }
 
-    /// `id`: chosen by the caller (a swarm knows its members before they start).
+    /// `id`: chosen by the caller (the caller knows the id before the session starts).
     pub(crate) fn session_start_as(self: &Arc<Self>, start: StartSession, id: Option<Id>) -> std::result::Result<Session, ApiError> {
         let ws = self
             .read(|s| s.workspaces.iter().find(|w| w.id == start.workspace_id).cloned())
             .ok_or_else(|| err(ErrorCode::NotFound, "no such workspace"))?;
         let profile = self.profile(&start.profile_id).ok_or_else(|| err(ErrorCode::NotFound, "no such profile"))?;
         let mut cwd = match &start.cwd {
+            Some(c) if ws.ssh.is_some() && Path::new(c).starts_with(&ws.path) => c.clone(),
             Some(c) if Path::new(c).starts_with(&ws.path) && Path::new(c).is_dir() => c.clone(),
             Some(_) => return Err(err(ErrorCode::BadRequest, "that folder is not inside the workspace")),
             None => ws.path.clone(),
@@ -820,7 +886,7 @@ impl Core {
         let id = id.unwrap_or_else(layout::new_id);
         // Its own branch and folder, so parallel agents do not edit the same files.
         let worktree = match start.worktree {
-            Some(true) => {
+            Some(true) if ws.ssh.is_none() => {
                 let name = format!("{}-{}", slug(&profile.name), &id[..id.len().min(6)]);
                 let wt = crate::git::worktree_create(Path::new(&ws.path), &name).map_err(git_err)?;
                 // Same subfolder inside the worktree, if one was asked for.
@@ -875,22 +941,17 @@ impl Core {
         // A dev server from the previous run is gone.
         session.preview_url = None;
         let exe = std::env::current_exe().map_err(|e| err(ErrorCode::Internal, e.to_string()))?;
-        let mut secrets = crate::mcp::load_secrets(&self.paths.root);
+        let secrets = crate::mcp::load_secrets(&self.paths.root);
         let hook_token = crate::server::random_token();
         let port = *self.port.lock();
-        let mut servers = self.read(|s| s.mcp.clone());
-        let in_swarm = self.swarm_of(&session.id).is_some();
-        if in_swarm {
-            servers.retain(|s| s.id != crate::swarm::SERVER_ID);
-            servers.push(crate::swarm::server(&exe));
-            secrets.insert(crate::swarm::SERVER_ID.into(), crate::swarm::bridge_env(&session.id, &hook_token, port));
-        }
-        let mut mcp = crate::mcp::for_engine(&profile.engine, &servers, &secrets);
-        if in_swarm && profile.engine == "claude" {
-            // Talking to the team needs no permission prompt.
-            mcp.args.extend(["--allowedTools".into(), format!("mcp__{}", crate::swarm::SERVER_ID)]);
-        }
-        let launch = crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe, &mcp.args)?;
+        let servers = self.read(|s| s.mcp.clone());
+        let mcp = crate::mcp::for_engine(&profile.engine, &servers, &secrets);
+        let remote = self.read(|s| s.workspaces.iter().find(|w| w.id == session.workspace_id).and_then(|w| w.ssh.clone()));
+        let launch = match &remote {
+            // Hooks and MCP servers are this computer's: out there the agent runs as it would in a plain ssh session.
+            Some(h) => crate::ssh::launch(h, &profile, prompt.as_deref(), session.engine_session.as_deref(), &session.cwd)?,
+            None => crate::profiles::launch(&self.env, &profile, prompt.as_deref(), session.engine_session.as_deref(), &exe, &mcp.args)?,
+        };
         let mut env: Vec<(String, String)> = self.env.vars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         env.extend(
             [
@@ -917,7 +978,7 @@ impl Core {
             Spawn {
                 program: launch.program,
                 args: launch.args,
-                cwd: session.cwd.clone(),
+                cwd: if remote.is_some() { self.env.home.to_string_lossy().into_owned() } else { session.cwd.clone() },
                 env,
                 env_remove: STRIP.iter().map(|s| s.to_string()).filter(|k| !k.starts_with("NEURALAGENT_")).collect(),
                 cols: session.cols,
@@ -933,7 +994,9 @@ impl Core {
         self.telemetry.count("agents_started", 1);
         self.telemetry.count(&format!("agent.{}", profile.engine), 1);
         // It runs in its folder now: macOS answered for it, if it guards it.
-        self.folder_gate(None).answered(Path::new(&session.cwd), &Ok(()));
+        if remote.is_none() {
+            self.folder_gate(None).answered(Path::new(&session.cwd), &Ok(()));
+        }
 
         let now = now_ms();
         session.alive = true;
@@ -1010,7 +1073,7 @@ impl Core {
         // is merged or discarded.
         if let Some((wt, repo)) = self.read(|s| {
             let x = s.sessions.get(id)?;
-            Some((x.worktree.clone()?, s.workspaces.iter().find(|w| w.id == x.workspace_id)?.path.clone()))
+            Some((x.worktree.clone()?, s.workspaces.iter().find(|w| w.id == x.workspace_id && w.ssh.is_none())?.path.clone()))
         }) {
             std::thread::spawn(move || {
                 if !crate::git::worktree_dirty(&wt)
@@ -1124,8 +1187,6 @@ impl Core {
             AgentStatus::Error => Some(AttentionKind::Error),
             _ => None,
         };
-        // A swarm member's finished turn is part of the team's work; the team reports itself.
-        let kind = kind.filter(|k| *k != AttentionKind::Done || self.swarm_of(id).is_none());
         if let (Some(kind), true) = (kind, next != cur) {
             self.emit(Event::Attention { session_id: id.clone(), kind, text: attention.unwrap_or_default() });
         }
@@ -1269,6 +1330,8 @@ impl Core {
     pub fn shutdown(&self) {
         // Save first, while sessions still count as running, then stop them.
         let _ = self.save_if_dirty();
+        self.autopilot_save();
+        self.connectors.stop_all();
         self.closing.store(true, std::sync::atomic::Ordering::SeqCst);
         for (_, l) in self.live.lock().drain() {
             l.pty.kill();
@@ -1349,6 +1412,11 @@ pub fn apply(s: &mut State, ev: &Event) {
                 s.neural = n;
             }
         }
+        Event::HostNotice { topic, data } if topic == "autopilot" => {
+            if let Ok(a) = serde_json::from_value(data.clone()) {
+                s.autopilot = a;
+            }
+        }
         Event::Attention { .. } | Event::HostNotice { .. } => {}
         Event::OrchMessage { message } => {
             let msgs = &mut s.orchestrator.messages;
@@ -1364,21 +1432,6 @@ pub fn apply(s: &mut State, ev: &Event) {
             s.orchestrator.busy = *busy;
         }
         Event::OrchCleared => s.orchestrator.messages.clear(),
-        Event::SwarmUpsert { swarm } => match s.swarms.iter_mut().find(|w| w.id == swarm.id) {
-            Some(w) => *w = swarm.clone(),
-            None => s.swarms.push(swarm.clone()),
-        },
-        Event::SwarmRemoved { id } => {
-            s.swarms.retain(|w| &w.id != id);
-            s.swarm_messages.retain(|m| &m.swarm_id != id);
-        }
-        Event::SwarmMessage { message } => {
-            match s.swarm_messages.iter_mut().rev().find(|m| m.id == message.id) {
-                Some(m) => *m = message.clone(),
-                None => s.swarm_messages.push(message.clone()),
-            }
-            crate::swarm::trim(&mut s.swarm_messages, &message.swarm_id);
-        }
     }
 }
 

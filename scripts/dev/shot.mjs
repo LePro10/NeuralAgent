@@ -91,11 +91,8 @@ for (const dev of devices) {
       return path;
     };
     const tap = (loc) => tapAt(p, loc, phone);
-    // The sidebar's "Swarm" is "Teams" with a Neural daemon (D64): either name finds it.
-    const desk = (name) => {
-      const re = ["Swarm", "Teams"].includes(name) ? "(Swarm|Teams)" : name;
-      return p.locator(`nav [aria-label="${name}"], nav :text-is("${name}")`).or(p.getByRole("button", { name: new RegExp(`(^|, )${re}$`, "i") })).first();
-    };
+    const desk = (name) =>
+      p.locator(`nav [aria-label="${name}"], nav :text-is("${name}")`).or(p.getByRole("button", { name: new RegExp(`(^|, )${name}$`, "i") })).first();
     // Main navigation: phone tab bar or desktop sidebar; `more` opens a page that has no tab.
     const go = async (name) => {
       if (phone) await tap(p.locator(`[role=tab][aria-label="${name}"]`).first());
@@ -105,14 +102,14 @@ for (const dev of devices) {
     // Settings sections that used to be pages of their own.
     const IN_SETTINGS = ["MCP servers", "Remote access"];
     // Phones (four tabs: Agents, Neural, Projects, Settings): everything else is a row on the
-    // Agents page (Swarms) or on Settings (History, Usage, MCP servers, Remote access, …).
-    const ON_AGENTS = ["Swarm", "Swarms", "Teams"];
+    // Agents page (Autopilot) or on Settings (History, Usage, MCP servers, Remote access, …).
+    const ON_AGENTS = ["Autopilot"];
     const more = async (name) => {
       const section = IN_SETTINGS.includes(name);
       if (phone) {
         await go(ON_AGENTS.includes(name) ? "Agents" : "Settings");
         if (name !== "Settings") {
-          const row = p.getByRole("button", { name: new RegExp(`^${ON_AGENTS.includes(name) ? "(Swarms|Teams)" : name}`) }).first();
+          const row = p.getByRole("button", { name: new RegExp(`^${name}`) }).first();
           // Centre it: at the bottom edge it sits under the Dock. A re-tapped tab scrolls to the top first.
           await sleep(500);
           await row.evaluate((e) => e.scrollIntoView({ block: "center" }));

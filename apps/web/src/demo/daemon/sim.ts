@@ -16,7 +16,7 @@ import type { Shell } from "./shell.ts";
 
 export const HOST = { host_id: "demo-studio-0001", name: "Studio", os: "macos", home: "/Users/demo" };
 export const DAEMON_VERSION = DEMO_VERSION;
-export const FEATURES = ["call_warm", "files", "neural", "host_system", "cv_stop_task"];
+export const FEATURES = ["call_warm", "files", "neural", "host_system", "cv_stop_task", "autopilot"];
 
 export type Listener = (s: DemoSignal) => void;
 

@@ -2,6 +2,7 @@
 // Neural's memory and its conversation. Identical for the same seed.
 
 import type { CatalogEntry, NeuralState, OrchMessage, Profile, Settings, State, UsageLimit, Workspace } from "@neuralagent/protocol";
+import { autopilotSeed } from "./autopilot.ts";
 import { CODE, HOME, HOME_FILES, PROJECTS } from "./content.ts";
 import type { Sim } from "./sim.ts";
 import { join } from "./vfs.ts";
@@ -105,7 +106,6 @@ export function workspaces(sim: Sim): Workspace[] {
 export function neuralHistory(sim: Sim, shopClaude: string, stockWin?: string): { messages: OrchMessage[]; neural: NeuralState } {
   const t = sim.now();
   const shop = sim.state.workspaces.find((w) => w.name === "web-shop")?.id ?? "";
-  const gone = (n: number) => sim.id("session", 12) + n; // dropped attempts: their sessions were closed after the pick
   const id = () => sim.id("orchm");
   const messages: OrchMessage[] = [
     { id: id(), role: "user", text: "Which of my agents are idle right now?", at: t - 26 * HOUR },
@@ -140,18 +140,7 @@ export function neuralHistory(sim: Sim, shopClaude: string, stockWin?: string): 
               workspace_id: shop,
               agents: [stockWin],
               check: "pnpm test",
-              note: "Kept Attempt 2",
-              team: {
-                pattern: "race" as const,
-                profiles: ["claude", "codex", "opencode"],
-                round: 1,
-                winner: stockWin,
-                attempts: [
-                  { session_id: gone(1), profile_id: "claude", role: "racer" as const, state: "dropped" as const, check_ok: true, check_out: "Tests  4 passed (4)", files: 2, additions: 14, deletions: 1 },
-                  { session_id: stockWin, profile_id: "codex", role: "racer" as const, state: "merged" as const, check_ok: true, check_out: "Tests  4 passed (4)", files: 1, additions: 6, deletions: 1 },
-                  { session_id: gone(3), profile_id: "opencode", role: "racer" as const, state: "dropped" as const, check_ok: false, check_out: "FAIL src/components/ProductCard.test.tsx\n  expected \"3 left\" to be visible", files: 1, additions: 4, deletions: 0 },
-                ],
-              },
+              note: "Done",
               created_at: t - 26 * HOUR + 12 * MIN,
               updated_at: t - 26 * HOUR + 31 * MIN,
             },
@@ -203,8 +192,7 @@ export function freshState(sim: Sim, ws: Workspace[]): State {
       fingerprint: "7F3A 91C2 04BE D5E8",
     },
     orchestrator: { ready: true, keys: ["neuralhub"], busy: false, messages: [] },
-    swarms: [],
-    swarm_messages: [],
     neural: { mode: "active", tasks: [], notes: [], observations: [], pending: [], summary_upto: 0 },
+    autopilot: autopilotSeed(ws.find((w) => w.name === "web-shop")?.id ?? ws[0]?.id ?? "", now),
   };
 }

@@ -6,7 +6,7 @@
 //   node scripts/dev/site-posters.mjs http://localhost:5194
 //   node scripts/dev/site-posters.mjs http://localhost:5194 --only desk-grid,phone-grid --max-kb 100
 //
-// Output: apps/web/public/demo/{desk,phone}-{grid,permission,neural,team,files,agents}.webp plus
+// Output: apps/web/public/demo/{desk,phone}-{grid,permission,neural,files,agents}.webp plus
 // desk-hero.webp and phone-hero.webp. Desk = 1280x800 css px, phone = 390x844, both at 2x.
 // The browser clock is fixed and the world is seeded, so the same checkout gives the same posters.
 //

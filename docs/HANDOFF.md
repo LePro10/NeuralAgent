@@ -18,6 +18,30 @@ click, guided learn, loose path on a real voice, the dictation history with real
 Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
 (a long paste was lost on reload, which motivated D85).
 
+## Autopilot built, relay + website deployed, not committed (2026-11-03)
+**Deployed 2026-11-03** (with the SSH workspaces of the other session): relay build
+`0.5.2+mw17iga8`, rollback image `neuralagent-relay:prev` = `0.5.2+mvzkram1`. Health, `/app/`,
+`/admin/`, changelog checked; `/api/me/reports`, `/api/admin/keys` answer 401 without auth.
+Deploy note: rsync `git ls-files --cached --others --exclude-standard` filtered to existing files
+(new files are untracked; a deleted tracked file makes rsync skip files). Desktop/Android get
+Autopilot and SSH only with the next release (ask the owner for the version number).
+Working copy on `mobile-overhaul` (another session's SSH workspaces, D90, is in the same copy).
+Spec: [notes/autopilot.md](notes/autopilot.md); decisions D87 (autopilot per project, separate from
+Neural), D88 (Teams/swarms removed), D89 (connectors = MCP + manifest, generated UI, Chrome
+extension), D91 (report answers, scoped admin API keys). Code: `crates/na-protocol/src/autopilot.rs`,
+`crates/na-daemon/src/{autopilot,connectors}/`, `connectors/` (built-ins discord/github/feed/web-api,
+`_lib`, `_template`, `examples/neuralagent-admin`), `apps/browser-extension/`,
+`packages/app/src/components/autopilot/`, relay `apikeys.rs` + reply/`/api/me/reports`, admin
+`ApiKeys.tsx`, Settings → Your reports, push type `report` (sw.js, Android `PushService`).
+Verified: cargo test (workspace), typecheck, pnpm test, lint:tokens, check:docs, `pnpm
+test:connectors` (33), extension tests (6); UI against a real test daemon in light/dark, phone/desk
+(`scripts/dev/scenes/autopilot.mjs`, montages `research-local/ap-final/`).
+**Not tried yet:** a real model turn (no key in test daemons: setup interview, triage, tools,
+suggestions), Discord/GitHub with real tokens, the extension in a real Chrome, a connector built by
+an agent, relay changes deployed (`cargo test -p na-relay --features test-login` for integration
+tests), the Android build with the new push channel. Relay push `report` opens the app home, not
+Settings → Your reports directly. Owner must decide on commit/deploy.
+
 ## Where we are (2026-11-02)
 - Released: 0.5.2 (see above). Earlier: 0.5.1 `046401c`.
 - **Deployed but NOT committed** (working copy on `mobile-overhaul`; relay build `0.5.1+mvzcn8r8`,

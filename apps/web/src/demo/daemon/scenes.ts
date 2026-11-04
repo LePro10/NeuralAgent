@@ -6,8 +6,6 @@ import type { Session } from "@neuralagent/protocol";
 import type { DemoScene } from "../api.ts";
 import { RETRY_PROMPT, registerTask, type TaskFn } from "./agents/scripts.ts";
 import { createSession, promptSession } from "./agents/spawn.ts";
-import { liveSwarm, endedSwarm } from "./swarms.ts";
-import { RACE_GOAL, REVIEW_GOAL } from "./agents/team.ts";
 import { Neural } from "./neural.ts";
 import { freshState, neuralHistory, seedDisk, workspaces } from "./seed.ts";
 import type { Sim } from "./sim.ts";
@@ -196,7 +194,7 @@ export async function buildScene(sim: Sim, scene: DemoScene, realNow: number): P
   sim.handles["agent.claude-shop"] = shopClaude.id;
   await finish(sim, [shopClaude.id], 4 * MIN);
   await earlier(sim, shopClaude.id, ["Where is the cart total computed?", "Run the tests."]);
-  // A team race Neural ran yesterday: its winner is a finished Codex session (the others were closed after the pick).
+  // A task Neural ran yesterday: its winner is a finished Codex session (the others were closed after the pick).
   const stockWin = createSession(sim, {
     workspaceId: shop.id,
     profileId: "codex",
@@ -210,7 +208,7 @@ export async function buildScene(sim: Sim, scene: DemoScene, realNow: number): P
     ],
   });
   await finish(sim, [stockWin.id], 3 * MIN);
-  if (scene !== "team") {
+  {
     // The billing-api Claude has been at work since the morning; today's task continues that conversation.
     const bc = createSession(sim, { workspaceId: ws(sim, "billing-api").id, profileId: "claude", prompt: MORNING[0]!, place: false });
     sim.handles["agent.claude-billing"] = bc.id;
@@ -267,23 +265,6 @@ export async function buildScene(sim: Sim, scene: DemoScene, realNow: number): P
       bigLeft(sim, billing.id, three[0]!.id, [three[1]!.id, three[2]!.id], "Agents");
       soloTab(sim, billing.id, three[3]!.id, "Docs");
       await advanceUntil(sim, () => sim.session(three[0]!.id)?.status === "waiting", 120 * SEC);
-      break;
-    }
-    case "team": {
-      // The Teams page at full strength: a swarm that talks, a build + review mid-loop and a race at "Pick one";
-      // a finished race and a stopped swarm are history.
-      const docs = ws(sim, "docs-site");
-      endedSwarm(sim, docs.id);
-      sim.neural.startTeam({ workspaceId: shop.id, goal: RACE_GOAL, pattern: "race", profiles: ["claude", "codex", "opencode"], check: "pnpm test" });
-      const race = () => sim.state.neural?.tasks.find((t) => t.team?.pattern === "race" && t.status !== "done");
-      sim.handles["team.wishlist"] = race()?.id ?? "";
-      await advanceUntil(sim, () => race()?.status === "review", 4 * MIN);
-      // Now the other two start: the swarm talks and the build + review goes into its second round.
-      liveSwarm(sim, docs.id);
-      sim.neural.startTeam({ workspaceId: shop.id, goal: REVIEW_GOAL, pattern: "review", profiles: ["claude", "codex"], check: "pnpm test" });
-      const review = () => sim.state.neural?.tasks.find((t) => t.team?.pattern === "review");
-      sim.handles["team.shipping"] = review()?.id ?? "";
-      await advanceUntil(sim, () => review()?.team?.attempts.find((a) => a.role === "reviewer")?.verdict === "changes", 3 * MIN);
       break;
     }
     case "files": {

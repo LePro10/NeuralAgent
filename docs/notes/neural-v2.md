@@ -1,6 +1,6 @@
 # Neural v2: a working colleague, not a launcher (2026-10-31)
 
-Decisions D61–D64. Code: `crates/na-daemon/src/orch.rs` (the turn engine, keys, folders) and
+**Teams/Swarm described here were removed (D88); Autopilot replaces them.** Decisions D61–D64. Code: `crates/na-daemon/src/orch.rs` (the turn engine, keys, folders) and
 `crates/na-daemon/src/neural/` (world state, observer, pulse, tasks, teams, guard, memory, tools).
 UI: `packages/app/src/components/NeuralPage.tsx`, `components/neural/*`, Teams in
 `SwarmPage.tsx` / `components/swarm/*`.

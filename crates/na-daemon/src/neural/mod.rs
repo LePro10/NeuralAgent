@@ -1,6 +1,6 @@
 //! Neural v2 (D61–D64, docs/notes/neural-v2.md): the state Neural keeps besides the conversation
 //! (tasks, memory, observations, confirmations), the observer that turns daemon events into
-//! observations and wake-ups, teams, and the requests the UI sends. The turn engine (talking to
+//! observations and wake-ups, and the requests the UI sends. The turn engine (talking to
 //! the model) stays in `orch.rs`.
 
 pub mod guard;
@@ -18,8 +18,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use na_protocol::{
-    AgentStatus, ApiError, AttemptState, AttentionKind, CvAction, ErrorCode, Event, Id, NeuralMode, NeuralNote, NeuralObs, NeuralState,
-    NeuralTask, NeuralTaskStatus, ObsKind, OrchRole, Request, TeamPattern,
+    AgentStatus, ApiError, AttentionKind, CvAction, ErrorCode, Event, Id, NeuralMode, NeuralNote, NeuralObs, NeuralState,
+    NeuralTaskStatus, ObsKind, OrchRole, Request,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -28,7 +28,6 @@ use crate::core::{Core, err, now_ms};
 use crate::llm::Call;
 use crate::orch::{Trigger, me};
 use observe::clip;
-use tasks::Step;
 
 const NOTES: usize = 40;
 
@@ -43,8 +42,6 @@ pub struct Runtime {
     pub compacting: AtomicBool,
     /// Attentions Neural raised itself (the observer skips them).
     own: Mutex<HashSet<(Id, String)>>,
-    /// Races being merged right now (a second "Use this" waits for the first).
-    picking: Mutex<HashSet<Id>>,
     /// Wake-ups per task since the user last wrote (caps follow-up loops).
     wakes: Mutex<HashMap<Id, u32>>,
 }
@@ -59,7 +56,18 @@ fn file(root: &Path) -> PathBuf {
 /// Neural's state from the last run. Confirmations do not survive a restart (the agents they
 /// were about are gone or changed).
 pub fn load(root: &Path) -> NeuralState {
-    let mut n: NeuralState = std::fs::read_to_string(file(root)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let mut n: NeuralState = std::fs::read_to_string(file(root))
+        .ok()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .map(|mut v| {
+            // Older versions wrote observations of the removed "team" kind: drop them instead of losing the whole file.
+            if let Some(obs) = v.get_mut("observations").and_then(Value::as_array_mut) {
+                obs.retain(|o| o.get("kind").and_then(Value::as_str) != Some("team"));
+            }
+            v
+        })
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
     n.pending.clear();
     n
 }
@@ -114,7 +122,7 @@ impl Core {
         self.neural_observe_for(kind, sid, None, text)
     }
 
-    /// The same about a known task (a team step: the task may be finished by now, e.g. approved).
+    /// The same about a known task (the task may be finished by now).
     fn neural_observe_for(&self, kind: ObsKind, sid: Option<&Id>, task: Option<&str>, text: String) -> Id {
         let now = now_ms();
         let (id, wake, task) = self.neural_update(|n| {
@@ -123,10 +131,7 @@ impl Core {
                 None => sid.and_then(|s| tasks::of_agent(n, s)),
             };
             let task = t.map(|t| t.id.clone());
-            // A team moves on by itself (check, reviewer, feedback): its agents finishing a turn is
-            // not a reason to wake; the team's own step reports when it needs Neural.
-            let team_turn = kind == ObsKind::Done && t.is_some_and(|t| t.team.is_some());
-            let wake = pulse::wakes(kind, task.is_some(), n.mode) && !team_turn;
+            let wake = pulse::wakes(kind, task.is_some(), n.mode);
             let obs = NeuralObs {
                 id: self.neural_id("o"),
                 at: now,
@@ -235,12 +240,6 @@ impl Core {
                 Ok(Value::Null)
             }
             Request::NeuralConfirm { id, allow } => self.neural_confirm(&id, allow).await.map(|_| Value::Null),
-            Request::NeuralTeamStart { workspace_id, goal, pattern, profiles, check } => {
-                self.telemetry.count("teams_started", 1);
-                Ok(json!(self.team_start(workspace_id, goal, pattern, profiles, check).await?))
-            }
-            Request::NeuralTeamPick { task_id, session_id } => self.team_pick(&task_id, &session_id).await.map(|_| Value::Null),
-            Request::NeuralTeamCleanup { task_id } => self.team_cleanup(&task_id).await.map(|n| json!(n)),
             _ => Err(err(ErrorCode::BadRequest, "not a Neural request")),
         }
     }
@@ -273,414 +272,6 @@ impl Core {
             self.orch_wake(Trigger::Resume(note));
         }
         Ok(())
-    }
-
-    // ───────────── teams (D62) ─────────────
-
-    pub async fn team_start(
-        self: &Arc<Self>,
-        workspace_id: Id,
-        goal: String,
-        pattern: TeamPattern,
-        mut profiles: Vec<Id>,
-        check: Option<String>,
-    ) -> Result<NeuralTask, ApiError> {
-        let goal = goal.trim().to_string();
-        if goal.is_empty() {
-            return Err(err(ErrorCode::BadRequest, "a team needs a goal"));
-        }
-        if !self.read(|s| s.workspaces.iter().any(|w| w.id == workspace_id)) {
-            return Err(err(ErrorCode::NotFound, "no such workspace"));
-        }
-        let default = self.read(|s| s.settings.default_profile.clone());
-        let want = if pattern == TeamPattern::Race { 2..=4 } else { 2..=2 };
-        if profiles.is_empty() {
-            profiles = vec![default.clone(), default];
-        }
-        if profiles.len() == 1 {
-            profiles.push(profiles[0].clone());
-        }
-        if !want.contains(&profiles.len()) {
-            return Err(err(
-                ErrorCode::BadRequest,
-                if pattern == TeamPattern::Race { "a race has 2 to 4 agents" } else { "build + review has a builder and a reviewer" },
-            ));
-        }
-        let check = check.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
-        let task = self.neural_update(|n| {
-            let id = tasks::create(n, &goal, "", Some(workspace_id.clone()), check.clone(), now_ms());
-            if let Some(t) = tasks::get_mut(n, &id) {
-                t.team = Some(tasks::new_team(pattern, &profiles));
-                t.status = NeuralTaskStatus::Working;
-            }
-            id
-        });
-        let starts: Vec<(Id, &str, String, Option<bool>)> = match pattern {
-            TeamPattern::Race => {
-                profiles.iter().map(|p| (p.clone(), "racer", tasks::race_brief(&goal, check.as_deref()), Some(true))).collect()
-            }
-            TeamPattern::Review => vec![(profiles[0].clone(), "builder", tasks::builder_brief(&goal, check.as_deref()), None)],
-        };
-        let mut first_err = None;
-        for (profile, role, prompt, wt) in starts {
-            match self.start_agent_raw(&workspace_id, &profile, Some(prompt), wt).await {
-                Ok(sid) => self.neural_update(|n| {
-                    if let Some(t) = tasks::get_mut(n, &task)
-                        && let Some(tm) = t.team.as_mut()
-                    {
-                        tm.attempts.push(tasks::attempt(&sid, &profile, role));
-                    }
-                    tasks::link(n, &task, &sid, now_ms());
-                }),
-                Err(e) => {
-                    tracing::warn!("team: could not start {profile}: {}", e.message);
-                    first_err.get_or_insert(e);
-                }
-            }
-        }
-        let t = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).cloned()).expect("task exists");
-        if t.agents.is_empty() {
-            self.neural_update(|n| n.tasks.retain(|x| x.id != task));
-            return Err(first_err.unwrap_or_else(|| err(ErrorCode::Internal, "no agent started")));
-        }
-        Ok(t)
-    }
-
-    /// Race: keep one attempt, throw the others away.
-    async fn team_pick(self: &Arc<Self>, task: &str, keep: &str) -> Result<(), ApiError> {
-        let Some(t) = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).cloned()) else {
-            return Err(err(ErrorCode::NotFound, "no such task"));
-        };
-        let Some(team) = t.team.as_ref().filter(|tm| tm.pattern == TeamPattern::Race) else {
-            return Err(err(ErrorCode::BadRequest, "not a race"));
-        };
-        if team.winner.is_some() || t.status.finished() {
-            return Err(err(ErrorCode::BadRequest, "this race is already decided"));
-        }
-        if !self.orch.neural.picking.lock().insert(task.to_string()) {
-            return Err(err(ErrorCode::BadRequest, "this race is being merged"));
-        }
-        let r = self.team_merge(task, keep).await;
-        self.orch.neural.picking.lock().remove(task);
-        r
-    }
-
-    /// "Clean up" on a race that ended without a pick: throws away the worktrees of its attempts
-    /// (only those, never the kept one; the user confirmed in the UI). Returns how many went.
-    async fn team_cleanup(self: &Arc<Self>, task: &str) -> Result<u32, ApiError> {
-        let Some(t) = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).cloned()) else {
-            return Err(err(ErrorCode::NotFound, "no such task"));
-        };
-        let sids = tasks::cleanable(&t).map_err(|e| err(ErrorCode::BadRequest, e))?;
-        if !self.orch.neural.picking.lock().insert(task.to_string()) {
-            return Err(err(ErrorCode::BadRequest, "this race is being merged"));
-        }
-        let mut removed = 0u32;
-        for sid in &sids {
-            if !self.read(|s| s.sessions.get(sid).is_some_and(|x| x.worktree.is_some())) {
-                continue; // already discarded or merged by hand
-            }
-            match self.handle(&me(), Request::WorktreeDiscard { session_id: sid.clone() }).await {
-                Ok(_) => removed += 1,
-                Err(e) => tracing::warn!("race clean-up: discard {sid}: {}", e.message),
-            }
-        }
-        self.orch.neural.picking.lock().remove(task);
-        self.neural_update(|n| {
-            if let Some(t) = tasks::get_mut(n, task) {
-                if let Some(tm) = t.team.as_mut() {
-                    for a in tm.attempts.iter_mut().filter(|a| sids.contains(&a.session_id)) {
-                        a.state = AttemptState::Dropped;
-                    }
-                }
-                t.note = match removed {
-                    0 => "Cleaned up: no worktrees were left.".into(),
-                    1 => "Cleaned up: 1 worktree removed.".into(),
-                    n => format!("Cleaned up: {n} worktrees removed."),
-                };
-                t.updated_at = now_ms();
-            }
-        });
-        Ok(removed)
-    }
-
-    async fn team_merge(self: &Arc<Self>, task: &str, keep: &str) -> Result<(), ApiError> {
-        // Read again under the pick guard: a pick that just finished set the winner.
-        let Some(t) = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).cloned()) else {
-            return Err(err(ErrorCode::NotFound, "no such task"));
-        };
-        let Some(team) = t.team.as_ref().filter(|tm| tm.winner.is_none()) else {
-            return Err(err(ErrorCode::BadRequest, "this race is already decided"));
-        };
-        if !team.attempts.iter().any(|a| a.session_id == keep) {
-            return Err(err(ErrorCode::NotFound, "not part of this race"));
-        }
-        self.handle(&me(), Request::WorktreeMerge { session_id: keep.to_string() }).await?;
-        for a in team.attempts.iter().filter(|a| a.session_id != keep) {
-            if let Err(e) = self.handle(&me(), Request::WorktreeDiscard { session_id: a.session_id.clone() }).await {
-                tracing::warn!("race: discard {}: {}", a.session_id, e.message);
-            }
-        }
-        let engine = self.read(|s| {
-            let p = team.attempts.iter().find(|a| a.session_id == keep).map(|a| a.profile_id.clone()).unwrap_or_default();
-            s.profiles.iter().find(|x| x.id == p).map(|x| x.name.clone()).unwrap_or(p)
-        });
-        self.neural_update(|n| {
-            if let Some(t) = tasks::get_mut(n, task) {
-                t.status = NeuralTaskStatus::Done;
-                t.note = format!("Kept {engine}'s version.");
-                t.updated_at = now_ms();
-                if let Some(tm) = t.team.as_mut() {
-                    tm.winner = Some(keep.to_string());
-                    for a in &mut tm.attempts {
-                        a.state = if a.session_id == keep { AttemptState::Merged } else { AttemptState::Dropped };
-                    }
-                }
-            }
-        });
-        self.orch_post(
-            OrchRole::Action,
-            format!("Kept {engine}'s version of “{}”", clip(&t.title, 60)),
-            Some(true),
-            Some(keep.to_string()),
-        );
-        Ok(())
-    }
-
-    /// Does what a team step asks (runs in the background).
-    async fn team_step(self: &Arc<Self>, step: Step) {
-        match step {
-            Step::Nothing => {}
-            Step::Measure { task, sid } => {
-                let check = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).and_then(|t| t.check.clone()));
-                self.neural_update(|n| {
-                    if let Some(a) = tasks::get_mut(n, &task).and_then(|t| tasks::attempt_mut(t, &sid)) {
-                        a.state = AttemptState::Checking;
-                    }
-                });
-                let (files, add, del) = self.change_size(&sid).await;
-                let result = match (check, self.agent_dir(&sid)) {
-                    (Some(c), Some(dir)) if guard::safe_command(&c) => Some(self.run_check(&dir, &c).await),
-                    _ => None,
-                };
-                if let Some((ok, _)) = &result {
-                    let label = observe::label(&self.read(|s| s.clone()), &sid);
-                    let k = if *ok { ObsKind::CheckPassed } else { ObsKind::CheckFailed };
-                    // Inside a race a failed check is part of the result, not news on its own.
-                    self.neural_update(|n| {
-                        let obs = NeuralObs {
-                            id: self.neural_id("o"),
-                            at: now_ms(),
-                            kind: k,
-                            session_id: Some(sid.clone()),
-                            task_id: Some(task.clone()),
-                            text: observe::agent_text(&label, k, ""),
-                            seen: false,
-                            count: 1,
-                        };
-                        observe::push(n, obs);
-                    });
-                }
-                let done = self.neural_update(|n| {
-                    tasks::measured(n, &task, &sid, files, add, del, result.map(|(ok, out)| (ok, clip(&out, 1200))), now_ms())
-                });
-                if done {
-                    let title = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).map(|t| t.title.clone())).unwrap_or_default();
-                    let id = self.neural_observe_for(
-                        ObsKind::Team,
-                        Some(&sid),
-                        Some(&task),
-                        format!(
-                            "Race “{}” complete: every attempt is in. Compare them and recommend one; the user picks.",
-                            clip(&title, 80)
-                        ),
-                    );
-                    let _ = id;
-                }
-            }
-            Step::Review { task, builder } => {
-                let Some(t) = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).cloned()) else { return };
-                let Some(team) = t.team.clone() else { return };
-                let result = match (&t.check, self.agent_dir(&builder)) {
-                    (Some(c), Some(dir)) if guard::safe_command(c) => {
-                        let (ok, out) = self.run_check(&dir, c).await;
-                        Some(format!("`{c}` {}\n{}", if ok { "passed" } else { "FAILED" }, clip(&out, 1500)))
-                    }
-                    _ => None,
-                };
-                let reviewer = team.attempts.iter().find(|a| a.role == "reviewer").map(|a| a.session_id.clone());
-                let alive = reviewer.as_ref().is_some_and(|r| self.read(|s| s.sessions.get(r).is_some_and(|x| x.alive)));
-                let sid = if let (Some(r), true) = (&reviewer, alive) {
-                    let text = tasks::reviewer_again(team.round + 1, result.as_deref());
-                    if let Err(e) = self.handle(&me(), Request::SessionPrompt { id: r.clone(), text }).await {
-                        tracing::warn!("team: prompt reviewer: {}", e.message);
-                    }
-                    r.clone()
-                } else {
-                    let ws = t.workspace_id.clone().unwrap_or_default();
-                    let profile = team.profiles.get(1).cloned().unwrap_or_else(|| self.read(|s| s.settings.default_profile.clone()));
-                    match self
-                        .start_agent_raw(&ws, &profile, Some(tasks::reviewer_brief(&t.title, t.check.as_deref(), result.as_deref())), None)
-                        .await
-                    {
-                        Ok(sid) => {
-                            self.neural_update(|n| {
-                                if let Some(tm) = tasks::get_mut(n, &task).and_then(|t| t.team.as_mut()) {
-                                    tm.attempts.push(tasks::attempt(&sid, &profile, "reviewer"));
-                                }
-                                tasks::link(n, &task, &sid, now_ms());
-                            });
-                            sid
-                        }
-                        Err(e) => {
-                            self.neural_update(|n| {
-                                if let Some(t) = tasks::get_mut(n, &task) {
-                                    t.status = NeuralTaskStatus::Blocked;
-                                    t.note = format!("Could not start the reviewer: {}", e.message);
-                                }
-                            });
-                            self.neural_observe_for(
-                                ObsKind::Team,
-                                Some(&builder),
-                                Some(&task),
-                                format!("Could not start the reviewer: {}", e.message),
-                            );
-                            return;
-                        }
-                    }
-                };
-                self.neural_update(|n| {
-                    if let Some(t) = tasks::get_mut(n, &task) {
-                        t.status = NeuralTaskStatus::Review;
-                        t.note = format!("Review round {}", team.round + 1);
-                        if let Some(tm) = t.team.as_mut() {
-                            for a in &mut tm.attempts {
-                                if a.session_id == builder {
-                                    a.state = AttemptState::Ready;
-                                }
-                                if a.session_id == sid {
-                                    a.state = AttemptState::Working;
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-            Step::Verdict { task, reviewer } => {
-                let text = self.agent_final_text(&reviewer);
-                let v = tasks::verdict(&text);
-                let (round, builder, title) = self
-                    .read(|s| {
-                        s.neural.tasks.iter().find(|t| t.id == task).and_then(|t| {
-                            let tm = t.team.as_ref()?;
-                            Some((
-                                tm.round + 1,
-                                tm.attempts.iter().find(|a| a.role == "builder").map(|a| a.session_id.clone()),
-                                t.title.clone(),
-                            ))
-                        })
-                    })
-                    .unwrap_or((1, None, String::new()));
-                self.neural_update(|n| {
-                    if let Some(t) = tasks::get_mut(n, &task) {
-                        if let Some(tm) = t.team.as_mut() {
-                            tm.round = round;
-                            if let Some(a) = tm.attempts.iter_mut().find(|a| a.session_id == reviewer) {
-                                a.state = AttemptState::Ready;
-                                a.verdict = v.map(|ok| if ok { "approved" } else { "changes" }.to_string());
-                            }
-                        }
-                        match v {
-                            Some(true) => {
-                                t.status = NeuralTaskStatus::Done;
-                                t.note = format!("Approved by the reviewer in round {round}.");
-                            }
-                            Some(false) if round >= tasks::MAX_ROUNDS => {
-                                t.status = NeuralTaskStatus::Blocked;
-                                t.note = format!("Still changes requested after {round} rounds.");
-                            }
-                            Some(false) => {
-                                t.status = NeuralTaskStatus::Working;
-                                t.note = format!("Fixing review round {round}.");
-                            }
-                            None => {
-                                t.status = NeuralTaskStatus::Blocked;
-                                t.note = "The reviewer gave no verdict.".into();
-                            }
-                        }
-                        t.updated_at = now_ms();
-                    }
-                });
-                match (v, builder) {
-                    (Some(false), Some(b)) if round < tasks::MAX_ROUNDS => {
-                        let _ = self.handle(&me(), Request::SessionPrompt { id: b.clone(), text: tasks::feedback(&text) }).await;
-                        self.neural_update(|n| {
-                            if let Some(a) = tasks::get_mut(n, &task).and_then(|t| tasks::attempt_mut(t, &b)) {
-                                a.state = AttemptState::Working;
-                            }
-                        });
-                        // Not news: the loop goes on by itself.
-                        self.neural_update(|n| {
-                            let obs = NeuralObs {
-                                id: self.neural_id("o"),
-                                at: now_ms(),
-                                kind: ObsKind::Team,
-                                session_id: Some(reviewer.clone()),
-                                task_id: Some(task.clone()),
-                                text: format!("Review round {round} of “{}”: changes requested, sent to the builder.", clip(&title, 60)),
-                                seen: false,
-                                count: 1,
-                            };
-                            observe::push(n, obs);
-                        });
-                    }
-                    _ => {
-                        let what = match v {
-                            Some(true) => format!("approved in round {round}"),
-                            Some(false) => format!("still changes after {round} rounds: {}", clip(&text, 400)),
-                            None => format!("the reviewer gave no verdict: {}", clip(&text, 300)),
-                        };
-                        self.neural_observe_for(
-                            ObsKind::Team,
-                            Some(&reviewer),
-                            Some(&task),
-                            format!("Build + review “{}”: {what}", clip(&title, 60)),
-                        );
-                    }
-                }
-            }
-            Step::RaceDone { task } => {
-                let title = self.read(|s| s.neural.tasks.iter().find(|t| t.id == task).map(|t| t.title.clone())).unwrap_or_default();
-                self.neural_observe_for(
-                    ObsKind::Team,
-                    None,
-                    Some(&task),
-                    format!("Race “{}” complete. Compare the attempts and recommend one; the user picks.", clip(&title, 80)),
-                );
-            }
-        }
-    }
-
-    /// Files and lines an agent changed (worktree against its base, else the workspace).
-    async fn change_size(&self, sid: &Id) -> (u32, u32, u32) {
-        let Some((dir, base)) = self.read(|st| {
-            st.sessions.get(sid).map(|s| match &s.worktree {
-                Some(w) => (w.path.clone(), Some(w.base.clone())),
-                None => (s.cwd.clone(), None),
-            })
-        }) else {
-            return (0, 0, 0);
-        };
-        // Not in a folder macOS would first ask about (permissions.rs).
-        if !self.folder_ok(Path::new(&dir)) {
-            return (0, 0, 0);
-        }
-        tokio::task::spawn_blocking(move || crate::git::changes(Path::new(&dir), base.as_deref()).ok())
-            .await
-            .ok()
-            .flatten()
-            .map(|c| (c.files.len() as u32, c.files.iter().map(|f| f.additions).sum(), c.files.iter().map(|f| f.deletions).sum()))
-            .unwrap_or((0, 0, 0))
     }
 
     /// A waiting agent of Neural's: allow a safe permission prompt right away.
@@ -744,8 +335,7 @@ impl Core {
             AttentionKind::Error => (ObsKind::Error, text),
         };
         self.neural_observe(k, Some(&sid), observe::agent_text(&label, k, &detail));
-        let step = self.neural_update(|n| tasks::on_agent(n, &sid, k, now_ms()));
-        self.team_step(step).await;
+        self.neural_update(|n| tasks::on_agent(n, &sid, k, now_ms()));
     }
 }
 
@@ -769,7 +359,7 @@ impl Core {
     }
 }
 
-/// The observer: agent events become observations, the pulse wakes Neural, teams move on.
+/// The observer: agent events become observations, the pulse wakes Neural.
 pub async fn watch(core: Arc<Core>) {
     let mut rx = core.subscribe(None).rx;
     let mut alive: HashMap<Id, bool> = core.read(|s| s.sessions.values().map(|x| (x.id.clone(), x.alive)).collect());
@@ -799,9 +389,7 @@ pub async fn watch(core: Arc<Core>) {
                         if tracked {
                             let label = core.read(|s| observe::label(s, &session.id));
                             core.neural_observe(ObsKind::Exited, Some(&session.id), observe::agent_text(&label, ObsKind::Exited, ""));
-                            let step = core.neural_update(|n| tasks::on_agent(n, &session.id, ObsKind::Exited, now_ms()));
-                            let c = core.clone();
-                            tokio::spawn(async move { c.team_step(step).await });
+                            core.neural_update(|n| tasks::on_agent(n, &session.id, ObsKind::Exited, now_ms()));
                         }
                     }
                 }

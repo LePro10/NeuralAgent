@@ -41,6 +41,15 @@ self.addEventListener("push", (e) => {
           tag: `admin-${n.kind || ""}`,
           data: { admin: n.kind === "report" ? "reports" : "requests" },
         });
+      // The answer to the user's own problem report (opens the app on tap).
+      if (n.t === "report")
+        return self.registration.showNotification(n.title || "Answer to your report", {
+          body: n.body || "",
+          icon: "/app/icon-192.png",
+          badge: "/app/icon-192.png",
+          tag: `report-${n.id || ""}`,
+          data: {},
+        });
       if (n.t !== "attention") return self.registration.showNotification("NeuralAgent", { body: "Something needs your attention.", icon: "/app/icon-192.png" });
       // Always show something: Safari drops subscriptions whose pushes stay silent. The relay
       // already skips devices that are on screen.

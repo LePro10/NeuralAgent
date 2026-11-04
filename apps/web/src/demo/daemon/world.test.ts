@@ -148,19 +148,7 @@ test("scenes reach their moments", async () => {
       assert.ok(st.neural.pending.length >= 1);
       assert.ok(st.orchestrator.messages.length >= 4);
     },
-    team: (st) => {
-      const teams = st.neural.tasks.filter((x: any) => x.team);
-      assert.ok(teams.length >= 3, "a finished race, a build + review and a race");
-      assert.ok(teams.some((t: any) => t.team.pattern === "race" && t.status === "done"), "a finished team");
-      const race = teams.find((t: any) => t.team.pattern === "race" && t.status === "review");
-      assert.ok(race, "a race at Pick one");
-      assert.ok(race.team.attempts.every((a: any) => a.state === "ready"), "every attempt is ready");
-      const rev = teams.find((t: any) => t.team.pattern === "review");
-      assert.ok(rev && rev.status !== "done", "a build + review that is still looping");
-      assert.equal(rev.team.attempts.find((a: any) => a.role === "reviewer").verdict, "changes");
-      assert.ok(st.swarms.length === 2 && st.swarms.some((x: any) => x.ended) && st.swarms.some((x: any) => !x.ended), "a live and an ended swarm");
-      assert.ok(st.swarm_messages.filter((m: any) => !st.swarms.find((x: any) => x.id === m.swarm_id)?.ended).length >= 5, "the live swarm already talks");
-    },
+
     files: (st, w) => {
       const s = st.sessions[w.resolve("claude-billing")!];
       assert.equal(s.status, "done");

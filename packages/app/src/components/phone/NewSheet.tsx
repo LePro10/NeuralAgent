@@ -1,17 +1,15 @@
 // Phones: "+" on Agents or in a project. Pick the project and the agent, say what it should do
 // (the first prompt goes along with the start), optionally its own worktree; Start opens the
-// agent's screen. "New swarm" starts a team instead.
-import type { Profile, Session, Workspace } from "@neuralagent/protocol";
+// agent's screen.
+import type { Profile, Session } from "@neuralagent/protocol";
 import { Button, Chips, Field, List, Row, Sheet, Switch, TextArea, haptic, toast } from "@neuralagent/ui";
-import { Download, FolderPlus, GitBranch, Play, Users } from "lucide-react";
+import { Download, FolderPlus, GitBranch, Play } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useOpenAgent } from "../../lib/openAgent";
-import { phoneRouter } from "../../lib/phoneRoute";
 import { launchable } from "../../lib/profiles";
 import { useCatalogSheet, useClient, useDaemon, usePlatform, useUi } from "../../lib/store";
 import { useWorktreeStart } from "../../lib/worktree";
-import { pickHostFolder } from "../FolderBrowser";
-import { NewSwarmSheet } from "../swarm/NewSwarm";
+import { addWorkspaceFlow } from "../AddWorkspace";
 
 const LAST = "neuralagent.newAgent";
 type Last = { project?: string; profile?: string };
@@ -60,7 +58,6 @@ export function NewSheet({ open, onClose, workspaceId }: { open: boolean; onClos
   const [profile, setProfile] = useState<string>("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [swarm, setSwarm] = useState(false);
   // A fresh form each time, on the project it was opened from (else the last one used).
   useEffect(() => {
     if (!open) return;
@@ -76,14 +73,8 @@ export function NewSheet({ open, onClose, workspaceId }: { open: boolean; onClos
   const worktree = useWorktreeStart(project);
 
   const addFolder = async () => {
-    const path = await (platform.pickFolder ?? pickHostFolder)();
-    if (!path) return;
-    try {
-      const w = (await client.req({ m: "workspace_add", p: { path } })) as Workspace;
-      setProject(w.id);
-    } catch (e) {
-      toast((e as Error).message, { tone: "danger" });
-    }
+    const w = await addWorkspaceFlow(client, platform);
+    if (w) setProject(w.id);
   };
 
   const start = async () => {
@@ -106,7 +97,7 @@ export function NewSheet({ open, onClose, workspaceId }: { open: boolean; onClos
   return (
     <>
       <Sheet
-        open={open && !swarm}
+        open={open}
         onClose={onClose}
         title="New agent"
         eyebrow={ws?.name}
@@ -145,7 +136,6 @@ export function NewSheet({ open, onClose, workspaceId }: { open: boolean; onClos
           )}
           <List footer={ws?.git && chosen?.engine !== "shell" ? "With its own worktree the agent works on its own branch in a separate folder; you review and merge its changes." : undefined}>
             {ws?.git && chosen?.engine !== "shell" && <Row Icon={GitBranch} title="Own worktree" trailing={<Switch label="Own worktree" checked={worktrees} onChange={setWorktrees} />} />}
-            <Row Icon={Users} title="New swarm" detail="A team of agents on one goal" onClick={() => setSwarm(true)} />
             <Row
               Icon={Download}
               title="Install more agents"
@@ -157,18 +147,6 @@ export function NewSheet({ open, onClose, workspaceId }: { open: boolean; onClos
           </List>
         </div>
       </Sheet>
-      <NewSwarmSheet
-        open={open && swarm}
-        onClose={() => {
-          setSwarm(false);
-          onClose();
-        }}
-        onDone={(id) => {
-          setSwarm(false);
-          onClose();
-          phoneRouter().push({ k: "swarm", id });
-        }}
-      />
     </>
   );
 }

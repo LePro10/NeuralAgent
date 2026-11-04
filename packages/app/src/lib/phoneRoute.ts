@@ -17,8 +17,10 @@ export const HOME: Tab = "agents";
 export type Route =
   | { k: "agent"; sid: string }
   | { k: "project"; id: string }
-  | { k: "swarms" }
-  | { k: "swarm"; id: string }
+  /** Autopilot (D87): the pilot page, the connectors grid and one connector. */
+  | { k: "autopilot" }
+  | { k: "connectors" }
+  | { k: "connector"; id: string }
   | { k: "history"; project?: string }
   | { k: "usage" }
   | { k: "section"; id: string; detail?: string }
@@ -48,8 +50,8 @@ export function routeKey(r: Route): string {
       return `agent:${r.sid}`;
     case "project":
       return `project:${r.id}`;
-    case "swarm":
-      return `swarm:${r.id}`;
+    case "connector":
+      return `connector:${r.id}`;
     case "history":
       return r.project ? `history:${r.project}` : "history";
     case "section":
@@ -75,10 +77,12 @@ export function hashOf(n: Nav): string {
       return `#/agent/${enc(r.sid)}`;
     case "project":
       return `#/project/${enc(r.id)}`;
-    case "swarm":
-      return `#/swarm/${enc(r.id)}`;
-    case "swarms":
-      return "#/swarms";
+    case "autopilot":
+      return "#/autopilot";
+    case "connectors":
+      return "#/connectors";
+    case "connector":
+      return `#/connector/${enc(r.id)}`;
     case "history":
       return r.project ? `#/history/${enc(r.project)}` : "#/history";
     case "usage":
@@ -103,10 +107,12 @@ export function parseHash(hash: string): Nav | null {
       return b ? { tab: "agents", stack: [{ k: "agent", sid: b }] } : null;
     case "project":
       return b ? { tab: "projects", stack: [{ k: "project", id: b }] } : null;
-    case "swarms":
-      return { tab: "agents", stack: [{ k: "swarms" }] };
-    case "swarm":
-      return b ? { tab: "agents", stack: [{ k: "swarm", id: b }] } : null;
+    case "autopilot":
+      return { tab: "agents", stack: [{ k: "autopilot" }] };
+    case "connectors":
+      return { tab: "agents", stack: [{ k: "autopilot" }, { k: "connectors" }] };
+    case "connector":
+      return b ? { tab: "agents", stack: [{ k: "autopilot" }, { k: "connectors" }, { k: "connector", id: b }] } : null;
     case "history":
       return b ? { tab: "projects", stack: [{ k: "project", id: b }, { k: "history", project: b }] } : { tab: "settings", stack: [{ k: "history" }] };
     case "usage":
@@ -138,13 +144,13 @@ export function entriesOf(n: Nav): Nav[] {
   return out;
 }
 
-const KINDS = new Set(["agent", "project", "swarms", "swarm", "history", "usage", "section", "files", "file"]);
+const KINDS = new Set(["agent", "project", "autopilot", "connectors", "connector", "history", "usage", "section", "files", "file"]);
 function validRoute(r: unknown): r is Route {
   if (!r || typeof r !== "object") return false;
   const x = r as Record<string, unknown>;
   if (!KINDS.has(x.k as string)) return false;
   if (x.k === "agent") return typeof x.sid === "string";
-  if (x.k === "project" || x.k === "swarm" || x.k === "section") return typeof x.id === "string";
+  if (x.k === "project" || x.k === "connector" || x.k === "section") return typeof x.id === "string";
   if (x.k === "files") return typeof x.ws === "string" && (x.path === undefined || typeof x.path === "string");
   if (x.k === "file") return typeof x.ws === "string" && typeof x.path === "string";
   return true;

@@ -1,0 +1,30 @@
+{
+  "name": "Feed",
+  "icon": "rss",
+  "description": "Follows RSS, Atom and JSON feeds (blogs, release notes, forums) and reports new entries.",
+  "kind": "feed",
+  "version": "1.0.0",
+  "guide": [
+    "Find the feed address of what you want to follow. Most blogs and forums have one: look for an RSS icon, or try adding /feed or /rss to the address. GitHub releases have one at `https://github.com/OWNER/REPO/releases.atom`.",
+    "Paste one address per line below. Press **Test connection** to see that every address can be read.",
+    "New entries arrive every few minutes. Entries that are already there when you save are not reported."
+  ],
+  "setup": [
+    {
+      "key": "urls",
+      "label": "Feed addresses",
+      "type": "list",
+      "required": true,
+      "placeholder": "https://example.com/feed.xml",
+      "help": "RSS, Atom or JSON Feed addresses, one per line."
+    }
+  ],
+  "tools": {
+    "check_feeds": "read",
+    "fetch": "read",
+    "poll": "read"
+  },
+  "events": ["entry"],
+  "check": "check_feeds",
+  "poll": { "tool": "poll", "minutes": 15 }
+}

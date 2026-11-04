@@ -11,6 +11,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::apikeys::Scoped;
 use crate::db::Status;
 use crate::util::{ApiError, ApiResult};
 use crate::{Authed, Relay};
@@ -26,11 +27,14 @@ pub fn router() -> Router<Arc<Relay>> {
         .route("/stats", get(stats))
         .route("/reports", get(reports))
         .route("/reports/{id}", get(report).post(update_report).delete(delete_report))
+        .route("/reports/{id}/reply", post(crate::apikeys::reply))
+        .route("/keys", get(crate::apikeys::list_keys).post(crate::apikeys::create_key))
+        .route("/keys/{id}", delete(crate::apikeys::revoke_key))
         .route("/audit", get(audit))
 }
 
 /// Signed in with an admin account.
-pub struct Admin(Authed);
+pub struct Admin(pub Authed);
 
 impl FromRequestParts<Arc<Relay>> for Admin {
     type Rejection = ApiError;
@@ -142,18 +146,23 @@ async fn stats(State(r): State<Arc<Relay>>, _: Admin, Query(q): Query<StatsQuery
     Ok(Json(s))
 }
 
-async fn reports(State(r): State<Arc<Relay>>, _: Admin) -> ApiResult<Json<Value>> {
+async fn reports(State(r): State<Arc<Relay>>, _: Scoped<0>) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "reports": r.db.reports(500)? })))
 }
 
-async fn report(State(r): State<Arc<Relay>>, _: Admin, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+async fn report(State(r): State<Arc<Relay>>, Scoped(who): Scoped<0>, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let rep = r.db.report(&id)?.ok_or_else(ApiError::not_found)?;
+    let answers = r.db.answers(&id, true)?;
+    if who.by_key {
+        // A key sees the report and its answers, not the account behind it.
+        return Ok(Json(json!({ "report": rep, "answers": answers })));
+    }
     // The account behind a signed-in report, with its devices (versions, platforms, countries).
     let user = match &rep.user_id {
         Some(uid) => r.db.user(uid)?.map(|u| json!({ "user": u, "devices": r.hub.device_list(&r, uid) })),
         None => None,
     };
-    Ok(Json(json!({ "report": rep, "account": user })))
+    Ok(Json(json!({ "report": rep, "account": user, "answers": answers })))
 }
 
 #[derive(Deserialize)]
@@ -164,7 +173,7 @@ struct ReportUpdate {
 
 async fn update_report(
     State(r): State<Arc<Relay>>,
-    Admin(a): Admin,
+    Scoped(who): Scoped<1>,
     Path(id): Path<String>,
     Json(b): Json<ReportUpdate>,
 ) -> ApiResult<Json<Value>> {
@@ -178,7 +187,7 @@ async fn update_report(
         return Err(ApiError::not_found());
     }
     if let Some(s) = &b.status {
-        r.db.audit_add(&a.user.email, &format!("report {s}"), &id, "");
+        r.db.audit_add(&who.actor, &format!("report {s}"), &id, "");
     }
     Ok(Json(json!({ "report": r.db.report(&id)? })))
 }

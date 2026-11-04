@@ -14,7 +14,7 @@ Open items first. Everything else keeps going locally until these are done.
   - Settings → System → *Set up all permissions*: Full Disk Access, Accessibility, Microphone; then
     *Restart the service*. Optional: autostart *When the Mac starts* (admin password once).
     Check read-only with `scripts/macos-permissions.sh`.
-  - Neural: pick Active / Quiet / Off in its panel. Try a team (Teams → New team, Haiku profile).
+  - Neural: pick Active / Quiet / Off in its panel. Teams/Swarm were removed (D88); Autopilot replaces them.
   - Ducking: Settings → Voice → Other audio; dictate and call Neural with music playing; for calls
     allow Spotify/Music once. Unplug AirPods while music is lowered, plug back in.
   - Discord: open Discord, pick a preset in Settings → Discord, look at your profile; quit Discord,
