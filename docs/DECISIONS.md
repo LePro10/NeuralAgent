@@ -1174,3 +1174,16 @@ The pilot got `build_connector` (wraps `builder::create`, default agent profile,
 asked in chat) and `connector_status` (read), also during the setup interview, and answers carry
 `PilotMessage.connector_id` so the app shows the live card. `<world>` lists all connectors fresh each turn;
 `<interview>` (derived from the chat) lists questions already asked so none is repeated.
+
+## D93 — Quit on macOS stops the service; the app's host ends on a stop (2026-11-04)
+A plain Quit (Dock, Cmd+Q, app menu) only closed the window process; the service and its host
+(`neuralagent --service`, the old app's executable) kept running, and after "Quit and stop all
+agents" the host idled forever, so after an update people killed it by hand. Now `RunEvent::Exit`
+calls `daemon::on_app_exit`: on macOS it stops the service unless the exit was meant to keep it
+(`keep_service_on_exit`: tray "Quit (agents keep running)", the relaunch after an update) or the
+service runs from the boot host (meant to outlive the session; a logout quits the app too). The
+app-mode host returns on `host.stop` instead of idling; launchd/systemd hosts still idle, because
+`KeepAlive` would start them again at once and a fresh host clears `host.stop`. Alternatives:
+only fix the host (Dock Quit would still leave agents and the old version running), or plists with
+`KeepAlive.SuccessfulExit=false` so login hosts can end too (changes installed autostart entries;
+left for later).

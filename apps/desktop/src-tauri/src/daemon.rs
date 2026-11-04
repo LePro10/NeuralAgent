@@ -80,9 +80,16 @@ pub fn ensure() -> Result<DaemonInfo> {
     }
     let before = read_info(&dir).map(|i| i.pid);
     start(&dir)?;
-    let start = Instant::now();
-    while start.elapsed() < Duration::from_secs(15) {
+    let start_at = Instant::now();
+    let mut started_again = false;
+    while start_at.elapsed() < Duration::from_secs(15) {
         std::thread::sleep(Duration::from_millis(100));
+        // A host that was just ending after a stop (it held the lock a moment ago, so `start`
+        // left it to that host): start a new one.
+        if !started_again && start_at.elapsed() > Duration::from_secs(2) && !crate::service::running(&dir) {
+            started_again = true;
+            start(&dir)?;
+        }
         if let Some(info) = read_info(&dir)
             && Some(info.pid) != before
             && healthy(info.port)
@@ -206,6 +213,35 @@ pub fn stop() -> Result<()> {
     kill(&dir)
 }
 
+/// Set right before the app exits on purpose while the service should keep running ("Quit (agents
+/// keep running)" in the menu bar, the relaunch after an update).
+static KEEP_SERVICE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn keep_service_on_exit() {
+    KEEP_SERVICE.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Does quitting the app also stop the service? On macOS a plain Quit (Dock menu, Cmd+Q, the app
+/// menu) stops everything, the app's host included, so no old process stays behind (an update
+/// then needs no kill by hand). Not when the app asked to keep it, and not for a service started
+/// at boot: that one is meant to outlive the session (a logout quits the app too).
+fn quit_stops_service(macos: bool, keep: bool, host_mode: Option<&str>) -> bool {
+    macos && !keep && host_mode != Some("boot")
+}
+
+/// Called once when the app exits (`RunEvent::Exit`).
+pub fn on_app_exit() {
+    let keep = KEEP_SERVICE.load(std::sync::atomic::Ordering::SeqCst);
+    let Ok(dir) = data_dir() else { return };
+    let mode = crate::service::active_mode(&dir);
+    if quit_stops_service(cfg!(target_os = "macos"), keep, mode.as_deref()) {
+        tracing::info!("quit: stopping the service");
+        if let Err(e) = stop() {
+            tracing::warn!("stopping the service: {e:#}");
+        }
+    }
+}
+
 /// Stops the daemon so that its host starts the newest installed version (after an update).
 pub fn restart_newest() -> Result<()> {
     let dir = data_dir()?;
@@ -224,4 +260,23 @@ fn kill(dir: &Path) -> Result<()> {
         Command::new("taskkill").args(["/PID", &info.pid.to_string(), "/T", "/F"]).status()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn which_quit_stops_the_service() {
+        // macOS: a plain Quit stops it, with or without a login autostart host.
+        assert!(quit_stops_service(true, false, None));
+        assert!(quit_stops_service(true, false, Some("app")));
+        assert!(quit_stops_service(true, false, Some("login")));
+        // "Quit (agents keep running)" and the relaunch after an update keep it.
+        assert!(!quit_stops_service(true, true, Some("app")));
+        // A service started at boot outlives the session.
+        assert!(!quit_stops_service(true, false, Some("boot")));
+        // Windows/Linux keep their behaviour (no Dock; the tray offers both choices).
+        assert!(!quit_stops_service(false, false, Some("app")));
+    }
 }

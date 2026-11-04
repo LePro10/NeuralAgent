@@ -26,11 +26,15 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "remote" => {
                 let _ = app.emit("tray-remote", ());
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                daemon::keep_service_on_exit();
+                app.exit(0);
+            }
             "quit-all" => {
                 if let Err(e) = daemon::stop() {
                     tracing::warn!("stopping the service: {e:#}");
                 }
+                daemon::keep_service_on_exit(); // stopped already
                 app.exit(0);
             }
             _ => {}

@@ -261,11 +261,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while starting NeuralAgent")
         .run(|app, event| {
-            // Quitting never leaves other apps' audio lowered.
-            if let tauri::RunEvent::Exit = event
-                && let Some(d) = app.try_state::<duck::Ducking>()
-            {
-                d.shutdown();
+            if let tauri::RunEvent::Exit = event {
+                // Quitting never leaves other apps' audio lowered.
+                if let Some(d) = app.try_state::<duck::Ducking>() {
+                    d.shutdown();
+                }
+                // macOS: Quit from the Dock / Cmd+Q stops the service too (daemon::on_app_exit).
+                daemon::on_app_exit();
             }
             // macOS: clicking the Dock icon brings the hidden window back.
             #[cfg(target_os = "macos")]

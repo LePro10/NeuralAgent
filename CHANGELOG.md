@@ -11,6 +11,9 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+### Fixed
+- **Quit now really quits on macOS.** Quit from the Dock or with Cmd+Q stops NeuralAgent and its background service, so nothing old keeps running after an update. "Quit (agents keep running)" in the menu bar still leaves your agents running, and a service set to start at boot keeps running.
+
 ## [0.5.5] - 2026-11-04
 
 ### Fixed
