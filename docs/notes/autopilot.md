@@ -164,6 +164,20 @@ the daemon runs the **connector check**: manifest valid, server starts, `initial
 tests pass (`node --test`). The result shows on the card; failed checks go back to the agent once
 on its own. **Change with an agent** does the same in the existing folder.
 
+**A build that does not finish (recovery).** The check starts with `node --check` on the entry file
+("index.mjs is incomplete or has a syntax error at line N"). When the agent ends (done, crashed,
+stopped, refused) and the check still fails after the one retry, or nothing in the folder changed,
+the connector gets the status Error with `build_stopped` and a plain reason; it never starts a
+half-written file. The last version that passed the check is kept in
+`<home>/connectors/.backup/<id>/` (outside the folder, so neither the check nor copies see it; it is
+replaced only after a passing build, or a passing "Check again"). The detail page shows a "Build
+stopped" card: `connector_retry` (the last request, same agent), change the request,
+`connector_restore` (back to the backup), `connector_reset` (back to the template; settings and
+secrets stay), Open folder and Check again (`connector_test`). Restore and reset park the folder's
+old content in `.discarded/<id>/`. The user may put any code in the folder; it runs once the check
+passes. The build agent is chosen in the New connector dialog (`profile` on create/change). New ops
+need the daemon feature `connector_recover`; the policy is desktop only like all connector ops.
+
 **Any MCP server** can be added (command + args): the form is drawn from the environment variables
 the user names (each one secret or not), tools default to external until the user classifies
 them.

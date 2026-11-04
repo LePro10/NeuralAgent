@@ -93,7 +93,9 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
         Request::McpSave { .. } | Request::McpDelete { .. } | Request::McpImport => needs("changing MCP servers"),
         Request::LlmKeySet { .. } => needs("changing model keys"),
         // Reports and what they contain are for people, not for Neural.
-        Request::DiagnosticsPreview { .. } | Request::DiagnosticsSend { .. } | Request::ReportsMine if client.kind == ClientKind::Orchestrator => {
+        Request::DiagnosticsPreview { .. } | Request::DiagnosticsSend { .. } | Request::ReportsMine
+            if client.kind == ClientKind::Orchestrator =>
+        {
             Err(err(ErrorCode::Forbidden, "only the user can do this"))
         }
         // Neural does not talk to itself.
@@ -101,9 +103,7 @@ pub fn check(core: &Core, client: &ClientInfo, req: &Request) -> Result<(), ApiE
             Err(err(ErrorCode::BadRequest, "not available to the orchestrator"))
         }
         // Only a person answers Neural's confirmations or changes how it works (D63).
-        Request::NeuralConfirm { .. } | Request::NeuralMode { .. }
-            if client.kind == ClientKind::Orchestrator =>
-        {
+        Request::NeuralConfirm { .. } | Request::NeuralMode { .. } if client.kind == ClientKind::Orchestrator => {
             Err(err(ErrorCode::Forbidden, "only the user can do this"))
         }
         // Neural never drives the autopilot; phones answer and decide, but setup stays on the desktop.

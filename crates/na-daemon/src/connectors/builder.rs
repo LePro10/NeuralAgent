@@ -5,11 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use na_protocol::{
-    ApiError, AttentionKind, ClientInfo, ClientKind, Connector, ConnectorKind, ConnectorManifest, ErrorCode, Event, FieldKind, Id, Request,
-    RunSpec, SetupField, StartSession,
+    ApiError, AttentionKind, ClientInfo, ClientKind, Connector, ConnectorKind, ConnectorManifest, ConnectorTestResult, ErrorCode, Event,
+    FieldKind, Id, Request, RunSpec, SetupField, StartSession, TestStep,
 };
 use serde_json::{Value, json};
 
+use super::recover::{self, copy_dir};
 use super::{check, embedded, manifest, store};
 use crate::core::{Core, err};
 
@@ -33,7 +34,7 @@ fn user_path(core: &Core, id: &str) -> PathBuf {
 
 /// Adds the folder as a workspace (approved: the user asked for this build) and starts the
 /// user's default agent there with `prompt`. Returns the session id.
-async fn start_agent(core: &Arc<Core>, dir: &Path, name: &str, prompt: String) -> Result<Id, ApiError> {
+async fn start_agent(core: &Arc<Core>, dir: &Path, name: &str, prompt: String, profile: Option<Id>) -> Result<Id, ApiError> {
     let ws = core
         .handle(
             &client(),
@@ -51,7 +52,7 @@ async fn start_agent(core: &Arc<Core>, dir: &Path, name: &str, prompt: String) -
         Request::WorkspaceUpdate { id: ws_id.clone(), name: None, approved: Some(true), pinned: None, order: None, path: None },
     )
     .await?;
-    let profile = core.read(|s| s.settings.default_profile.clone());
+    let profile = profile.unwrap_or_else(|| core.read(|s| s.settings.default_profile.clone()));
     let v = core
         .handle(
             &client(),
@@ -91,7 +92,8 @@ pub fn build_prompt(name: &str, description: &str, change: bool) -> String {
 }
 
 /// New connector from the template, built by a coding agent.
-pub async fn create(core: &Arc<Core>, name: String, description: String) -> Result<Connector, ApiError> {
+pub async fn create(core: &Arc<Core>, name: String, description: String, profile: Option<Id>) -> Result<Connector, ApiError> {
+    check_profile(core, profile.as_deref())?;
     let name = name.trim().to_string();
     if name.is_empty() || description.trim().is_empty() {
         return Err(err(ErrorCode::BadRequest, "a connector needs a name and a description"));
@@ -108,11 +110,19 @@ pub async fn create(core: &Arc<Core>, name: String, description: String) -> Resu
         let _ = std::fs::write(dir.join("connector.json"), serde_json::to_vec_pretty(&v).unwrap_or_default());
     }
     core.connectors.rescan(core);
-    build(core, &id, &dir, &name, &description, false).await
+    build(core, &id, &dir, &name, &description, false, profile, false).await
+}
+
+fn check_profile(core: &Core, profile: Option<&str>) -> Result<(), ApiError> {
+    match profile {
+        Some(p) if !core.read(|s| s.profiles.iter().any(|x| x.id == p)) => Err(err(ErrorCode::BadRequest, "that agent is not available")),
+        _ => Ok(()),
+    }
 }
 
 /// Let an agent change a connector the user made.
-pub async fn change(core: &Arc<Core>, id: &str, request: String) -> Result<Connector, ApiError> {
+pub async fn change(core: &Arc<Core>, id: &str, request: String, profile: Option<Id>) -> Result<Connector, ApiError> {
+    check_profile(core, profile.as_deref())?;
     let c = core.connectors.get(id).ok_or_else(|| err(ErrorCode::NotFound, "no such connector"))?;
     if c.builtin {
         return Err(err(ErrorCode::BadRequest, "built-in connectors cannot be changed; make a new one instead"));
@@ -124,23 +134,139 @@ pub async fn change(core: &Arc<Core>, id: &str, request: String) -> Result<Conne
         return Err(err(ErrorCode::BadRequest, "say what should change"));
     }
     let dir = PathBuf::from(&c.path);
-    build(core, id, &dir, &c.manifest.name, &request, true).await
+    build(core, id, &dir, &c.manifest.name, request.trim(), true, profile, false).await
 }
 
-async fn build(core: &Arc<Core>, id: &str, dir: &Path, name: &str, text: &str, change: bool) -> Result<Connector, ApiError> {
+/// The user's connector (not built in) and its folder.
+fn own(core: &Core, id: &str) -> Result<(Connector, PathBuf), ApiError> {
+    let c = core.connectors.get(id).ok_or_else(|| err(ErrorCode::NotFound, "no such connector"))?;
+    if c.builtin {
+        return Err(err(ErrorCode::BadRequest, "built-in connectors cannot be changed"));
+    }
+    if core.connectors.build_session(id).is_some() {
+        return Err(err(ErrorCode::BadRequest, "an agent is working on it; stop it first"));
+    }
+    let dir = PathBuf::from(&c.path);
+    Ok((c, dir))
+}
+
+/// "Try again": the last request once more, with the same agent.
+pub async fn retry(core: &Arc<Core>, id: &str) -> Result<Connector, ApiError> {
+    let (c, dir) = own(core, id)?;
+    let (_, request, change, profile) = core.connectors.build_info(id).unwrap_or_default();
+    let request = request.ok_or_else(|| err(ErrorCode::BadRequest, "there is no earlier request; describe what you want instead"))?;
+    check_profile(core, profile.as_deref())?;
+    build(core, id, &dir, &c.manifest.name, &request, change, profile, true).await
+}
+
+/// Back to the last working version.
+pub fn restore(core: &Arc<Core>, id: &str) -> Result<Connector, ApiError> {
+    let (_, dir) = own(core, id)?;
+    let root = &core.paths.root;
+    recover::restore(&dir, &recover::backup_dir(root, id), &recover::discarded_dir(root, id))
+        .map_err(|e| err(ErrorCode::BadRequest, format!("cannot go back: {e}")))?;
+    core.audit.note("connector_restore", Some(id.to_string()), true, None);
+    refresh(core, id)
+}
+
+/// Back to the template; name, description, setup values and secrets stay.
+pub fn reset(core: &Arc<Core>, id: &str) -> Result<Connector, ApiError> {
+    let (c, dir) = own(core, id)?;
+    let root = &core.paths.root;
+    recover::reset(&dir, &recover::discarded_dir(root, id), &c.manifest.name, &c.manifest.description)
+        .map_err(|e| err(ErrorCode::Internal, format!("cannot reset: {e}")))?;
+    core.audit.note("connector_reset", Some(id.to_string()), true, None);
+    refresh(core, id)
+}
+
+fn refresh(core: &Arc<Core>, id: &str) -> Result<Connector, ApiError> {
     core.connectors.set_build_failed(core, id, None);
-    let sid = start_agent(core, dir, name, build_prompt(name, text, change)).await?;
+    core.connectors.rescan(core);
+    core.connectors.restart(core, id);
+    core.connectors.get(id).ok_or_else(|| err(ErrorCode::Internal, "the connector disappeared"))
+}
+
+/// The folder passed the check: it is the last working version now.
+pub fn mark_working(core: &Core, id: &str, dir: &Path) {
+    if let Err(e) = recover::snapshot(dir, &recover::backup_dir(&core.paths.root, id)) {
+        tracing::warn!(connector = id, "cannot keep the working version: {e}");
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn build(
+    core: &Arc<Core>,
+    id: &str,
+    dir: &Path,
+    name: &str,
+    text: &str,
+    change: bool,
+    profile: Option<Id>,
+    resume: bool,
+) -> Result<Connector, ApiError> {
+    // What is in the folder now is the last working version, unless an earlier build already failed.
+    if change && core.connectors.build_info(id).is_some_and(|(failed, ..)| failed.is_none()) {
+        mark_working(core, id, dir);
+    }
+    let prompt_text = if resume {
+        format!("{text}\n\n(An earlier attempt stopped before it finished. Look at what is already in the folder and finish it.)")
+    } else {
+        text.to_string()
+    };
+    let start = recover::fingerprint(dir);
+    let sid = start_agent(core, dir, name, build_prompt(name, &prompt_text, change), profile.clone()).await?;
+    core.connectors.set_request(core, id, text, change, profile);
+    core.connectors.set_build_failed(core, id, None);
     core.audit.note("connector_build", Some(format!("{name} ({id})")), true, None);
     core.connectors.set_build_session(core, id, Some(sid.clone()));
     let c = core.clone();
     let id2 = id.to_string();
     let dir2 = dir.to_path_buf();
-    tokio::spawn(async move { watch_build(c, id2, dir2, sid).await });
+    tokio::spawn(async move { watch_build(c, id2, dir2, sid, start).await });
     core.connectors.get(id).ok_or_else(|| err(ErrorCode::Internal, "the connector disappeared"))
 }
 
-/// When the agent finishes a turn: run the check; on failure send it back once.
-async fn watch_build(core: Arc<Core>, id: String, dir: PathBuf, sid: Id) {
+/// How a build ended, for the check and the message.
+pub struct Verdict {
+    pub changed: bool,
+    pub result: ConnectorTestResult,
+}
+
+impl Verdict {
+    pub fn ok(&self) -> bool {
+        self.changed && self.result.ok
+    }
+}
+
+async fn evaluate(core: &Arc<Core>, id: &str, dir: &Path, start: u64) -> Verdict {
+    core.connectors.rescan(core);
+    let changed = recover::fingerprint(dir) != start;
+    let result = if changed {
+        check::conformance(core, id, dir).await
+    } else {
+        ConnectorTestResult { ok: false, steps: vec![TestStep { label: "The agent changed something".into(), ok: false, detail: None }] }
+    };
+    Verdict { changed, result }
+}
+
+/// What the user reads when a build ended without a working result.
+pub fn stopped_message(v: &Verdict, has_backup: bool) -> String {
+    let mut s = if v.changed {
+        String::from("The build stopped before it finished.")
+    } else {
+        String::from("The agent ended without changing anything.")
+    };
+    if let Some(st) = v.result.steps.iter().find(|x| !x.ok && x.detail.is_some()) {
+        let d = st.detail.as_deref().unwrap_or("");
+        s.push_str(&format!(" {}: {}", st.label, crate::neural::observe::clip(d.trim(), 400)));
+    }
+    s.push_str(if has_backup { " Your last working version is kept." } else { " What was written so far is still in the folder." });
+    s
+}
+
+/// When the agent finishes a turn: run the check; on failure send it back once. When its session
+/// ends, run the check one last time.
+async fn watch_build(core: Arc<Core>, id: String, dir: PathBuf, sid: Id, start: u64) {
     let mut rx = core.subscribe(None).rx;
     let mut retried = false;
     loop {
@@ -149,36 +275,34 @@ async fn watch_build(core: Arc<Core>, id: String, dir: PathBuf, sid: Id) {
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
             Err(_) => return,
         };
-        let done = match ev {
-            Event::Attention { session_id, kind: AttentionKind::Done, .. } if session_id == sid => true,
-            Event::SessionUpsert { session } if session.id == sid && !session.alive => {
-                finish(&core, &id, Some("The agent stopped before the connector was ready.".into())).await;
-                return;
-            }
-            Event::SessionRemoved { id: gone } if gone == sid => {
-                finish(&core, &id, None).await;
-                return;
-            }
-            _ => false,
+        let (done, ended) = match ev {
+            Event::Attention { session_id, kind: AttentionKind::Done, .. } if session_id == sid => (true, false),
+            Event::SessionUpsert { session } if session.id == sid && !session.alive => (false, true),
+            Event::SessionRemoved { id: gone } if gone == sid => (false, true),
+            _ => (false, false),
         };
-        if !done {
+        if !done && !ended {
             continue;
         }
-        core.connectors.rescan(&core);
-        let r = check::conformance(&core, &id, &dir).await;
-        if r.ok {
+        let v = evaluate(&core, &id, &dir, start).await;
+        if v.ok() {
+            mark_working(&core, &id, &dir);
             finish(&core, &id, None).await;
             return;
         }
-        if retried {
-            finish(&core, &id, Some(check::failure_message(&r))).await;
+        if ended || retried {
+            finish(&core, &id, Some(stopped_message(&v, recover::has_backup(&core.paths.root, &id)))).await;
             return;
         }
         retried = true;
-        let msg = check::failure_message(&r);
+        let msg = if v.changed {
+            check::failure_message(&v.result)
+        } else {
+            "You have not changed any file in this folder yet. Do the task now, run `node --test` and tell me when it is done.".to_string()
+        };
         tracing::info!(connector = id, "connector check failed, sending it back to the agent");
         if core.send_prompt(&sid, &msg).is_err() {
-            finish(&core, &id, Some(msg)).await;
+            finish(&core, &id, Some(stopped_message(&v, recover::has_backup(&core.paths.root, &id)))).await;
             return;
         }
     }
@@ -283,25 +407,6 @@ pub fn mcp_manifest(name: &str, cmd: &ImportCmd) -> ConnectorManifest {
     }
 }
 
-fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(to)?;
-    for e in std::fs::read_dir(from)? {
-        let e = e?;
-        let name = e.file_name();
-        let n = name.to_string_lossy();
-        if n == "node_modules" || n == ".git" {
-            continue;
-        }
-        let t = e.file_type()?;
-        if t.is_dir() {
-            copy_dir(&e.path(), &to.join(&name))?;
-        } else if t.is_file() {
-            std::fs::copy(e.path(), to.join(&name))?;
-        }
-    }
-    Ok(())
-}
-
 pub async fn import(core: &Arc<Core>, path: String) -> Result<Connector, ApiError> {
     let path = path.trim().to_string();
     if path.is_empty() {
@@ -390,6 +495,25 @@ mod tests {
         assert!(manifest::validate(&m).is_empty());
         // tools unclassified = external
         assert_eq!(manifest::class_of(&m, "anything"), na_protocol::ToolClass::External);
+    }
+
+    #[test]
+    fn says_why_a_build_stopped() {
+        let step = |ok, d: Option<&str>| TestStep { label: "Code is complete".into(), ok, detail: d.map(String::from) };
+        let broken = Verdict {
+            changed: true,
+            result: ConnectorTestResult {
+                ok: false,
+                steps: vec![step(false, Some("index.mjs is incomplete or has a syntax error at line 12."))],
+            },
+        };
+        let m = stopped_message(&broken, true);
+        assert!(m.starts_with("The build stopped before it finished."));
+        assert!(m.contains("at line 12") && m.ends_with("Your last working version is kept."));
+        assert!(stopped_message(&broken, false).ends_with("still in the folder."));
+        let idle = Verdict { changed: false, result: ConnectorTestResult { ok: true, steps: vec![] } };
+        assert!(!idle.ok());
+        assert!(stopped_message(&idle, true).starts_with("The agent ended without changing anything."));
     }
 
     #[test]

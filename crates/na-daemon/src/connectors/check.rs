@@ -49,6 +49,19 @@ pub async fn test(core: &Arc<Core>, id: &str) -> ConnectorTestResult {
         }
         return result(v);
     }
+    // "Check again" after a stopped build: the conformance check on the folder (the user may have
+    // fixed the code by hand). When it passes, this is the working version.
+    if c.build_stopped && !c.builtin {
+        let dir = std::path::PathBuf::from(&c.path);
+        let r = conformance(core, id, &dir).await;
+        if r.ok {
+            super::builder::mark_working(core, id, &dir);
+            core.connectors.set_build_failed(core, id, None);
+            core.connectors.rescan(core);
+            core.connectors.restart(core, id);
+        }
+        return r;
+    }
     let missing = manifest::missing(&c.manifest, &c.config, &c.secrets_set);
     let mut steps =
         vec![step("Settings complete", missing.is_empty(), (!missing.is_empty()).then(|| format!("Still needed: {}", missing.join(", "))))];
@@ -194,6 +207,40 @@ async fn node_tests(dir: &Path, env: Vec<(String, String)>) -> TestStep {
     }
 }
 
+/// The file the manifest starts (`node index.mjs` by default).
+fn entry_file(m: &ConnectorManifest) -> String {
+    m.run
+        .as_ref()
+        .and_then(|r| r.args.iter().find(|a| a.ends_with(".mjs") || a.ends_with(".js") || a.ends_with(".cjs")).cloned())
+        .unwrap_or_else(|| "index.mjs".into())
+}
+
+/// `node --check` says "<path>:12" on its first line; the plain-words message for it.
+pub fn syntax_message(file: &str, stderr: &str) -> String {
+    let line = stderr.lines().find_map(|l| {
+        l.rsplit_once(':').filter(|(p, n)| p.ends_with(file) && n.trim().parse::<u32>().is_ok()).map(|(_, n)| n.trim().to_string())
+    });
+    let what = stderr.lines().find(|l| l.contains("Error")).map(str::trim).unwrap_or("");
+    let at = line.map(|n| format!(" at line {n}")).unwrap_or_default();
+    format!("{file} is incomplete or has a syntax error{at}. {what}").trim().to_string()
+}
+
+/// `node --check` on the file the connector starts: catches a half-written file in a second.
+async fn syntax_step(dir: &Path, m: &ConnectorManifest, env: Vec<(String, String)>) -> TestStep {
+    let file = entry_file(m);
+    if !dir.join(&file).is_file() {
+        return step("Code is complete", false, Some(format!("{file} is missing.")));
+    }
+    let mut c = tokio::process::Command::new("node");
+    c.arg("--check").arg(&file).current_dir(dir).env_clear().envs(env).stdin(std::process::Stdio::null()).kill_on_drop(true);
+    match tokio::time::timeout(Duration::from_secs(20), c.output()).await {
+        Ok(Ok(o)) if o.status.success() => step("Code is complete", true, None),
+        Ok(Ok(o)) => step("Code is complete", false, Some(syntax_message(&file, &String::from_utf8_lossy(&o.stderr)))),
+        Ok(Err(e)) => step("Code is complete", false, Some(format!("cannot run node: {e}"))),
+        Err(_) => step("Code is complete", false, Some("The syntax check took longer than 20 s.".into())),
+    }
+}
+
 /// What the builder checks when the agent says it is done.
 pub async fn conformance(core: &Arc<Core>, id: &str, dir: &Path) -> ConnectorTestResult {
     let mut steps = vec![];
@@ -205,6 +252,12 @@ pub async fn conformance(core: &Arc<Core>, id: &str, dir: &Path) -> ConnectorTes
         }
         Err(e) => return result(vec![step("Manifest is valid", false, Some(e))]),
     };
+    let syntax = syntax_step(dir, &m, supervisor::base_env(&core.env.vars)).await;
+    let syntax_ok = syntax.ok;
+    steps.push(syntax);
+    if !syntax_ok {
+        return result(steps);
+    }
     let spec = LaunchSpec {
         id: id.into(),
         dir: dir.into(),
@@ -292,6 +345,37 @@ mod tests {
         assert!(!looks_secret(r#"import { x } from "../_lib/connector.mjs";"#));
         assert!(!looks_secret(r#"const url = "https://discord.com/api/v10/channels";"#));
         assert!(!looks_secret(r#"description: "Reads messages in the channels you choose and posts replies""#));
+    }
+
+    #[test]
+    fn syntax_errors_are_said_in_plain_words() {
+        let err = "/tmp/x/index.mjs:12\n  foo(\n     ^\n\nSyntaxError: Unexpected end of input\n\nNode.js v22";
+        let m = syntax_message("index.mjs", err);
+        assert!(m.starts_with("index.mjs is incomplete or has a syntax error at line 12."), "{m}");
+        assert!(m.contains("Unexpected end of input"));
+        assert!(syntax_message("index.mjs", "weird").starts_with("index.mjs is incomplete or has a syntax error."));
+    }
+
+    #[tokio::test]
+    async fn node_check_finds_a_half_written_file() {
+        if std::process::Command::new("node").arg("--version").output().is_err() {
+            return;
+        }
+        let d = std::env::temp_dir().join(format!("na-syn-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let m = manifest::parse(r#"{"name":"x"}"#).unwrap();
+        let env = vec![("PATH".to_string(), std::env::var("PATH").unwrap_or_default())];
+        std::fs::write(d.join("index.mjs"), "export const a = 1;\n").unwrap();
+        let first = syntax_step(&d, &m, env.clone()).await;
+        assert!(first.ok, "{:?}", first.detail);
+        std::fs::write(d.join("index.mjs"), "export function a() {\n  return (1 +\n").unwrap();
+        let s = syntax_step(&d, &m, env.clone()).await;
+        assert!(!s.ok);
+        assert!(s.detail.unwrap().contains("index.mjs is incomplete or has a syntax error at line"));
+        std::fs::remove_file(d.join("index.mjs")).unwrap();
+        assert!(!syntax_step(&d, &m, env).await.ok);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

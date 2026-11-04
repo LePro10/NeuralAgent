@@ -106,8 +106,11 @@ pub async fn handle(core: &Arc<Core>, client: &ClientInfo, op: Op) -> R {
             core.audit.note("autopilot_suggestion", Some(id), true, None);
             Ok(Value::Null)
         }
-        Op::ConnectorCreate { name, description } => builder::create(core, name, description).await.and_then(|c| val(&c)),
-        Op::ConnectorChange { id, request } => builder::change(core, &id, request).await.and_then(|c| val(&c)),
+        Op::ConnectorCreate { name, description, profile } => builder::create(core, name, description, profile).await.and_then(|c| val(&c)),
+        Op::ConnectorChange { id, request, profile } => builder::change(core, &id, request, profile).await.and_then(|c| val(&c)),
+        Op::ConnectorRetry { id } => builder::retry(core, &id).await.and_then(|c| val(&c)),
+        Op::ConnectorRestore { id } => builder::restore(core, &id).and_then(|c| val(&c)),
+        Op::ConnectorReset { id } => builder::reset(core, &id).and_then(|c| val(&c)),
         Op::ConnectorImport { path } => builder::import(core, path).await.and_then(|c| val(&c)),
         Op::ConnectorConfigure { id, config, secrets } => core.connectors.configure(core, &id, config, secrets).and_then(|c| val(&c)),
         Op::ConnectorEnable { id, enabled } => {

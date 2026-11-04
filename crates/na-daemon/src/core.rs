@@ -335,7 +335,9 @@ impl Core {
                 let wait = std::time::Duration::from_secs(if op == "update.install" { 1800 } else { 130 });
                 self.host_ctl.call(&op, args, wait).await
             }
-            Request::HostNotice { topic, .. } if topic == "neural" || topic == "autopilot" => Err(err(ErrorCode::BadRequest, "reserved topic")),
+            Request::HostNotice { topic, .. } if topic == "neural" || topic == "autopilot" => {
+                Err(err(ErrorCode::BadRequest, "reserved topic"))
+            }
             Request::HostNotice { topic, data } => {
                 self.emit(Event::HostNotice { topic, data });
                 Ok(Value::Null)

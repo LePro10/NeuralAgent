@@ -11,6 +11,13 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-11-04
+
+### Improved
+- **Discord connector does more**: it also notices messages in threads, direct messages to the bot, new members and reactions (you choose which), can find messages, list roles and members, start threads and pin messages, and can note every action it takes with the reason in a log channel of your choice.
+- A connector whose build stops halfway now keeps its last working version and offers Try again, Restore, Reset to template, Open folder and Check again; you can also pick which agent builds it.
+- **Choose your default agent** in Settings → Agents (Claude Code, Codex, Gemini or any other you have): the autopilot, connector builds and Neural use it whenever they start an agent on their own.
+
 ## [0.5.3] - 2026-11-04
 
 ### New

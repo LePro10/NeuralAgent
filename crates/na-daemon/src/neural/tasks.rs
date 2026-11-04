@@ -56,7 +56,6 @@ pub fn link(n: &mut NeuralState, task: &str, sid: &str, now: Millis) {
     }
 }
 
-
 /// Updates the task of an agent for an agent event.
 pub fn on_agent(n: &mut NeuralState, sid: &str, kind: ObsKind, now: Millis) {
     let Some(id) = of_agent(n, sid).map(|t| t.id.clone()) else { return };

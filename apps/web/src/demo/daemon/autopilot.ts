@@ -11,7 +11,7 @@ function manifest(name: string, icon: string, description: string, kind: Connect
 
 function connector(id: string, m: ConnectorManifest, status: Connector["status"]): Connector {
   const tools = Object.entries(m.tools).map(([name, cls]) => ({ name, description: name.replace(/_/g, " "), class: cls }));
-  return { id, manifest: m, builtin: true, enabled: status === "running", status, config: {}, secrets_set: [], tools, path: `/Users/demo/.neuralagent/connectors/${id}` };
+  return { id, manifest: m, builtin: true, enabled: status === "running", status, config: {}, secrets_set: [], tools, build_stopped: false, can_restore: false, path: `/Users/demo/.neuralagent/connectors/${id}` };
 }
 
 export function autopilotSeed(workspaceId: string, now: number): AutopilotState {

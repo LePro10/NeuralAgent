@@ -2,6 +2,8 @@
 // labels, tool permissions as the user sees them, the setup form of a connector and the
 // before/after of a suggested playbook. No React, no daemon: tests live in autopilot.test.ts.
 import type {
+  CatalogEntry,
+  Profile,
   Allow,
   AutopilotState,
   Connector,
@@ -21,6 +23,7 @@ import type {
   ToolClass,
   ToolRule,
 } from "@neuralagent/protocol";
+import { launchable } from "./profiles.ts";
 
 export const EMPTY_AUTOPILOT: AutopilotState = { pilots: [], items: [], messages: [], pending: [], suggestions: [], connectors: [], browser: { connected: false } };
 
@@ -177,6 +180,23 @@ export function newRoutine(id: string): Routine {
 }
 
 // ───────────────────────────── connectors ─────────────────────────────
+
+/** The agents that can build a connector: installed coding agents (not the plain terminal), the default first. */
+export function builderAgents(profiles: Profile[] | undefined, catalog: CatalogEntry[] | undefined, defaultId: string | undefined): Profile[] {
+  const list = launchable(profiles, catalog).filter((p) => p.engine !== "shell");
+  return [...list.filter((p) => p.id === defaultId), ...list.filter((p) => p.id !== defaultId)];
+}
+
+/** What the "Build stopped" card offers. Old daemons (no `connector_recover`) get none of the new buttons. */
+export function recoveryOptions(c: Pick<Connector, "build_stopped" | "can_restore" | "last_request" | "builtin">, supported: boolean) {
+  const show = !c.builtin && c.build_stopped;
+  return {
+    show,
+    retry: show && supported && !!c.last_request,
+    restore: show && supported && c.can_restore,
+    reset: show && supported,
+  };
+}
 
 export const STATUS_LABEL: Record<ConnectorStatus, string> = {
   needs_setup: "Needs setup",

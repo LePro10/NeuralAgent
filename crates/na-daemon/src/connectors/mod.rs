@@ -9,6 +9,7 @@ pub mod embedded;
 pub mod log;
 pub mod manifest;
 pub mod mcp_client;
+pub mod recover;
 pub mod store;
 pub mod supervisor;
 pub mod virt;
@@ -55,8 +56,6 @@ pub struct Rt {
     pub client: Option<Arc<McpClient>>,
     cancel: Option<CancellationToken>,
     log: Arc<Log>,
-    /// The last build or change did not pass the check (what was wrong).
-    pub build_failed: Option<String>,
 }
 
 impl Default for Rt {
@@ -69,7 +68,6 @@ impl Default for Rt {
             client: None,
             cancel: None,
             log: Default::default(),
-            build_failed: None,
         }
     }
 }
@@ -85,6 +83,9 @@ struct Inner {
     entries: BTreeMap<Id, Entry>,
     secrets: Secrets,
 }
+
+/// (build failed message, last request, was a change, agent profile)
+pub type BuildInfo = (Option<String>, Option<String>, bool, Option<Id>);
 
 pub struct Hub {
     inner: Mutex<Inner>,
@@ -165,7 +166,11 @@ impl Hub {
             if let Some(sid) = sid
                 && !core.read(|s| s.sessions.get(&sid).is_some_and(|x| x.alive))
             {
-                self.mutate_saved(core, &id, |s| s.build_session = None);
+                self.mutate_saved(core, &id, |s| {
+                    s.build_session = None;
+                    s.build_failed =
+                        Some("The build was interrupted when NeuralAgent restarted. Your last working version is kept.".into());
+                });
             }
         }
         self.start_all(core);
@@ -229,10 +234,26 @@ impl Hub {
     }
 
     pub fn set_build_failed(&self, core: &Arc<Core>, id: &str, why: Option<String>) {
-        if let Some(e) = self.inner.lock().entries.get_mut(id) {
-            e.rt.build_failed = why;
-        }
+        self.mutate_saved(core, id, |s| s.build_failed = why);
         self.publish(core);
+    }
+
+    /// Remembers the request and the agent, so "Try again" can run it once more.
+    pub fn set_request(&self, core: &Arc<Core>, id: &str, request: &str, change: bool, profile: Option<Id>) {
+        self.mutate_saved(core, id, |s| {
+            s.request = Some(request.to_string());
+            s.request_is_change = change;
+            s.profile = profile;
+        });
+    }
+
+    /// (build failed message, last request, was a change, agent profile)
+    pub fn build_info(&self, id: &str) -> Option<BuildInfo> {
+        self.inner
+            .lock()
+            .entries
+            .get(id)
+            .map(|e| (e.saved.build_failed.clone(), e.saved.request.clone(), e.saved.request_is_change, e.saved.profile.clone()))
     }
 
     pub fn build_session(&self, id: &str) -> Option<Id> {
@@ -244,14 +265,14 @@ impl Hub {
     }
 
     fn status_of(&self, g: &Inner, id: &str, e: &Entry) -> (ConnectorStatus, Option<String>) {
-        if e.def.broken.is_some() {
-            return (ConnectorStatus::Error, e.def.broken.clone());
-        }
         if e.saved.build_session.is_some() {
             return (ConnectorStatus::Building, None);
         }
-        if let Some(f) = &e.rt.build_failed {
+        if let Some(f) = &e.saved.build_failed {
             return (ConnectorStatus::Error, Some(f.clone()));
+        }
+        if e.def.broken.is_some() {
+            return (ConnectorStatus::Error, e.def.broken.clone());
         }
         let missing = manifest::missing(&e.def.manifest, &e.saved.config, &Self::secrets_set(g, id));
         if !missing.is_empty() {
@@ -300,6 +321,9 @@ impl Hub {
             secrets_set: Self::secrets_set(g, id),
             tools,
             build_session: e.saved.build_session.clone(),
+            build_stopped: e.saved.build_failed.is_some() && e.saved.build_session.is_none(),
+            can_restore: !e.def.builtin && e.def.dir.parent().and_then(Path::parent).is_some_and(|r| recover::has_backup(r, id)),
+            last_request: e.saved.request.clone(),
             path: e.def.dir.to_string_lossy().into_owned(),
         }
     }
@@ -548,6 +572,8 @@ impl Hub {
             let _ = std::fs::remove_dir_all(&dir);
         }
         let _ = std::fs::remove_dir_all(core.paths.root.join("connector-state").join(id));
+        let _ = std::fs::remove_dir_all(recover::backup_dir(&core.paths.root, id));
+        let _ = std::fs::remove_dir_all(recover::discarded_dir(&core.paths.root, id));
         self.persist(&core.paths.root);
         self.publish(core);
         Ok(())

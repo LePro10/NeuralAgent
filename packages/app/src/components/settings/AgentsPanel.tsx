@@ -2,10 +2,11 @@
 // pane) and Settings → Profiles (your own launch profiles). They were one sheet before (D71); now
 // they are Settings pages like the others, and the profile editor is a detail page.
 import type { CatalogEntry, Profile, Session } from "@neuralagent/protocol";
-import { Button, Callout, Empty, IconButton, List, Row, toast, useLayoutMode } from "@neuralagent/ui";
+import { Button, Callout, Empty, IconButton, InlinePicker, List, Row, toast, useLayoutMode } from "@neuralagent/ui";
 import { ExternalLink, Plus, RotateCw, UserCog } from "lucide-react";
 import { useState } from "react";
 import { phoneRouter } from "../../lib/phoneRoute";
+import { builderAgents } from "../../lib/autopilot";
 import { joinArgs } from "../../lib/profiles";
 import { useClient, useDaemon, usePlatform, useUi } from "../../lib/store";
 import { EngineTile } from "../EngineTile";
@@ -51,6 +52,13 @@ export function AgentsPanel() {
     }
   };
 
+  const settings = useDaemon((c) => c.state?.settings);
+  const profiles = useDaemon((c) => c.state?.profiles);
+  // Agents NeuralAgent may start on its own (autopilot, connector builds, Neural), default first.
+  const agents = builderAgents(profiles, catalog, settings?.default_profile);
+  const setDefault = (id: string) =>
+    settings && client.req({ m: "settings_set", p: { settings: { ...settings, default_profile: id } } }).catch((e) => toast((e as Error).message, { tone: "danger" }));
+
   const installed = (catalog ?? []).filter((a) => a.installed);
   const available = (catalog ?? []).filter((a) => !a.installed);
   const docs = (a: CatalogEntry) =>
@@ -63,6 +71,20 @@ export function AgentsPanel() {
   return (
     <div className="flex flex-col gap-7">
       {!target && <Callout tone="warning">Add a workspace first: installs run in one of its panes.</Callout>}
+      {agents.length > 0 && (
+        <div>
+          <InlinePicker
+            title="Default agent"
+            kind="list"
+            value={agents.find((a) => a.id === settings?.default_profile) ? settings!.default_profile : agents[0]!.id}
+            options={agents.map((a) => ({ value: a.id, label: a.name }))}
+            onChange={setDefault}
+          />
+          <p className="mt-1.5 px-1 text-detail text-dim">
+            Used whenever NeuralAgent starts an agent on its own: the autopilot, building a connector and Neural. You can still pick another one each time.
+          </p>
+        </div>
+      )}
       {installed.length > 0 && (
         <List label="Installed">
           {installed.map((a) => (

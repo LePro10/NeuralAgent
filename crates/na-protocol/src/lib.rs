@@ -25,7 +25,8 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// newer messages and requests only to daemons that list them: over the relay an older daemon
 /// closes the session on a message it cannot parse. Add a name with every new client message or
 /// request a new web remote might send to an older computer.
-pub const DAEMON_FEATURES: &[&str] = &["call_warm", "files", "neural", "host_system", "cv_stop_task", "neural_cleanup", "autopilot", "reports_mine"];
+pub const DAEMON_FEATURES: &[&str] =
+    &["call_warm", "files", "neural", "host_system", "cv_stop_task", "neural_cleanup", "autopilot", "reports_mine", "connector_recover"];
 
 /// [`DAEMON_FEATURES`] as sent in `HelloOk`.
 pub fn daemon_features() -> Vec<String> {

@@ -354,6 +354,16 @@ pub struct Connector {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub build_session: Option<Id>,
+    /// The last build or change ended without a working result (`error` says why).
+    #[serde(default)]
+    pub build_stopped: bool,
+    /// A last working version is kept and can be restored.
+    #[serde(default)]
+    pub can_restore: bool,
+    /// What the user last asked an agent to build or change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_request: Option<String>,
     /// Folder on disk (for "Open folder").
     pub path: String,
 }
@@ -619,11 +629,30 @@ pub enum AutopilotOp {
     ConnectorCreate {
         name: String,
         description: String,
+        /// The agent profile that builds it (absent: the default one).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        profile: Option<Id>,
     },
     /// Let a coding agent change a connector the user made. [Connector]
     ConnectorChange {
         id: Id,
         request: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        profile: Option<Id>,
+    },
+    /// Back to the template; setup values and secrets stay. Needs feature `connector_recover`. [Connector]
+    ConnectorReset {
+        id: Id,
+    },
+    /// Back to the last working version, if one is kept. Needs feature `connector_recover`. [Connector]
+    ConnectorRestore {
+        id: Id,
+    },
+    /// Run the build again with the last request. Needs feature `connector_recover`. [Connector]
+    ConnectorRetry {
+        id: Id,
     },
     /// Add an existing MCP server or connector folder. [Connector]
     ConnectorImport {

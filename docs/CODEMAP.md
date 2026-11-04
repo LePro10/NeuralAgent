@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-03 by `node scripts/codemap.mjs` (790 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-04 by `node scripts/codemap.mjs` (792 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -237,25 +237,25 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **manifests.test.mjs** (35) — Every connector.json must fit the daemon's ConnectorManifest (crates/na-protocol/src/autopilot.rs).
 
 ## connectors/_lib/
-- **connector.mjs** (220) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
 
 ## connectors/_template/
 - **connector.test.mjs** (52) — Run with: node --test (no network: fetch is mocked)
 - **index.mjs** (47) — Starting point for a NeuralAgent connector. Replace the example tools below; keep the shape. · `build()`
 
 ## connectors/_template/lib/
-- **connector.mjs** (220) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
 
 ## connectors/discord/
-- **connector.test.mjs** (99)
-- **index.mjs** (218) — Discord connector: Gateway WebSocket (events) + REST (tools). No npm packages. · `INTENTS, build()`
+- **connector.test.mjs** (265)
+- **index.mjs** (397) — Discord connector: Gateway WebSocket (events) + REST (tools). No npm packages. · `INTENTS, INTENT_MEMBERS, INVITE_PERMISSIONS, EVENT_KINDS, build()`
 
 ## connectors/examples/neuralagent-admin/
 - **connector.test.mjs** (48)
 - **index.mjs** (93) — NeuralAgent admin example connector: problem reports through the relay admin API with a · `build()`
 
 ## connectors/examples/neuralagent-admin/lib/
-- **connector.mjs** (220) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
 
 ## connectors/feed/
 - **connector.test.mjs** (53)
@@ -282,7 +282,7 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **call.rs** (759) — Voice calls with Neural. The client streams echo-cancelled microphone audio; everything · `const OUT_RATE, struct Engines, struct Calls, struct CallHandle, impl Drop for CallHandle, lang_of()`
 - **catalog.rs** (315) — Known agent CLIs: how to find, install, start and resume them, and how we get their status. · `enum PromptMode, enum Hooks, struct Agent, const AGENTS, agent(), detect(), parse_version()`
 - **claude_view.rs** (2310) — Claude view: reads the transcript of a Claude Code session (JSONL in `~/.claude/projects`) · `struct ClaudeView, struct Parsed, const EFFORTS, effort_from_output(), detect_effort(), settings_effort(), parse_line(), parse_line_in(), detect_prompt(), detect_activity(), detect_mode(), claude_dir(), match_files()`
-- **core.rs** (1499) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
+- **core.rs** (1501) — The daemon's state and everything that changes it. · `now_ms(), err(), struct Core, struct Subscription, apply()`
 - **cv_action.rs** (618) — Claude view: actions the phone asks for (`Request::CvAction`), done by typing the CLI's own · `menu_now()`
 - **cv_commands.rs** (369) — Claude view: the slash commands of Claude Code (table for CLI 2.1.316) plus the user's, · `builtin(), front_matter(), read_small(), collect_commands(), collect_skills(), collect_plugins()`
 - **cv_image.rs** (290) — Images in a Claude transcript (a `Read` of a picture, pasted images, screenshots from MCP · `const MAX_SEND, images_in(), index_of(), image_ref(), image_url(), dims(), serve(), fit()`
@@ -319,7 +319,7 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 
 ## crates/na-daemon/src/autopilot/
 - **mod.rs** (363) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace. This module keeps · `mod ops, mod perm, mod prompt, mod run, mod sched, mod tools, mod turn, const KEEP, struct Extra, struct PRt, struct Runtime, impl Default for Runtime, load(), start()`
-- **ops.rs** (309) — `Request::Autopilot { op }`: every operation of the pilots and the connectors. · `handle()`
+- **ops.rs** (312) — `Request::Autopilot { op }`: every operation of the pilots and the connectors. · `handle()`
 - **perm.rs** (84) — What the pilot may do on its own: tool classes and the playbook's rules. · `builtin_class(), resolve(), explicit_auto()`
 - **prompt.rs** (439) — What the model reads: the system prompt (rules + the user's playbook), the setup interview, · `system(), playbook_text(), schedule_text(), setup_system(), kind_word(), item_line(), world(), events_message(), struct Triage, const TRIAGE_SYSTEM, triage_message(), parse_triage(), fallback_triage()`
 - **run.rs** (289) — The background loop: connector events into the inbox (with triage), polling, routines, · `run()`
@@ -329,14 +329,15 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 
 ## crates/na-daemon/src/connectors/
 - **browser.rs** (393) — The bridge to the NeuralAgent browser extension (docs/notes/autopilot.md → Browser). · `const DEFAULT_PORT, const PAIR_VALID, struct Pairing, struct Bridge, start()`
-- **builder.rs** (401) — Building connectors: "New connector" (template + a coding agent), "Change with an agent", and · `build_prompt(), create(), change(), struct ImportCmd, split_command(), parse_command(), mcp_manifest(), import()`
-- **check.rs** (315) — Testing a connector: the user's "Test connection" (does it start, list tools, pass its own · `test(), looks_secret(), scan_secrets(), tool_gaps(), conformance(), failure_message()`
+- **builder.rs** (525) — Building connectors: "New connector" (template + a coding agent), "Change with an agent", and · `build_prompt(), create(), change(), retry(), restore(), reset(), mark_working(), struct Verdict, stopped_message(), struct ImportCmd, split_command(), parse_command(), mcp_manifest(), import()`
+- **check.rs** (401) — Testing a connector: the user's "Test connection" (does it start, list tools, pass its own · `test(), looks_secret(), scan_secrets(), tool_gaps(), syntax_message(), conformance(), failure_message()`
 - **embedded.rs** (140) — The connectors that ship with NeuralAgent. The JS ones are embedded (`include_str!`, no build · `struct Builtin, const JS, const LIB, const TEMPLATE, const VIRTUAL, install(), write_template()`
 - **log.rs** (78) — The last log lines of a connector (its stderr), with every known secret value masked. · `const LINES, struct Log`
 - **manifest.rs** (138) — `connector.json`: parsing, validation and what is still missing to run a connector. · `parse(), validate(), class_of(), missing(), secret_var()`
 - **mcp_client.rs** (267) — A minimal MCP client over newline-delimited JSON-RPC 2.0 (stdio). Generic over the byte · `const EVENT_METHOD, struct McpClient, struct ToolOutput, struct ToolInfo, mod tests`
-- **mod.rs** (598) — Connectors (D87, docs/notes/autopilot.md): registry of built-in and user connectors, the · `mod browser, mod builder, mod check, mod embedded, mod log, mod manifest, mod mcp_client, mod store, mod supervisor, mod virt, struct ConnEvent, struct Rt, impl Default for Rt, struct Hub` +1
-- **store.rs** (106) — What is saved about connectors: `<home>/connectors.json` (enabled, setup values, the agent · `struct Saved, type SavedMap, type Secrets, saved_path(), secrets_path(), load_saved(), save_saved(), load_secrets(), save_secrets(), valid_id(), slug()`
+- **mod.rs** (624) — Connectors (D87, docs/notes/autopilot.md): registry of built-in and user connectors, the · `mod browser, mod builder, mod check, mod embedded, mod log, mod manifest, mod mcp_client, mod recover, mod store, mod supervisor, mod virt, struct ConnEvent, struct Rt, impl Default for Rt` +3
+- **recover.rs** (212) — Recovering a connector whose build did not finish (D92): the last working version is kept · `backup_dir(), discarded_dir(), has_backup(), copy_dir(), snapshot(), restore(), reset(), fingerprint()`
+- **store.rs** (117) — What is saved about connectors: `<home>/connectors.json` (enabled, setup values, the agent · `struct Saved, type SavedMap, type Secrets, saved_path(), secrets_path(), load_saved(), save_saved(), load_secrets(), save_secrets(), valid_id(), slug()`
 - **supervisor.rs** (303) — Starting connector processes and keeping them alive: restart with backoff (1 s up to 5 min), · `const FAILURES, const FAILURE_WINDOW, const MAX_BACKOFF, struct LaunchSpec, struct Launched, base_env(), environment(), command_of(), launch(), tools_with_classes(), supervise()`
 - **virt.rs** (291) — The two built-in connectors that live inside the daemon: `browser` (the extension bridge as · `call(), schema(), struct Post, parse_posts()`
 
@@ -346,14 +347,14 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **mod.rs** (439) — Neural v2 (D61–D64, docs/notes/neural-v2.md): the state Neural keeps besides the conversation · `mod guard, mod history, mod observe, mod pulse, mod tasks, mod tools, mod world, struct Runtime, const TASK_WAKES, load(), watch()`
 - **observe.rs** (210) — Observations: what Neural noticed about agents, kept apart from the conversation. Coalescing, · `const KEEP, const STUCK_MS, push(), label(), workspace_name(), describe_prompt(), agent_text(), clip(), struct Stuck`
 - **pulse.rs** (129) — When Neural speaks on its own: which observations wake it, batching and throttling. · `const BATCH_MS, const GAP_MS, const PER_HOUR, wakes(), struct Pulse`
-- **tasks.rs** (128) — Neural's tasks: linking agents and status changes on agent events. Pure. · `next_id(), create(), of_agent(), get_mut(), link(), on_agent(), interrupted()`
+- **tasks.rs** (127) — Neural's tasks: linking agents and status changes on agent events. Pure. · `next_id(), create(), of_agent(), get_mut(), link(), on_agent(), interrupted()`
 - **tools.rs** (596) — Neural's tools: what the model can do, and the guarded code that does it. Requests go · `struct Outcome, list(), tail()`
 - **world.rs** (326) — The world state: a compact picture of everything Neural should know, rendered fresh for every · `struct Ctx, short(), render()`
 
 ## crates/na-protocol/src/
-- **autopilot.rs** (665) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace that looks after the · `struct AutopilotState, struct Pilot, enum PilotStatus, struct Playbook, struct Routine, enum Schedule, struct SourceUse, struct ToolRule, enum Allow, enum NotifyLevel, struct InboxItem, enum ItemKind, enum ItemStatus, struct ItemStep` +20
+- **autopilot.rs** (694) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace that looks after the · `struct AutopilotState, struct Pilot, enum PilotStatus, struct Playbook, struct Routine, enum Schedule, struct SourceUse, struct ToolRule, enum Allow, enum NotifyLevel, struct InboxItem, enum ItemKind, enum ItemStatus, struct ItemStep` +20
 - **claude.rs** (852) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvToolMeta, struct CvHunk, struct CvTask, struct CvTodo, struct CvPr, struct CvWorktree, struct CvQueued, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption` +14
-- **lib.rs** (1912) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +69
+- **lib.rs** (1913) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +69
 - **neural.rs** (177) — Neural's own working state (D61–D64, docs/notes/neural-v2.md): the tasks it follows up, · `struct NeuralState, enum NeuralMode, struct NeuralTask, enum NeuralTaskStatus, struct NeuralNote, struct NeuralObs, enum ObsKind, struct NeuralPending`
 
 ## crates/na-relay/src/
@@ -440,11 +441,12 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **ZoomControl.tsx** (126) — Desktop interface size: applies the chosen size to the window's web view and handles the zoom · `ZoomControl()`
 
 ## packages/app/src/components/autopilot/
+- **AgentPicker.tsx** (30) — Which installed agent builds a connector (the same agents the app starts in a pane). Renders · `useBuilderAgents(), AgentPicker()`
 - **AutopilotPage.tsx** (288) — Autopilot (D87): one project agent per workspace. Empty state with a project picker, then the · `AutopilotPage(), PhoneConnectors(), PhoneConnector()`
 - **BrowserPair.tsx** (88) — The Browser connector: pair the Chrome extension. The app shows a one-time code, the user · `BrowserPair()`
 - **Chat.tsx** (118) — Autopilot → Chat: the conversation with the pilot. Right after creation it is the setup · `Chat(), ChatComposer()`
-- **ConnectorDetail.tsx** (339) — Autopilot → a connector: the guide, the setup form drawn from its manifest, a test with a · `ConnectorDetail()`
-- **ConnectorsPage.tsx** (199) — Autopilot → Connectors: a grid of what the autopilots can read and do. Built-in ones first, then · `ConnectorsPage()`
+- **ConnectorDetail.tsx** (433) — Autopilot → a connector: the guide, the setup form drawn from its manifest, a test with a · `ConnectorDetail()`
+- **ConnectorsPage.tsx** (202) — Autopilot → Connectors: a grid of what the autopilots can read and do. Built-in ones first, then · `ConnectorsPage()`
 - **FieldInput.tsx** (214) — One setup field of a connector, drawn from its manifest (all FieldKinds). Used by the connector · `useFieldOptions(), FieldInput()`
 - **Inbox.tsx** (260) — Autopilot → Inbox: what needs you first (OKs, drafts), then what is open or done. An item opens · `Inbox()`
 - **Instructions.tsx** (342) — Autopilot → Instructions: the playbook as a form. Mission, how to work, tone, routines, sources · `Instructions()`
@@ -525,7 +527,7 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **rows.tsx** (193) — Phones: the rows of the Agents inbox and a project's page. One row per agent (quiet engine tile, · `wordOf, LIVE_ANSWERS, AgentInboxRow(), ErrorLine()`
 
 ## packages/app/src/components/settings/
-- **AgentsPanel.tsx** (161) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
+- **AgentsPanel.tsx** (183) — Settings → Agents (every known agent CLI: installed, or one-click install that runs visibly in a · `rememberInstallTarget(), AgentsPanel(), profileDetail(), profileKey, ProfilesPanel()`
 - **DictationHistory.tsx** (106) — The last dictations of the host (D85): a text is never lost when the app it was typed into · `DictationHistory()`
 - **DiscordPanel.tsx** (202) — Settings → Discord (D72): a privacy preset, what each part of the card shows, and a live preview · `DiscordPanel(), ProfileCard()`
 - **PrivacyPanel.tsx** (163) — Settings → Privacy and support (docs/notes/insights.md): the anonymous usage ping (on unless · `privacySummary(), PrivacyPanel(), PrivacyIcon`
@@ -547,8 +549,8 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **agentui.test.ts** (24)
 - **agentui.ts** (98) — Small shared helpers for the agent-facing pages (Neural, Agents, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **alerts.ts** (79) — How this device tells you that an agent finished, needs your input or stopped with an error: · `type AlertMode, type AlertKind, useAlerts, setAlertMode(), wantsSound, wantsNotify, ALERT_TEXT, chime()`
-- **autopilot.test.ts** (148)
-- **autopilot.ts** (460) — Autopilot (D87): the pure logic behind its screens: grouping and filtering the inbox, schedule · `EMPTY_AUTOPILOT, type ItemFilter, interface InboxView, needsUser, inboxView(), attentionCount(), pilotAttention(), anyWorking, KIND_LABEL, URGENCY_LABEL, DAY_OPTIONS, whenLabel(), agoLabel(), statusLine()` +49
+- **autopilot.test.ts** (167)
+- **autopilot.ts** (480) — Autopilot (D87): the pure logic behind its screens: grouping and filtering the inbox, schedule · `EMPTY_AUTOPILOT, type ItemFilter, interface InboxView, needsUser, inboxView(), attentionCount(), pilotAttention(), anyWorking, KIND_LABEL, URGENCY_LABEL, DAY_OPTIONS, whenLabel(), agoLabel(), statusLine()` +51
 - **call.ts** (531) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, interface CallStart, startCall(), endCall(), muteCall(), holdCall(), resumeCall(), interruptCall(), useCallWarm(), playPreview()`
 - **callState.test.ts** (44)
 - **callState.ts** (80) — Pure rules of a call with Neural (no DOM; tested in `callState.test.ts`): what the call screen · `ANSWER_TIMEOUT_MS, READY_TIMEOUT_MS, OFFLINE_TIMEOUT_MS, AUDIO_START_MS, WAKE_IDLE_MS, wakeIdle, type CallNotice, type CallHold, callSubtitle(), runningTime(), micErrorText(), noAnswerText(), SLOW_START_TEXT`

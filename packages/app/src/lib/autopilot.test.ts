@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AutopilotState, Connector, InboxItem, Pilot, Playbook } from "@neuralagent/protocol";
 import {
+  builderAgents,
+  recoveryOptions,
   attentionCount,
   buildConfigure,
   effectiveAllow,
@@ -97,7 +99,7 @@ const connector = (over: Partial<Connector> = {}): Connector => ({
       { key: "bots", label: "Include bots", type: "bool", required: false, options: [] },
     ],
   },
-  builtin: true, enabled: true, status: "running", config: {}, secrets_set: [], tools: [], path: "/x", ...over,
+  builtin: true, enabled: true, status: "running", build_stopped: false, can_restore: false, config: {}, secrets_set: [], tools: [], path: "/x", ...over,
 });
 
 test("permissions default by class and only custom choices are stored", () => {
@@ -144,4 +146,21 @@ test("a suggestion lists only what changes", () => {
   assert.deepEqual(ch.map((c) => c.label), ["How to talk to people", "Routines"]);
   assert.equal(ch[1]!.after, "Every 6 hours · Read posts");
   assert.equal(ch[1]!.before, "None");
+});
+
+test("the build agent list: installed coding agents, default first, no plain terminal", () => {
+  const p = (id: string, engine: string, builtin = true) => ({ id, name: id, engine, command: id, args: [], env: {}, icon: "", builtin });
+  const profiles = [p("shell", "shell"), p("claude", "claude"), p("codex", "codex"), p("gemini", "gemini"), p("mine", "custom", false)];
+  const catalog = [{ id: "claude", installed: true }, { id: "codex", installed: true }, { id: "gemini", installed: false }] as never;
+  assert.deepEqual(builderAgents(profiles, catalog, "codex").map((x) => x.id), ["codex", "claude", "mine"]);
+  assert.deepEqual(builderAgents(undefined, undefined, "claude"), []);
+});
+
+test("the stopped-build card offers only what can work", () => {
+  const base = { builtin: false, build_stopped: true, can_restore: false, last_request: "Read X" };
+  assert.deepEqual(recoveryOptions(base, true), { show: true, retry: true, restore: false, reset: true });
+  assert.deepEqual(recoveryOptions({ ...base, can_restore: true, last_request: undefined }, true), { show: true, retry: false, restore: true, reset: true });
+  assert.deepEqual(recoveryOptions(base, false), { show: true, retry: false, restore: false, reset: false });
+  assert.equal(recoveryOptions({ ...base, build_stopped: false }, true).show, false);
+  assert.equal(recoveryOptions({ ...base, builtin: true }, true).show, false);
 });

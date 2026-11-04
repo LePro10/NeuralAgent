@@ -18,8 +18,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use na_protocol::{
-    AgentStatus, ApiError, AttentionKind, CvAction, ErrorCode, Event, Id, NeuralMode, NeuralNote, NeuralObs, NeuralState,
-    NeuralTaskStatus, ObsKind, OrchRole, Request,
+    AgentStatus, ApiError, AttentionKind, CvAction, ErrorCode, Event, Id, NeuralMode, NeuralNote, NeuralObs, NeuralState, NeuralTaskStatus,
+    ObsKind, OrchRole, Request,
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};

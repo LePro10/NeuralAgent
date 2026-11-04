@@ -1,15 +1,15 @@
 {
   "name": "Discord",
   "icon": "discord",
-  "description": "Reads messages in the channels you choose and lets the autopilot answer as your bot.",
+  "description": "Reads messages, threads, direct messages, new members and reactions on your Discord server and lets the autopilot answer, start threads and pin as your bot.",
   "kind": "service",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "guide": [
     "Open the [Discord Developer Portal](https://discord.com/developers/applications) and press **New Application**. Give it a name, for example the name of your project.",
     "In the left menu open **Bot**. Press **Reset Token**, copy the token and paste it below. Anyone with this token can act as your bot, so keep it private.",
-    "Still on the **Bot** page, scroll to **Privileged Gateway Intents** and switch on **Message Content Intent**. Without it the bot sees empty messages. Save.",
-    "Paste the token below and press **Test connection**. The result shows an **invite link**. Open it, choose your server and press **Authorize**.",
-    "Come back, press **Reload** on the channel list and tick the channels the autopilot should listen to."
+    "Still on the **Bot** page, scroll to **Privileged Gateway Intents** and switch on **Message Content Intent** (otherwise the bot sees empty messages) and **Server Members Intent** (needed to notice new members and to list members). Save.",
+    "Paste the token below and press **Test connection**. The result shows an **invite link** that asks only for the rights the tools need (view channels, send messages, send in threads, create public threads, read history, add reactions, manage messages for pinning). It never asks for Administrator. Open it, choose your server and press **Authorize**.",
+    "Come back, press **Reload** on the channel list and tick the channels the autopilot should listen to. Optional: pick a **Log channel**; the bot then writes one line there for everything it does, with the reason."
   ],
   "setup": [
     {
@@ -26,16 +26,67 @@
       "type": "pick",
       "from": "list_channels",
       "help": "The autopilot only reacts to new messages in these channels. Needs the bot invited to your server first."
+    },
+    {
+      "key": "events",
+      "label": "What to react to",
+      "type": "pick",
+      "options": [
+        {
+          "value": "messages",
+          "label": "New messages in the chosen channels"
+        },
+        {
+          "value": "threads",
+          "label": "Messages in threads of the chosen channels"
+        },
+        {
+          "value": "dms",
+          "label": "Direct messages to the bot"
+        },
+        {
+          "value": "member_joined",
+          "label": "New members (needs the Server Members intent)"
+        },
+        {
+          "value": "reaction_added",
+          "label": "Reactions in the chosen channels"
+        }
+      ],
+      "default": [
+        "messages",
+        "threads",
+        "dms",
+        "reaction_added"
+      ],
+      "help": "Bots are always ignored. Change this, then reconnect the connector."
+    },
+    {
+      "key": "log_channel",
+      "label": "Log channel",
+      "type": "pick",
+      "from": "list_channels",
+      "help": "Optional. Pick one channel: every post, reply, reaction, thread and pin of the bot is noted there with its reason. Leave empty for no log."
     }
   ],
   "tools": {
     "whoami": "read",
     "list_channels": "read",
     "read_messages": "read",
+    "list_roles": "read",
+    "list_members": "read",
+    "search_messages": "read",
+    "get_message": "read",
     "reply": "external",
     "send_message": "external",
-    "add_reaction": "write"
+    "add_reaction": "write",
+    "create_thread": "write",
+    "pin_message": "write"
   },
-  "events": ["message"],
+  "events": [
+    "message",
+    "member_joined",
+    "reaction_added"
+  ],
   "check": "whoami"
 }

@@ -21,6 +21,17 @@ pub struct Saved {
     /// The coding agent building or changing it (gone after a restart).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build_session: Option<Id>,
+    /// The last build or change did not finish (what was wrong). Kept across restarts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_failed: Option<String>,
+    /// What the user last asked an agent for, and whether it was a change (for "Try again").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
+    #[serde(default)]
+    pub request_is_change: bool,
+    /// The agent profile that builds it (absent: the default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<Id>,
 }
 
 pub type SavedMap = BTreeMap<Id, Saved>;

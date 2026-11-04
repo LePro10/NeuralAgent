@@ -101,7 +101,13 @@ export async function fetchJson(url, opts = {}) {
       throw new ConnectorError(`Could not reach ${host}: ${e?.cause?.code || e?.message || e}. Check the internet connection and the address.`);
     }
     if (res.status === 429 && attempt < retries) {
-      const wait = Math.min(Number(res.headers?.get?.("retry-after")) || 1, 30);
+      let wait = Number(res.headers?.get?.("retry-after")) || 0;
+      try {
+        // Discord and others also put retry_after (seconds, maybe fractional) in the JSON body.
+        const j = JSON.parse(await res.text());
+        wait = Math.max(wait, Number(j?.retry_after) || 0);
+      } catch {}
+      wait = Math.min(wait || 1, 30);
       await sleep(wait * 1000 * (opts.retryScale ?? 1));
       continue;
     }

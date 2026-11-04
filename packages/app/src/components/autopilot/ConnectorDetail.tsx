@@ -3,12 +3,13 @@
 // agent, open the folder, remove.
 import type { Connector, ConnectorTestResult, ToolClass } from "@neuralagent/protocol";
 import { Button, Callout, ConfirmSheet, Disclosure, Empty, Field, List, Page, Pill, Row, Sheet, Spinner, Switch, TextArea, toast } from "@neuralagent/ui";
-import { Bot, Check, FolderOpen, Hammer, Plug, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Check, FolderOpen, Hammer, History, OctagonAlert, Plug, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CLASS_GROUPS, STATUS_LABEL, buildConfigure, guideParts, initialValues, missingFields, toolLabel, toolsOf, type FormValues } from "../../lib/autopilot";
+import { CLASS_GROUPS, STATUS_LABEL, buildConfigure, guideParts, initialValues, missingFields, recoveryOptions, toolLabel, toolsOf, type FormValues } from "../../lib/autopilot";
 import { useOpenAgent } from "../../lib/openAgent";
 import { useDaemon, usePlatform } from "../../lib/store";
 import { Glow } from "../Glow";
+import { AgentPicker } from "./AgentPicker";
 import { BrowserPair } from "./BrowserPair";
 import { connectorIcon, useOpenLink } from "./bits";
 import { FieldInput } from "./FieldInput";
@@ -43,6 +44,8 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ConnectorTestResult | null>(null);
   const [changing, setChanging] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const recoverable = useDaemon((x) => x.status === "open" && x.has("connector_recover"));
   const [removing, setRemoving] = useState(false);
   const Icon = connectorIcon(c);
   const dirty = useMemo(() => Object.keys(drafts).some((k) => drafts[k]) || cleared.length > 0 || JSON.stringify(values) !== JSON.stringify(initialValues(c)), [drafts, cleared, values, c]);
@@ -101,13 +104,25 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
               </div>
               {c.build_session && agentAlive && (
                 <Button size="sm" variant="accent" Icon={Bot} onClick={() => openAgent(c.build_session!)} className="shrink-0 rounded-full">
-                  Open
+                  Open the agent
                 </Button>
               )}
             </div>
           )}
 
-          {c.status === "error" && c.error && (
+          {mine && !building && c.build_stopped && (
+            <StoppedCard
+              c={c}
+              recoverable={recoverable}
+              testing={testing}
+              onCheck={() => void test()}
+              onChange={() => setChanging(true)}
+              onReset={() => setResetting(true)}
+              onOpenFolder={platform.revealPath ? () => void platform.revealPath!(c.path) : undefined}
+            />
+          )}
+
+          {c.status === "error" && c.error && !c.build_stopped && (
             <Callout tone="danger" title="This connector has a problem">
               {c.error}
             </Callout>
@@ -204,7 +219,19 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
           )}
         </div>
       </Page>
-      <ChangeSheet open={changing} onClose={() => setChanging(false)} id={c.id} name={c.manifest.name} />
+      <ChangeSheet open={changing} onClose={() => setChanging(false)} id={c.id} name={c.manifest.name} initial={c.build_stopped ? c.last_request : undefined} />
+      <ConfirmSheet
+        open={resetting}
+        onClose={() => setResetting(false)}
+        title="Reset to the template?"
+        message="The code goes back to an empty connector. Your settings and secrets stay. What is in the folder now is set aside in a hidden folder, not deleted."
+        confirmLabel="Reset"
+        destructive
+        Icon={RotateCcw}
+        onConfirm={async () => {
+          await run({ op: "connector_reset", id: c.id }, "Reset to the template");
+        }}
+      />
       <ConfirmSheet
         open={removing}
         onClose={() => setRemoving(false)}
@@ -218,6 +245,68 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
         }}
       />
     </div>
+  );
+}
+
+/** A build that ended without a working result: why, and every way out. The user stays in control. */
+function StoppedCard({ c, recoverable, testing, onCheck, onChange, onReset, onOpenFolder }: {
+  c: Connector;
+  recoverable: boolean;
+  testing: boolean;
+  onCheck: () => void;
+  onChange: () => void;
+  onReset: () => void;
+  onOpenFolder?: () => void;
+}) {
+  const run = useApDo();
+  const [busy, setBusy] = useState<string | null>(null);
+  const o = recoveryOptions(c, recoverable);
+  const go = async (op: "connector_retry" | "connector_restore", done?: string) => {
+    setBusy(op);
+    await run({ op, id: c.id }, done);
+    setBusy(null);
+  };
+  return (
+    <section className="surface flex flex-col gap-4 rounded-list p-4">
+      <div className="flex items-start gap-3">
+        <OctagonAlert className="mt-0.5 size-icon shrink-0 text-warning" strokeWidth={1.8} />
+        <div className="min-w-0 flex-1">
+          <div className="text-headline text-bright">Build stopped</div>
+          <p className="mt-0.5 text-subhead break-words text-dim">{c.error || "The build did not finish."}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {o.retry && (
+          <Button size="sm" variant="accent" busy={busy === "connector_retry"} onClick={() => void go("connector_retry")}>
+            Try again
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" Icon={Sparkles} onClick={onChange}>
+          Change the request
+        </Button>
+        {o.restore && (
+          <Button size="sm" variant="ghost" Icon={History} busy={busy === "connector_restore"} onClick={() => void go("connector_restore", "Back to the last working version")}>
+            Restore last working version
+          </Button>
+        )}
+        {o.reset && (
+          <Button size="sm" variant="ghost" Icon={RotateCcw} onClick={onReset}>
+            Reset to template
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {onOpenFolder && (
+          <Button size="sm" variant="quiet" Icon={FolderOpen} onClick={onOpenFolder}>
+            Open folder
+          </Button>
+        )}
+        <Button size="sm" variant="quiet" busy={testing} onClick={onCheck}>
+          Check again
+        </Button>
+      </div>
+      <p className="text-footnote text-dim">You can put any code you want in the folder. NeuralAgent runs it after the check passes: you decide.</p>
+    </section>
   );
 }
 
@@ -304,16 +393,21 @@ function Logs({ id }: { id: string }) {
   );
 }
 
-function ChangeSheet({ open, onClose, id, name }: { open: boolean; onClose: () => void; id: string; name: string }) {
+function ChangeSheet({ open, onClose, id, name, initial }: { open: boolean; onClose: () => void; id: string; name: string; initial?: string }) {
   const run = useApDo();
   const [text, setText] = useState("");
+  const [profile, setProfile] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (open && initial) setText((t) => t || initial);
+  }, [open, initial]);
   return (
     <Sheet open={open} onClose={onClose} title="Change with an agent" eyebrow={name} size="md">
       <div className="flex flex-col gap-5 pb-4">
         <Field label="What should be different?">
           <TextArea value={text} onChange={(e) => setText(e.target.value)} maxRows={8} placeholder="Also read the closed tickets, and let me mark one as solved." />
         </Field>
+        <AgentPicker value={profile} onChange={setProfile} />
         <Button
           size="lg"
           variant="accent"
@@ -322,7 +416,7 @@ function ChangeSheet({ open, onClose, id, name }: { open: boolean; onClose: () =
           block
           onClick={async () => {
             setBusy(true);
-            const r = await run({ op: "connector_change", id, request: text.trim() });
+            const r = await run({ op: "connector_change", id, request: text.trim(), ...(profile ? { profile } : {}) });
             setBusy(false);
             if (r !== undefined) {
               setText("");

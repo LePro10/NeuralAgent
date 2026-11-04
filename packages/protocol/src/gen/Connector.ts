@@ -29,6 +29,18 @@ tools: Array<ConnectorTool>,
  */
 build_session?: string, 
 /**
+ * The last build or change ended without a working result (`error` says why).
+ */
+build_stopped: boolean, 
+/**
+ * A last working version is kept and can be restored.
+ */
+can_restore: boolean, 
+/**
+ * What the user last asked an agent to build or change.
+ */
+last_request?: string, 
+/**
  * Folder on disk (for "Open folder").
  */
 path: string, };

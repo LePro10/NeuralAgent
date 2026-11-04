@@ -7,6 +7,7 @@ import { useState } from "react";
 import { STATUS_LABEL, splitConnectors } from "../../lib/autopilot";
 import { pickHostFolder } from "../FolderBrowser";
 import { Glow } from "../Glow";
+import { AgentPicker } from "./AgentPicker";
 import { StatusMark, connectorIcon } from "./bits";
 import { useApRequest, useAutopilot } from "./hooks";
 
@@ -112,11 +113,12 @@ function NewConnectorSheet({ open, onClose, onCreated }: { open: boolean; onClos
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [profile, setProfile] = useState("");
   const ok = name.trim() !== "" && description.trim().length >= 10;
   const create = async () => {
     setBusy(true);
     try {
-      const c = await req<Connector | null>({ op: "connector_create", name: name.trim(), description: description.trim() });
+      const c = await req<Connector | null>({ op: "connector_create", name: name.trim(), description: description.trim(), ...(profile ? { profile } : {}) });
       setName("");
       setDescription("");
       if (c?.id) onCreated(c.id);
@@ -136,6 +138,7 @@ function NewConnectorSheet({ open, onClose, onCreated }: { open: boolean; onClos
         <Field label="What should it do?" hint="Say what it should read and what it may do. Mention where the key or login comes from if you know it.">
           <TextArea value={description} onChange={(e) => setDescription(e.target.value)} maxRows={8} placeholder="Read new support requests from my app’s admin API and let me answer them." />
         </Field>
+        <AgentPicker value={profile} onChange={setProfile} />
         <p className="text-footnote text-dim">A coding agent writes the connector in a new folder and tests it. You can watch it work, and ask for changes later.</p>
         <Button size="lg" variant="accent" busy={busy} disabled={!ok} onClick={() => void create()} block>
           Build it
