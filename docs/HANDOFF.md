@@ -18,6 +18,14 @@ click, guided learn, loose path on a real voice, the dictation history with real
 Owner idea, not started: Luna (projectWebsite) should keep "Pasted text" cards in its draft
 (a long paste was lost on reload, which motivated D85).
 
+## Released + deployed 0.5.6 (2026-11-04)
+Tag `v0.5.6` = `main` `d98c758`: only `fix/macos-quit-stops-daemon` (`177746f`, D93: normal Quit
+on macOS stops app, service and watchdog; "Quit (agents keep running)" and boot service unchanged).
+CI release run 41832943817. Relay build `0.5.6+mw24azcs`, rollback `neuralagent-relay:prev` =
+`0.5.5+mw1zlmvd`. Not in this release: the restart-after-update button (not approved) and the
+uncommitted `.github/workflows/ci.yml` change in the main checkout (left untouched).
+Not yet tried in the real app: Quit from Dock / Cmd+Q actually ending the service.
+
 ## Released + deployed 0.5.5 (2026-11-04)
 D92: connector tool schemas normalized (`connectors/schema.rs`, `Connector.warnings`), pilot tools
 `build_connector`/`connector_status`, `PilotMessage.connector_id` -> live card in chat
