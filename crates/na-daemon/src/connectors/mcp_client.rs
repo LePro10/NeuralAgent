@@ -41,7 +41,12 @@ impl ToolOutput {
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
+    /// The input schema, normalized to valid JSON Schema.
     pub schema: Value,
+    /// What normalizing changed ("pinned: type \"bool\" should be \"boolean\"").
+    pub fixes: Vec<String>,
+    /// Set when the schema cannot be repaired: the tool must not be offered.
+    pub invalid: Option<String>,
 }
 
 impl McpClient {
@@ -148,10 +153,16 @@ impl McpClient {
             .map(|a| {
                 a.iter()
                     .filter_map(|t| {
+                        let (schema, fixes, invalid) = match super::schema::normalize(t.get("inputSchema").unwrap_or(&Value::Null)) {
+                            Ok((s, f)) => (s, f, None),
+                            Err(e) => (super::schema::empty(), vec![], Some(e)),
+                        };
                         Some(ToolInfo {
                             name: t["name"].as_str()?.to_string(),
                             description: t["description"].as_str().unwrap_or_default().to_string(),
-                            schema: t.get("inputSchema").cloned().unwrap_or(Value::Null),
+                            schema,
+                            fixes,
+                            invalid,
                         })
                     })
                     .collect()

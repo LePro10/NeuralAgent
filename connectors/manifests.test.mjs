@@ -32,3 +32,20 @@ for (const d of dirs) {
     assert.ok(fs.existsSync(new URL(`${d}/index.mjs`, root)));
   });
 }
+
+test("the shared helper repairs wrong tool param types", async () => {
+  const { createServer } = await import("./_lib/connector.mjs");
+  const s = createServer({
+    name: "t",
+    tools: {
+      pin: { schema: { pinned: { type: "bool" }, n: { type: "int" }, tags: { type: "list", items: { type: "str" } } }, required: ["pinned", "ghost"], run: () => ({}) },
+    },
+  });
+  const r = await s.handle({ id: 1, method: "tools/list" });
+  const sch = r.result.tools[0].inputSchema;
+  assert.equal(sch.properties.pinned.type, "boolean");
+  assert.equal(sch.properties.n.type, "integer");
+  assert.equal(sch.properties.tags.type, "array");
+  assert.equal(sch.properties.tags.items.type, "string");
+  assert.deepEqual(sch.required, ["pinned"]);
+});

@@ -159,13 +159,17 @@ async fn turn(core: &Arc<Core>, pid: &str, triggers: &[Trigger]) -> Result<(), S
     let user_facing = triggers.iter().any(|t| matches!(t, Trigger::Chat | Trigger::Setup));
     let project =
         core.read(|s| s.workspaces.iter().find(|w| w.id == p.workspace_id).map(|w| w.name.clone())).unwrap_or_else(|| p.name.clone());
-    let system = if p.setup_done { prompt::system(&p) } else { prompt::setup_system(&project) };
+    let mut system = if p.setup_done { prompt::system(&p) } else { prompt::setup_system(&project) };
     // The chat so far, then the reason for this turn.
     let mut msgs: Vec<Msg> = vec![];
     let hist: Vec<(PilotRole, String)> = core.read(|s| {
         let mine: Vec<_> = s.autopilot.messages.iter().filter(|m| m.pilot_id == pid).collect();
         mine.iter().skip(mine.len().saturating_sub(HISTORY)).map(|m| (m.role, m.text.clone())).collect()
     });
+    if let Some(n) = prompt::interview_notes(&hist) {
+        system.push_str("\n\n");
+        system.push_str(&n);
+    }
     for (role, text) in hist {
         push(&mut msgs, role == PilotRole::User, text);
     }
@@ -185,14 +189,17 @@ async fn turn(core: &Arc<Core>, pid: &str, triggers: &[Trigger]) -> Result<(), S
     let mut said: Vec<String> = vec![];
     let mut steps: Vec<String> = vec![];
     let mut mid: Option<Id> = None;
+    // The connector this answer is about (a build the pilot started or checked): the app shows a card.
+    let mut conn: Option<Id> = None;
     let max = if user_facing { CHAT_STEPS } else { WAKE_STEPS };
     for _ in 0..max {
         let offer = tools::offer(core, &p);
         let p_now = core.pilot(pid).unwrap_or_else(|| p.clone());
+        let conns = core.connectors.list();
         let context = core.read(|s| {
             let label = |sid: &str| s.sessions.get(sid).map(|x| format!("{}, {:?}", short(sid), x.status).to_lowercase());
             let notes = core.autopilot.notes(pid);
-            prompt::world(&s.autopilot, &p_now, &project, &label, &notes, Local::now())
+            prompt::world(&s.autopilot, &p_now, &project, &conns, &label, &notes, Local::now())
         });
         let mut cur = String::new();
         let mut last_emit = Instant::now();
@@ -213,7 +220,7 @@ async fn turn(core: &Arc<Core>, pid: &str, triggers: &[Trigger]) -> Result<(), S
                 if user_facing && last_emit.elapsed() > Duration::from_millis(80) {
                     last_emit = Instant::now();
                     let text = joined(&said, &cur);
-                    mid = Some(show(core, pid, mid.take(), &text, &steps, false));
+                    mid = Some(show(core, pid, mid.take(), &text, &steps, conn.as_deref(), false));
                 }
             })
             .await
@@ -223,7 +230,7 @@ async fn turn(core: &Arc<Core>, pid: &str, triggers: &[Trigger]) -> Result<(), S
             said.push(text.trim().to_string());
         }
         if user_facing && !said.is_empty() {
-            mid = Some(show(core, pid, mid.take(), &said.join("\n\n"), &steps, false));
+            mid = Some(show(core, pid, mid.take(), &said.join("\n\n"), &steps, conn.as_deref(), false));
         }
         if t.calls.is_empty() {
             break;
@@ -238,23 +245,31 @@ async fn turn(core: &Arc<Core>, pid: &str, triggers: &[Trigger]) -> Result<(), S
             activity(core, pid, &words);
             steps.push(words);
             let out = tools::call(core, pid, item_hint.as_deref(), &target, c.args.clone()).await;
+            if matches!(target, tools::Target::Builtin("build_connector" | "connector_status"))
+                && let Some(id) =
+                    serde_json::from_str::<serde_json::Value>(&out).ok().and_then(|v| v["connector_id"].as_str().map(str::to_string))
+            {
+                conn = Some(id);
+            }
             msgs.push(Msg::Tool { id: c.id.clone(), content: out });
         }
         if user_facing && let Some(id) = &mid {
             let text = said.join("\n\n");
-            mid = Some(show(core, pid, Some(id.clone()), &text, &steps, false));
+            mid = Some(show(core, pid, Some(id.clone()), &text, &steps, conn.as_deref(), false));
         }
     }
     let full = said.join("\n\n");
     let quiet = full.trim().is_empty() || full.trim().to_lowercase().starts_with("(quiet)");
     if user_facing {
         if quiet && !steps.is_empty() && mid.is_none() {
-            core.ap_message(pid, PilotRole::Pilot, "Done.", None, false, steps);
+            let id = core.ap_message(pid, PilotRole::Pilot, "Done.", None, false, steps);
+            attach_connector(core, &id, conn.as_deref());
         } else if let Some(id) = mid {
-            show(core, pid, Some(id), &full, &steps, true);
+            show(core, pid, Some(id), &full, &steps, conn.as_deref(), true);
         }
     } else if !quiet {
-        core.ap_message(pid, PilotRole::Pilot, full.trim(), item_hint.as_deref(), true, steps);
+        let id = core.ap_message(pid, PilotRole::Pilot, full.trim(), item_hint.as_deref(), true, steps);
+        attach_connector(core, &id, conn.as_deref());
         core.ap_notify(pid, &format!("{pid}-say"), AttentionKind::Done, &clip(full.trim(), 120), false);
     }
     Ok(())
@@ -269,7 +284,7 @@ fn joined(said: &[String], cur: &str) -> String {
 }
 
 /// Creates or updates the pilot's message; streamed updates are not saved.
-fn show(core: &Core, pid: &str, id: Option<Id>, text: &str, steps: &[String], last: bool) -> Id {
+fn show(core: &Core, pid: &str, id: Option<Id>, text: &str, steps: &[String], connector: Option<&str>, last: bool) -> Id {
     let id = id.unwrap_or_else(|| core.autopilot.new_id("m"));
     let m = na_protocol::PilotMessage {
         id: id.clone(),
@@ -280,11 +295,13 @@ fn show(core: &Core, pid: &str, id: Option<Id>, text: &str, steps: &[String], la
         item_id: None,
         proactive: false,
         steps: steps.to_vec(),
+        connector_id: connector.map(str::to_string),
     };
     let f = |a: &mut na_protocol::AutopilotState| match a.messages.iter_mut().rev().find(|x| x.id == m.id) {
         Some(x) => {
             x.text = m.text.clone();
             x.steps = m.steps.clone();
+            x.connector_id = m.connector_id.clone();
         }
         None => a.messages.push(m.clone()),
     };
@@ -294,4 +311,15 @@ fn show(core: &Core, pid: &str, id: Option<Id>, text: &str, steps: &[String], la
         core.autopilot_update_live(f);
     }
     id
+}
+
+/// Marks a message as being about a connector (the app shows its live card).
+fn attach_connector(core: &Core, message: &str, connector: Option<&str>) {
+    if let Some(c) = connector {
+        core.autopilot_update(|a| {
+            if let Some(m) = a.messages.iter_mut().rev().find(|m| m.id == message) {
+                m.connector_id = Some(c.to_string());
+            }
+        });
+    }
 }

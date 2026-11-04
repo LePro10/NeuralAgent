@@ -225,6 +225,13 @@ async fn run_once(core: &Arc<Core>, id: &str, cancel: &CancellationToken) -> End
             }
         }
     };
+    // A tool whose schema cannot be repaired is not offered (one bad schema fails a whole request).
+    let warnings: Vec<String> =
+        tools.iter().filter_map(|t| t.invalid.as_ref().map(|e| format!("Tool \"{}\" skipped: {e}", t.name))).collect();
+    for w in &warnings {
+        tracing::warn!(connector = id, "{w}");
+    }
+    let tools: Vec<_> = tools.into_iter().filter(|t| t.invalid.is_none()).collect();
     let classes = tools_with_classes(&spec.manifest, &tools);
     let schemas: BTreeMap<String, Value> = tools.iter().map(|t| (t.name.clone(), t.schema.clone())).collect();
     {
@@ -234,6 +241,7 @@ async fn run_once(core: &Arc<Core>, id: &str, cancel: &CancellationToken) -> End
             rt.error = None;
             rt.tools = classes;
             rt.schemas = schemas;
+            rt.warnings = warnings;
             rt.client = Some(client);
         });
     }

@@ -11,7 +11,7 @@ import { useDaemon } from "../../lib/store";
 import { useOpenLink } from "./bits";
 import { useApDo, useAutopilot, useConnectorName } from "./hooks";
 
-export function Inbox({ pilot, onChat }: { pilot: Pilot; onChat: () => void }) {
+export function Inbox({ pilot, onChat, onConnectors }: { pilot: Pilot; onChat: () => void; onConnectors: () => void }) {
   const state = useAutopilot();
   const [filter, setFilter] = useState<ItemFilter>("open");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -52,7 +52,18 @@ export function Inbox({ pilot, onChat }: { pilot: Pilot; onChat: () => void }) {
           ))}
         </List>
       )}
-      {nothing && (
+      {nothing && filter === "open" && pilot.playbook.sources.length === 0 ? (
+        <Empty
+          Icon={InboxIcon}
+          title="Connect your first source"
+          detail="The autopilot sorts what comes in from places like Discord, GitHub or Reddit. Connect one and it shows up here."
+          action={
+            <Button variant="accent" onClick={onConnectors} className="rounded-full">
+              Connect a source
+            </Button>
+          }
+        />
+      ) : nothing && (
         <Empty
           Icon={InboxIcon}
           title={filter === "open" ? "Nothing waiting" : "Nothing done yet"}

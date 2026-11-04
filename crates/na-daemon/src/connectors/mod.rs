@@ -10,6 +10,7 @@ pub mod log;
 pub mod manifest;
 pub mod mcp_client;
 pub mod recover;
+pub mod schema;
 pub mod store;
 pub mod supervisor;
 pub mod virt;
@@ -53,6 +54,8 @@ pub struct Rt {
     pub error: Option<String>,
     pub tools: Vec<ConnectorTool>,
     pub schemas: BTreeMap<String, Value>,
+    /// Things the user should know: tools skipped for an unusable schema.
+    pub warnings: Vec<String>,
     pub client: Option<Arc<McpClient>>,
     cancel: Option<CancellationToken>,
     log: Arc<Log>,
@@ -65,6 +68,7 @@ impl Default for Rt {
             error: None,
             tools: vec![],
             schemas: BTreeMap::new(),
+            warnings: vec![],
             client: None,
             cancel: None,
             log: Default::default(),
@@ -324,6 +328,7 @@ impl Hub {
             build_stopped: e.saved.build_failed.is_some() && e.saved.build_session.is_none(),
             can_restore: !e.def.builtin && e.def.dir.parent().and_then(Path::parent).is_some_and(|r| recover::has_backup(r, id)),
             last_request: e.saved.request.clone(),
+            warnings: e.rt.warnings.clone(),
             path: e.def.dir.to_string_lossy().into_owned(),
         }
     }
@@ -467,6 +472,7 @@ impl Hub {
             e.rt.client = None;
             e.rt.tools.clear();
             e.rt.schemas.clear();
+            e.rt.warnings.clear();
             e.rt.status = ConnectorStatus::Off;
         }
         self.sync_one(core, id);

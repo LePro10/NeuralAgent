@@ -10,6 +10,7 @@ import { useNow } from "../../lib/agentui";
 import { phoneRouter } from "../../lib/phoneRoute";
 import { useDaemon } from "../../lib/store";
 import { Glow } from "../Glow";
+import { ErrorNotice } from "./ErrorNotice";
 import { Chat, ChatComposer } from "./Chat";
 import { ConnectorDetail } from "./ConnectorDetail";
 import { ConnectorsPage } from "./ConnectorsPage";
@@ -34,7 +35,7 @@ export function AutopilotPage() {
   const openConnector = (id: string) => (phone ? phoneRouter().push({ k: "connector", id }) : setView({ k: "connector", id }));
   if (!phone && view.k === "connectors") return <ConnectorsPage onOpen={openConnector} back={{ label: "Autopilot", onBack: () => setView({ k: "pilot" }) }} />;
   if (!phone && view.k === "connector") return <ConnectorDetail id={view.id} onGone={() => setView({ k: "connectors" })} back={{ label: "Connectors", onBack: () => setView({ k: "connectors" }) }} />;
-  return <PilotScreen onConnectors={openConnectors} />;
+  return <PilotScreen onConnectors={openConnectors} onOpenConnector={openConnector} />;
 }
 
 export function PhoneConnectors() {
@@ -44,7 +45,7 @@ export function PhoneConnector({ id }: { id: string }) {
   return <ConnectorDetail id={id} onGone={() => phoneRouter().back()} />;
 }
 
-function PilotScreen({ onConnectors }: { onConnectors: () => void }) {
+function PilotScreen({ onConnectors, onOpenConnector }: { onConnectors: () => void; onOpenConnector: (id: string) => void }) {
   const state = useAutopilot();
   const loaded = useDaemon((c) => !!c.state);
   const pilot = useShownPilot();
@@ -63,7 +64,7 @@ function PilotScreen({ onConnectors }: { onConnectors: () => void }) {
     <div className="relative h-full">
       <Glow tint="autopilot" />
       {pilot ? (
-        <PilotView pilot={pilot} actions={connectorsButton} onConnectors={onConnectors} />
+        <PilotView pilot={pilot} actions={connectorsButton} onConnectors={onConnectors} onOpenConnector={onOpenConnector} />
       ) : (
         <Page title="Autopilot" eyebrow="Project agent" actions={connectorsButton}>
           <Start pilots={state.pilots.length} />
@@ -135,7 +136,7 @@ const TABS: { value: PilotTab; label: string }[] = [
   { value: "instructions", label: "Instructions" },
 ];
 
-function PilotView({ pilot, actions, onConnectors }: { pilot: Pilot; actions: React.ReactNode; onConnectors: () => void }) {
+function PilotView({ pilot, actions, onConnectors, onOpenConnector }: { pilot: Pilot; actions: React.ReactNode; onConnectors: () => void; onOpenConnector: (id: string) => void }) {
   const state = useAutopilot();
   const run = useApDo();
   const tab = usePilotUi((s) => s.tab);
@@ -149,15 +150,6 @@ function PilotView({ pilot, actions, onConnectors }: { pilot: Pilot; actions: Re
   const [removing, setRemoving] = useState(false);
   const working = pilot.status === "working";
   const line = statusLine(pilot, now);
-
-  // Chat follows the conversation while it grows.
-  const msgs = state.messages.filter((m) => m.pilot_id === pilot.id);
-  const lastLen = msgs.at(-1)?.text.length ?? 0;
-  useEffect(() => {
-    if (tab !== "chat") return;
-    const el = scroll.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [tab, msgs.length, lastLen]);
 
   const free = workspacesWithoutPilot(workspaces, state.pilots);
   const switcher = (
@@ -223,6 +215,7 @@ function PilotView({ pilot, actions, onConnectors }: { pilot: Pilot; actions: Re
           />
         </div>
       </div>
+      {pilot.status === "error" && <ErrorNotice pilot={pilot} onOpenConnector={onOpenConnector} />}
       <Segmented
         className="w-full"
         label="Autopilot sections"
@@ -237,8 +230,8 @@ function PilotView({ pilot, actions, onConnectors }: { pilot: Pilot; actions: Re
     <>
       <Page title="Autopilot" eyebrow={project ? undefined : "Project agent"} actions={actions} header={header} scrollRef={scroll}>
         <div className="pt-3">
-          {tab === "inbox" && <Inbox pilot={pilot} onChat={() => setTab("chat")} />}
-          {tab === "chat" && <Chat pilot={pilot} />}
+          {tab === "inbox" && <Inbox pilot={pilot} onChat={() => setTab("chat")} onConnectors={onConnectors} />}
+          {tab === "chat" && <Chat pilot={pilot} scroller={scroll} onOpenConnector={onOpenConnector} />}
           {tab === "instructions" && <Instructions pilot={pilot} onConnectors={onConnectors} />}
         </div>
       </Page>

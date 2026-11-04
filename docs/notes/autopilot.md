@@ -222,3 +222,13 @@ gone. A pilot can still start a reviewer agent when the playbook says so.
   `apps/browser-extension/`).
 - Neural asking an autopilot for its state.
 - A server mode is explicitly not planned now.
+
+## Connector tool schemas, pilot-built connectors (D92)
+Tool input schemas are normalized in `connectors/schema.rs` when read from a server (type aliases such as
+`bool` -> `boolean`, unknown types dropped, `required` limited to real properties, top level forced to an object).
+Unrepairable tools are skipped; the reason is in `Connector.warnings`. The build check reports each fix as a
+failed step ("pin_message.pinned: type "bool" should be "boolean"") so the builder agent fixes the source.
+The pilot has `build_connector {name, request}` and `connector_status {id}`; when it uses them the message
+gets `connector_id` and the app shows the live connector card. The prompt always lists all connectors with
+state and attachment, plus an `<interview>` block of questions already asked (never repeated; after two
+unanswered asks the pilot picks a default and says so). The pilot answers in the owner's latest language.

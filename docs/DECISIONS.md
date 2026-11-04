@@ -1160,3 +1160,17 @@ The relay stores answers to signed-in reports, pushes them to the reporter's dev
 them under Settings → Privacy and support → Your reports. Anonymous reports cannot be answered.
 Automation (our own autopilot) uses admin API keys with scopes (`reports:read`, `reports:reply`),
 shown once, stored hashed, revocable, instead of the owner's Google sign-in.
+
+## D92 — Tool schemas are normalized at the MCP boundary; the pilot builds connectors itself (2026-11-04)
+A user-built Discord connector declared a tool param as `"type":"bool"` (a setup-field kind, not JSON
+Schema). Schemas go unchanged to the model provider, which rejected the whole request, so the
+whole autopilot was dead. Now `connectors/schema.rs` repairs every `tools/list` schema where it is read
+(`McpClient::list_tools`): type aliases, unknown types, top-level object, `required` names, bad properties.
+This covers all providers. A tool that cannot be repaired is skipped and shown in `Connector.warnings`.
+The build check has a "Tool schemas are valid JSON Schema" step naming tool and fix, so the builder agent
+fixes the source; `_lib/connector.mjs` also repairs types. Alternative considered: fail the connector
+start; rejected because one slip should not take a source down.
+The pilot got `build_connector` (wraps `builder::create`, default agent profile, class write, auto: the owner
+asked in chat) and `connector_status` (read), also during the setup interview, and answers carry
+`PilotMessage.connector_id` so the app shows the live card. `<world>` lists all connectors fresh each turn;
+`<interview>` (derived from the chat) lists questions already asked so none is repeated.

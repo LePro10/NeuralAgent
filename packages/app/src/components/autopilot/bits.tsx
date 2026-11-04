@@ -1,6 +1,6 @@
 // Small pieces the autopilot screens share: connector icons and status dots, external links.
 import type { Connector, ConnectorStatus } from "@neuralagent/protocol";
-import { StatusDot } from "@neuralagent/ui";
+import { Callout, StatusDot } from "@neuralagent/ui";
 import { Bot, Compass, Globe, MessageCircle, Plug, Rss, Sparkles, type LucideIcon } from "lucide-react";
 import { STATUS_LABEL, STATUS_TONE } from "../../lib/autopilot";
 import { usePlatform } from "../../lib/store";
@@ -36,4 +36,19 @@ export function useOpenLink() {
     if (platform.openExternal) platform.openExternal(url);
     else window.open(url, "_blank", "noopener,noreferrer");
   };
+}
+
+/** Things worth knowing about a connector (a tool skipped because its schema was unusable). */
+export function ConnectorWarnings({ c }: { c: Pick<Connector, "warnings"> }) {
+  const list = c.warnings ?? [];
+  if (list.length === 0) return null;
+  return (
+    <Callout tone="warning" title={list.length === 1 ? "Heads up" : `${list.length} things to know`}>
+      <ul className="flex flex-col gap-1 text-footnote break-words">
+        {list.map((w, i) => (
+          <li key={i}>{w}</li>
+        ))}
+      </ul>
+    </Callout>
+  );
 }

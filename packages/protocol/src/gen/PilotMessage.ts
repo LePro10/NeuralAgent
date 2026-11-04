@@ -9,4 +9,9 @@ proactive: boolean,
 /**
  * Tool steps of this answer, in words ("Read 12 Discord messages").
  */
-steps: Array<string>, };
+steps: Array<string>, 
+/**
+ * A connector this message is about (the pilot started building or set it up). The app shows
+ * a live card for it: build progress, the setup form, test result.
+ */
+connector_id?: string, };

@@ -11,7 +11,7 @@ import { useDaemon, usePlatform } from "../../lib/store";
 import { Glow } from "../Glow";
 import { AgentPicker } from "./AgentPicker";
 import { BrowserPair } from "./BrowserPair";
-import { connectorIcon, useOpenLink } from "./bits";
+import { ConnectorWarnings, connectorIcon, useOpenLink } from "./bits";
 import { FieldInput } from "./FieldInput";
 import { useApDo, useApRequest, useConnector } from "./hooks";
 
@@ -28,32 +28,44 @@ export function ConnectorDetail({ id, onGone, back }: { id: string; onGone: () =
   return <Detail key={c.id} c={c} onGone={onGone} back={back} />;
 }
 
-const CLASS_TONE: Record<ToolClass, "neutral" | "warning" | "accent"> = { read: "neutral", write: "warning", external: "accent" };
-
-function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: { label: string; onBack: () => void } }) {
-  const run = useApDo();
-  const req = useApRequest();
-  const platform = usePlatform();
+/** The numbered "how to connect" steps; links open in the system browser. */
+export function Guide({ steps }: { steps: string[] }) {
   const open = useOpenLink();
-  const openAgent = useOpenAgent();
-  const agentAlive = useDaemon((x) => (c.build_session ? !!x.state?.sessions[c.build_session]?.alive : false));
+  return (
+    <ol className="surface flex flex-col gap-3 rounded-list p-4">
+      {steps.map((step, i) => (
+        <li key={i} className="flex items-start gap-3">
+          <span className="mt-px grid size-6 shrink-0 place-items-center rounded-full bg-fill-3 text-footnote text-ink tabular">{i + 1}</span>
+          <span className="min-w-0 flex-1 break-words text-subhead text-ink">
+            {guideParts(step).map((p, j) =>
+              p.href ? (
+                <button key={j} type="button" onClick={() => open(p.href!)} className="text-left break-all text-accent hover:underline">
+                  {p.text}
+                </button>
+              ) : (
+                <span key={j}>{p.text}</span>
+              ),
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+type ConnectorForm = ReturnType<typeof useConnectorForm>;
+
+/** The setup form's state: values, secret drafts, save and test. Shared by the page and the chat card. */
+export function useConnectorForm(c: Connector) {
+  const req = useApRequest();
   const [values, setValues] = useState<FormValues>(() => initialValues(c));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [cleared, setCleared] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ConnectorTestResult | null>(null);
-  const [changing, setChanging] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const recoverable = useDaemon((x) => x.status === "open" && x.has("connector_recover"));
-  const [removing, setRemoving] = useState(false);
-  const Icon = connectorIcon(c);
   const dirty = useMemo(() => Object.keys(drafts).some((k) => drafts[k]) || cleared.length > 0 || JSON.stringify(values) !== JSON.stringify(initialValues(c)), [drafts, cleared, values, c]);
   const missing = missingFields(c, values, drafts);
-  const building = c.status === "building";
-  const mine = !c.builtin;
-  const fields = c.manifest.setup;
-  const ready = c.status === "running";
 
   const save = async (): Promise<boolean> => {
     setSaving(true);
@@ -82,6 +94,63 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
       setTesting(false);
     }
   };
+  return { values, setValues, drafts, setDrafts, cleared, setCleared, saving, testing, result, dirty, missing, save, test };
+}
+
+/** The fields drawn from the manifest plus "Save and test connection". */
+export function ConnectionForm({ c, form, compact }: { c: Connector; form: ConnectorForm; compact?: boolean }) {
+  const { values, setValues, drafts, setDrafts, cleared, setCleared, saving, testing, dirty, missing, save, test } = form;
+  const ready = c.status === "running";
+  return (
+    <div className={compact ? "flex flex-col gap-4" : "surface flex flex-col gap-5 rounded-list p-4"}>
+      {c.manifest.setup.map((f) => (
+        <FieldInput
+          key={f.key}
+          connectorId={c.id}
+          field={f}
+          value={values[f.key]}
+          onChange={(v) => setValues((x) => ({ ...x, [f.key]: v }))}
+          isSet={c.secrets_set.includes(f.key)}
+          draft={drafts[f.key]}
+          onDraft={(v) => setDrafts((x) => ({ ...x, [f.key]: v }))}
+          cleared={cleared.includes(f.key)}
+          onClear={() => setCleared((x) => [...x, f.key])}
+          ready={ready && !dirty}
+        />
+      ))}
+      <p className="text-footnote text-dim">Secrets are kept on this computer and never shown again. Agents and the autopilot cannot read them.</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button variant="accent" busy={testing} disabled={missing.length > 0 || saving} onClick={() => void test()} className="flex-1">
+          Save and test connection
+        </Button>
+        {!compact && (
+          <Button variant="ghost" busy={saving} disabled={!dirty || testing} onClick={() => void save().then((ok) => ok && toast("Saved"))}>
+            Save
+          </Button>
+        )}
+      </div>
+      {missing.length > 0 && <p className="text-footnote text-warning">Still needed: {missing.join(", ")}.</p>}
+    </div>
+  );
+}
+
+const CLASS_TONE: Record<ToolClass, "neutral" | "warning" | "accent"> = { read: "neutral", write: "warning", external: "accent" };
+
+function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: { label: string; onBack: () => void } }) {
+  const run = useApDo();
+  const platform = usePlatform();
+  const openAgent = useOpenAgent();
+  const agentAlive = useDaemon((x) => (c.build_session ? !!x.state?.sessions[c.build_session]?.alive : false));
+  const [changing, setChanging] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const recoverable = useDaemon((x) => x.status === "open" && x.has("connector_recover"));
+  const [removing, setRemoving] = useState(false);
+  const Icon = connectorIcon(c);
+  const form = useConnectorForm(c);
+  const { testing, result, test } = form;
+  const building = c.status === "building";
+  const mine = !c.builtin;
+  const fields = c.manifest.setup;
 
   return (
     <div className="relative h-full">
@@ -128,6 +197,8 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
             </Callout>
           )}
 
+          <ConnectorWarnings c={c} />
+
           {!building && (
             <List footer={c.status === "needs_setup" ? "Fill in the connection below first." : c.enabled ? "On: autopilots may use it, and it keeps running." : "Off: autopilots cannot use it and it does not run."}>
               <Row Icon={Plug} title="Turned on" trailing={<Switch checked={c.enabled} onChange={(v) => void run({ op: "connector_enable", id: c.id, enabled: v })} label={`${c.manifest.name} on`} />} />
@@ -139,62 +210,14 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
           {c.manifest.guide.length > 0 && !building && c.manifest.kind !== "browser" && (
             <section>
               <h2 className="mb-2 px-1 text-footnote text-dim uppercase tracking-wide">How to connect</h2>
-              <ol className="surface flex flex-col gap-3 rounded-list p-4">
-                {c.manifest.guide.map((step, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className="mt-px grid size-6 shrink-0 place-items-center rounded-full bg-fill-3 text-footnote text-ink tabular">{i + 1}</span>
-                    <span className="min-w-0 flex-1 break-words text-subhead text-ink">
-                      {guideParts(step).map((p, j) =>
-                        p.href ? (
-                          <button key={j} type="button" onClick={() => open(p.href!)} className="text-left break-all text-accent hover:underline">
-                            {p.text}
-                          </button>
-                        ) : (
-                          <span key={j}>{p.text}</span>
-                        ),
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <Guide steps={c.manifest.guide} />
             </section>
           )}
 
           {fields.length > 0 && !building && (
             <section>
               <h2 className="mb-2 px-1 text-footnote text-dim uppercase tracking-wide">Connection</h2>
-              <div className="surface flex flex-col gap-5 rounded-list p-4">
-                {fields.map((f) => (
-                  <FieldInput
-                    key={f.key}
-                    connectorId={c.id}
-                    field={f}
-                    value={values[f.key]}
-                    onChange={(v) => setValues((x) => ({ ...x, [f.key]: v }))}
-                    isSet={c.secrets_set.includes(f.key)}
-                    draft={drafts[f.key]}
-                    onDraft={(v) => setDrafts((x) => ({ ...x, [f.key]: v }))}
-                    cleared={cleared.includes(f.key)}
-                    onClear={() => setCleared((x) => [...x, f.key])}
-                    ready={ready && !dirty}
-                  />
-                ))}
-                <p className="text-footnote text-dim">Secrets are kept on this computer and never shown again. Agents and the autopilot cannot read them.</p>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button variant="accent" busy={testing} disabled={missing.length > 0 || saving} onClick={() => void test()} className="flex-1">
-                    Save and test connection
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    busy={saving}
-                    disabled={!dirty || testing}
-                    onClick={() => void save().then((ok) => ok && toast("Saved"))}
-                  >
-                    Save
-                  </Button>
-                </div>
-                {missing.length > 0 && <p className="text-footnote text-warning">Still needed: {missing.join(", ")}.</p>}
-              </div>
+              <ConnectionForm c={c} form={form} />
             </section>
           )}
 
@@ -249,7 +272,7 @@ function Detail({ c, onGone, back }: { c: Connector; onGone: () => void; back?: 
 }
 
 /** A build that ended without a working result: why, and every way out. The user stays in control. */
-function StoppedCard({ c, recoverable, testing, onCheck, onChange, onReset, onOpenFolder }: {
+export function StoppedCard({ c, recoverable, testing, onCheck, onChange, onReset, onOpenFolder }: {
   c: Connector;
   recoverable: boolean;
   testing: boolean;
@@ -311,7 +334,7 @@ function StoppedCard({ c, recoverable, testing, onCheck, onChange, onReset, onOp
 }
 
 /** Started, tools listed, check passed: each as a line; a failure says why in words. */
-function TestChecklist({ testing, result }: { testing: boolean; result: ConnectorTestResult | null }) {
+export function TestChecklist({ testing, result }: { testing: boolean; result: ConnectorTestResult | null }) {
   return (
     <section aria-live="polite">
       <h2 className="mb-2 px-1 text-footnote text-dim uppercase tracking-wide">Test</h2>
@@ -393,7 +416,7 @@ function Logs({ id }: { id: string }) {
   );
 }
 
-function ChangeSheet({ open, onClose, id, name, initial }: { open: boolean; onClose: () => void; id: string; name: string; initial?: string }) {
+export function ChangeSheet({ open, onClose, id, name, initial }: { open: boolean; onClose: () => void; id: string; name: string; initial?: string }) {
   const run = useApDo();
   const [text, setText] = useState("");
   const [profile, setProfile] = useState("");

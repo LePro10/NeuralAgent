@@ -41,6 +41,10 @@ can_restore: boolean,
  */
 last_request?: string, 
 /**
+ * Things worth knowing while it runs, e.g. a tool that was skipped because its schema is unusable.
+ */
+warnings: Array<string>, 
+/**
  * Folder on disk (for "Open folder").
  */
 path: string, };

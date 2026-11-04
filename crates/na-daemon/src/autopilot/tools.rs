@@ -116,12 +116,34 @@ fn builtin_tools() -> Vec<Tool> {
         },
         suggest_tool(),
     ]
+    .into_iter()
+    .chain(connector_tools())
+    .collect()
+}
+
+/// build_connector and connector_status: also offered while the setup interview is open.
+fn connector_tools() -> Vec<Tool> {
+    vec![
+        Tool {
+            name: "build_connector",
+            description: "Start a coding agent that builds a NEW connector (a source such as Discord servers, a forum, an API). Use it when the owner wants a source that is not in <world>. `request` is what it should do, in the owner's words plus the details you know. Returns at once; the build runs in the background and the owner sees its progress. Do not call it twice for the same wish.",
+            params: obj(
+                json!({ "name": { "type": "string", "description": "Short name, e.g. \"My Discord\"" }, "request": { "type": "string" } }),
+                &["name", "request"],
+            ),
+        },
+        Tool {
+            name: "connector_status",
+            description: "The current state of one connector from <world>: building, needs setup (what the owner still has to enter), running, error, warnings, and its tools.",
+            params: obj(json!({ "id": { "type": "string" } }), &["id"]),
+        },
+    ]
 }
 
 fn suggest_tool() -> Tool {
     Tool {
         name: "suggest_playbook",
-        description: "Propose the whole playbook (it replaces the current one). The owner reviews it and decides; you cannot apply it yourself. Fields: mission, instructions, tone, routines [{task, schedule: {kind: every, minutes} | {kind: daily, at: \"09:00\"} | {kind: weekly, day: 0-6, at}, enabled}], sources [{connector_id, listen, scope}], rules [{connector_id (omit for your own tools), tool (or \"*\"), allow: auto|ask|never}], notify: all|needs_you|never.",
+        description: "Propose the whole playbook (it replaces the current one, so start from the current one). This is also how a running connector becomes a source: add it to sources. The owner reviews it and decides; you cannot apply it yourself. Fields: mission, instructions, tone, routines [{task, schedule: {kind: every, minutes} | {kind: daily, at: \"09:00\"} | {kind: weekly, day: 0-6, at}, enabled}], sources [{connector_id, listen, scope}], rules [{connector_id (omit for your own tools), tool (or \"*\"), allow: auto|ask|never}], notify: all|needs_you|never.",
         params: obj(json!({ "reason": { "type": "string" }, "playbook": { "type": "object" } }), &["reason", "playbook"]),
     }
 }
@@ -132,7 +154,12 @@ pub fn offer(core: &Core, p: &Pilot) -> Offer {
     let mut map = HashMap::new();
     if !p.setup_done {
         map.insert("suggest_playbook".to_string(), Target::Builtin("suggest_playbook"));
-        return Offer { tools: vec![suggest_tool()], map };
+        let mut tools = vec![suggest_tool()];
+        for t in connector_tools() {
+            map.insert(t.name.to_string(), Target::Builtin(t.name));
+            tools.push(t);
+        }
+        return Offer { tools, map };
     }
     for t in builtin_tools() {
         if perm::resolve(&p.playbook, None, t.name, perm::builtin_class(t.name)) == Allow::Never {
@@ -179,6 +206,8 @@ pub fn step_text(core: &Core, t: &Target, args: &Value) -> String {
             "inspect_agent" | "agent_changes" => "Checked an agent".into(),
             "remember" => "Made a note".into(),
             "suggest_playbook" => "Proposed changes to the playbook".into(),
+            "build_connector" => "Started building a connector".into(),
+            "connector_status" => "Checked a connector".into(),
             n => n.to_string(),
         },
         Target::Conn { id, tool, .. } => {
@@ -227,8 +256,11 @@ pub async fn call(core: &Arc<Core>, pid: &str, item_hint: Option<&str>, t: &Targ
         Target::Builtin(n) => (None, n.to_string(), perm::builtin_class(n)),
         Target::Conn { id, tool, class } => (Some(id.clone()), tool.clone(), *class),
     };
-    let allow =
-        if p.setup_done || name == "suggest_playbook" { perm::resolve(&p.playbook, conn.as_deref(), &name, class) } else { Allow::Never };
+    let allow = if p.setup_done || matches!(name.as_str(), "suggest_playbook" | "build_connector" | "connector_status") {
+        perm::resolve(&p.playbook, conn.as_deref(), &name, class)
+    } else {
+        Allow::Never
+    };
     match allow {
         Allow::Never => fail("this tool is not available"),
         Allow::Ask => {
@@ -471,6 +503,29 @@ async fn builtin(core: &Arc<Core>, p: &Pilot, name: &str, a: Value, item_hint: O
             ok(json!({ "ok": true }))
         }
         "suggest_playbook" => suggest(core, p, &a),
+        "build_connector" => {
+            let (Some(name), Some(request)) = (s("name"), s("request")) else { return fail("name and request are needed") };
+            if core.connectors.list().iter().any(|c| c.status == na_protocol::ConnectorStatus::Building && c.manifest.name == name) {
+                return fail("a connector with that name is already being built; use connector_status");
+            }
+            let profile = core.read(|st| st.settings.default_profile.clone());
+            match super::super::connectors::builder::create(core, name, request, Some(profile)).await {
+                Ok(c) => {
+                    core.audit.note("autopilot_build_connector", Some(c.id.clone()), true, None);
+                    ok(json!({ "ok": true, "connector_id": c.id, "status": "building",
+                        "note": "A coding agent is building it now. The owner sees the progress and the setup form in the chat. Tell them in one sentence; check later with connector_status." }))
+                }
+                Err(e) => fail(e.message),
+            }
+        }
+        "connector_status" => {
+            let Some(id) = s("id") else { return fail("id is missing") };
+            let Some(c) = core.connectors.get(&id) else { return fail(format!("no connector \"{id}\"")) };
+            ok(json!({ "ok": true, "connector_id": c.id, "name": c.manifest.name, "state": super::prompt::status_words(&c),
+                "running": c.status == na_protocol::ConnectorStatus::Running, "error": c.error, "warnings": c.warnings,
+                "attached": p.playbook.sources.iter().any(|x| x.connector_id == c.id),
+                "tools": c.tools.iter().map(|t| t.name.clone()).collect::<Vec<_>>() }))
+        }
         other => fail(format!("unknown tool {other}")),
     }
 }

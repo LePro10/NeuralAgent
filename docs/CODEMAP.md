@@ -1,6 +1,6 @@
 # CODEMAP – NeuralAgent
 
-Generated 2026-11-04 by `node scripts/codemap.mjs` (792 files). Do not edit by hand; regenerate after adding,
+Generated 2026-11-04 by `node scripts/codemap.mjs` (795 files). Do not edit by hand; regenerate after adding,
 renaming or deleting files. Per file: (lines) — purpose (first doc comment) · main types/functions/exports.
 Look here first, then read only the files you need (Grep this file instead of reading it whole).
 
@@ -234,17 +234,17 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **release.ts** (84) — OS detection and the latest release (shared by Nav, Hero, Footer, download page). One fetch per page load. · `interface Latest, type Os, detectOs(), OS_LABEL, isMobileOs, type ReleaseStatus, interface ReleaseState, interface Cta, useRelease(), shortDate()`
 
 ## connectors/
-- **manifests.test.mjs** (35) — Every connector.json must fit the daemon's ConnectorManifest (crates/na-protocol/src/autopilot.rs).
+- **manifests.test.mjs** (52) — Every connector.json must fit the daemon's ConnectorManifest (crates/na-protocol/src/autopilot.rs).
 
 ## connectors/_lib/
-- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (270) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), fixSchemaTypes(), createServer(), options`
 
 ## connectors/_template/
 - **connector.test.mjs** (52) — Run with: node --test (no network: fetch is mocked)
 - **index.mjs** (47) — Starting point for a NeuralAgent connector. Replace the example tools below; keep the shape. · `build()`
 
 ## connectors/_template/lib/
-- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (270) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), fixSchemaTypes(), createServer(), options`
 
 ## connectors/discord/
 - **connector.test.mjs** (265)
@@ -255,7 +255,7 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **index.mjs** (93) — NeuralAgent admin example connector: problem reports through the relay admin API with a · `build()`
 
 ## connectors/examples/neuralagent-admin/lib/
-- **connector.mjs** (226) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), createServer(), options`
+- **connector.mjs** (270) — NeuralAgent connector helper: a zero-dependency MCP stdio server for Node 22+. · `EVENT_METHOD, config(), secret(), log(), class ConnectorError, getState(), setState(), fetchJson(), clip(), fixSchemaTypes(), createServer(), options`
 
 ## connectors/feed/
 - **connector.test.mjs** (53)
@@ -318,27 +318,28 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **usage.rs** (642) — Token use and cost from the CLIs' own transcripts, so it covers every conversation on this · `struct Price, price(), struct Usage, claude_limits(), since_day(), today()`
 
 ## crates/na-daemon/src/autopilot/
-- **mod.rs** (363) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace. This module keeps · `mod ops, mod perm, mod prompt, mod run, mod sched, mod tools, mod turn, const KEEP, struct Extra, struct PRt, struct Runtime, impl Default for Runtime, load(), start()`
+- **mod.rs** (364) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace. This module keeps · `mod ops, mod perm, mod prompt, mod run, mod sched, mod tools, mod turn, const KEEP, struct Extra, struct PRt, struct Runtime, impl Default for Runtime, load(), start()`
 - **ops.rs** (312) — `Request::Autopilot { op }`: every operation of the pilots and the connectors. · `handle()`
-- **perm.rs** (84) — What the pilot may do on its own: tool classes and the playbook's rules. · `builtin_class(), resolve(), explicit_auto()`
-- **prompt.rs** (439) — What the model reads: the system prompt (rules + the user's playbook), the setup interview, · `system(), playbook_text(), schedule_text(), setup_system(), kind_word(), item_line(), world(), events_message(), struct Triage, const TRIAGE_SYSTEM, triage_message(), parse_triage(), fallback_triage()`
+- **perm.rs** (87) — What the pilot may do on its own: tool classes and the playbook's rules. · `builtin_class(), resolve(), explicit_auto()`
+- **prompt.rs** (539) — What the model reads: the system prompt (rules + the user's playbook), the setup interview, · `system(), playbook_text(), schedule_text(), setup_system(), interview_notes(), kind_word(), item_line(), status_words(), world(), events_message(), struct Triage, const TRIAGE_SYSTEM, triage_message(), parse_triage()` +1
 - **run.rs** (289) — The background loop: connector events into the inbox (with triage), polling, routines, · `run()`
 - **sched.rs** (127) — Routine schedules: when is a routine next due, and does a run missed during sleep happen once. · `const MIN_MINUTES, parse_at(), validate(), next_after(), next_due(), due()`
-- **tools.rs** (580) — The pilot's tools: its own (inbox, agents, notes, playbook proposals) and the tools of the · `enum Target, struct Offer, offer(), step_text(), item_status(), call(), run(), parse_playbook(), validate_playbook(), send_draft(), target_of()`
-- **turn.rs** (298) — One turn of a pilot: build the prompt, let the model call tools until it answers, post the · `enum Trigger, run()`
+- **tools.rs** (635) — The pilot's tools: its own (inbox, agents, notes, playbook proposals) and the tools of the · `enum Target, struct Offer, offer(), step_text(), item_status(), call(), run(), parse_playbook(), validate_playbook(), send_draft(), target_of()`
+- **turn.rs** (326) — One turn of a pilot: build the prompt, let the model call tools until it answers, post the · `enum Trigger, run()`
 
 ## crates/na-daemon/src/connectors/
 - **browser.rs** (393) — The bridge to the NeuralAgent browser extension (docs/notes/autopilot.md → Browser). · `const DEFAULT_PORT, const PAIR_VALID, struct Pairing, struct Bridge, start()`
-- **builder.rs** (525) — Building connectors: "New connector" (template + a coding agent), "Change with an agent", and · `build_prompt(), create(), change(), retry(), restore(), reset(), mark_working(), struct Verdict, stopped_message(), struct ImportCmd, split_command(), parse_command(), mcp_manifest(), import()`
-- **check.rs** (401) — Testing a connector: the user's "Test connection" (does it start, list tools, pass its own · `test(), looks_secret(), scan_secrets(), tool_gaps(), syntax_message(), conformance(), failure_message()`
+- **builder.rs** (526) — Building connectors: "New connector" (template + a coding agent), "Change with an agent", and · `build_prompt(), create(), change(), retry(), restore(), reset(), mark_working(), struct Verdict, stopped_message(), struct ImportCmd, split_command(), parse_command(), mcp_manifest(), import()`
+- **check.rs** (434) — Testing a connector: the user's "Test connection" (does it start, list tools, pass its own · `test(), looks_secret(), scan_secrets(), tool_gaps(), syntax_message(), conformance(), schema_problems(), failure_message()`
 - **embedded.rs** (140) — The connectors that ship with NeuralAgent. The JS ones are embedded (`include_str!`, no build · `struct Builtin, const JS, const LIB, const TEMPLATE, const VIRTUAL, install(), write_template()`
 - **log.rs** (78) — The last log lines of a connector (its stderr), with every known secret value masked. · `const LINES, struct Log`
 - **manifest.rs** (138) — `connector.json`: parsing, validation and what is still missing to run a connector. · `parse(), validate(), class_of(), missing(), secret_var()`
-- **mcp_client.rs** (267) — A minimal MCP client over newline-delimited JSON-RPC 2.0 (stdio). Generic over the byte · `const EVENT_METHOD, struct McpClient, struct ToolOutput, struct ToolInfo, mod tests`
-- **mod.rs** (624) — Connectors (D87, docs/notes/autopilot.md): registry of built-in and user connectors, the · `mod browser, mod builder, mod check, mod embedded, mod log, mod manifest, mod mcp_client, mod recover, mod store, mod supervisor, mod virt, struct ConnEvent, struct Rt, impl Default for Rt` +3
+- **mcp_client.rs** (278) — A minimal MCP client over newline-delimited JSON-RPC 2.0 (stdio). Generic over the byte · `const EVENT_METHOD, struct McpClient, struct ToolOutput, struct ToolInfo, mod tests`
+- **mod.rs** (630) — Connectors (D87, docs/notes/autopilot.md): registry of built-in and user connectors, the · `mod browser, mod builder, mod check, mod embedded, mod log, mod manifest, mod mcp_client, mod recover, mod schema, mod store, mod supervisor, mod virt, struct ConnEvent, struct Rt` +4
 - **recover.rs** (212) — Recovering a connector whose build did not finish (D92): the last working version is kept · `backup_dir(), discarded_dir(), has_backup(), copy_dir(), snapshot(), restore(), reset(), fingerprint()`
+- **schema.rs** (272) — Tool input schemas of connectors. Connector authors (often a coding agent) write them by hand · `empty(), normalize()`
 - **store.rs** (117) — What is saved about connectors: `<home>/connectors.json` (enabled, setup values, the agent · `struct Saved, type SavedMap, type Secrets, saved_path(), secrets_path(), load_saved(), save_saved(), load_secrets(), save_secrets(), valid_id(), slug()`
-- **supervisor.rs** (303) — Starting connector processes and keeping them alive: restart with backoff (1 s up to 5 min), · `const FAILURES, const FAILURE_WINDOW, const MAX_BACKOFF, struct LaunchSpec, struct Launched, base_env(), environment(), command_of(), launch(), tools_with_classes(), supervise()`
+- **supervisor.rs** (311) — Starting connector processes and keeping them alive: restart with backoff (1 s up to 5 min), · `const FAILURES, const FAILURE_WINDOW, const MAX_BACKOFF, struct LaunchSpec, struct Launched, base_env(), environment(), command_of(), launch(), tools_with_classes(), supervise()`
 - **virt.rs** (291) — The two built-in connectors that live inside the daemon: `browser` (the extension bridge as · `call(), schema(), struct Post, parse_posts()`
 
 ## crates/na-daemon/src/neural/
@@ -352,7 +353,7 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **world.rs** (326) — The world state: a compact picture of everything Neural should know, rendered fresh for every · `struct Ctx, short(), render()`
 
 ## crates/na-protocol/src/
-- **autopilot.rs** (694) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace that looks after the · `struct AutopilotState, struct Pilot, enum PilotStatus, struct Playbook, struct Routine, enum Schedule, struct SourceUse, struct ToolRule, enum Allow, enum NotifyLevel, struct InboxItem, enum ItemKind, enum ItemStatus, struct ItemStep` +20
+- **autopilot.rs** (702) — Autopilot (D87, docs/notes/autopilot.md): one project agent per workspace that looks after the · `struct AutopilotState, struct Pilot, enum PilotStatus, struct Playbook, struct Routine, enum Schedule, struct SourceUse, struct ToolRule, enum Allow, enum NotifyLevel, struct InboxItem, enum ItemKind, enum ItemStatus, struct ItemStep` +20
 - **claude.rs** (852) — Claude view: the structured conversation of a Claude Code session, read from its transcript · `enum CvRole, enum CvBlock, struct CvToolMeta, struct CvHunk, struct CvTask, struct CvTodo, struct CvPr, struct CvWorktree, struct CvQueued, struct CvImage, struct CvImageData, struct CvMessage, struct CvMeta, struct CvOption` +14
 - **lib.rs** (1913) — Wire types shared by every NeuralAgent component. · `const PROTOCOL_VERSION, const DAEMON_FEATURES, daemon_features(), type Id, type Millis, enum ClientMsg, enum ServerMsg, enum CallEvent, enum CallState, struct ClientInfo, enum ClientKind, struct HostInfo, struct ApiError, enum ErrorCode` +69
 - **neural.rs** (177) — Neural's own working state (D61–D64, docs/notes/neural-v2.md): the tasks it follows up, · `struct NeuralState, enum NeuralMode, struct NeuralTask, enum NeuralTaskStatus, struct NeuralNote, struct NeuralObs, enum ObsKind, struct NeuralPending`
@@ -442,16 +443,18 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 
 ## packages/app/src/components/autopilot/
 - **AgentPicker.tsx** (30) — Which installed agent builds a connector (the same agents the app starts in a pane). Renders · `useBuilderAgents(), AgentPicker()`
-- **AutopilotPage.tsx** (288) — Autopilot (D87): one project agent per workspace. Empty state with a project picker, then the · `AutopilotPage(), PhoneConnectors(), PhoneConnector()`
+- **AutopilotPage.tsx** (281) — Autopilot (D87): one project agent per workspace. Empty state with a project picker, then the · `AutopilotPage(), PhoneConnectors(), PhoneConnector()`
 - **BrowserPair.tsx** (88) — The Browser connector: pair the Chrome extension. The app shows a one-time code, the user · `BrowserPair()`
-- **Chat.tsx** (118) — Autopilot → Chat: the conversation with the pilot. Right after creation it is the setup · `Chat(), ChatComposer()`
-- **ConnectorDetail.tsx** (433) — Autopilot → a connector: the guide, the setup form drawn from its manifest, a test with a · `ConnectorDetail()`
+- **Chat.tsx** (166) — Autopilot → Chat: the conversation with the pilot. Right after creation it is the setup · `Chat(), ChatComposer()`
+- **ConnectorDetail.tsx** (456) — Autopilot → a connector: the guide, the setup form drawn from its manifest, a test with a · `ConnectorDetail(), Guide(), useConnectorForm(), ConnectionForm(), StoppedCard(), TestChecklist(), ChangeSheet()`
 - **ConnectorsPage.tsx** (202) — Autopilot → Connectors: a grid of what the autopilots can read and do. Built-in ones first, then · `ConnectorsPage()`
+- **ErrorNotice.tsx** (38) — Autopilot: a pilot error in words. The raw daemon text hides behind "Details"; when a connector · `ErrorNotice()`
 - **FieldInput.tsx** (214) — One setup field of a connector, drawn from its manifest (all FieldKinds). Used by the connector · `useFieldOptions(), FieldInput()`
-- **Inbox.tsx** (260) — Autopilot → Inbox: what needs you first (OKs, drafts), then what is open or done. An item opens · `Inbox()`
+- **Inbox.tsx** (271) — Autopilot → Inbox: what needs you first (OKs, drafts), then what is open or done. An item opens · `Inbox()`
 - **Instructions.tsx** (342) — Autopilot → Instructions: the playbook as a form. Mission, how to work, tone, routines, sources · `Instructions()`
+- **LiveConnector.tsx** (174) — Autopilot → Chat: a live card under a message that is about a connector (the pilot started · `LiveConnector()`
 - **SuggestionCard.tsx** (54) — A change to the playbook the autopilot proposes (or the whole playbook after the setup · `SuggestionCard()`
-- **bits.tsx** (40) — Small pieces the autopilot screens share: connector icons and status dots, external links. · `connectorIcon(), StatusMark(), useOpenLink()`
+- **bits.tsx** (55) — Small pieces the autopilot screens share: connector icons and status dots, external links. · `connectorIcon(), StatusMark(), useOpenLink(), ConnectorWarnings()`
 - **hooks.ts** (76) — Autopilot (D87): the state, the requests and the little UI state the screens share. · `useAutopilot(), useAutopilotSupported(), type PilotTab, usePilotUi, useShownPilot(), useApRequest(), useApDo(), useConnector(), useConnectorName()`
 
 ## packages/app/src/components/claude/
@@ -549,8 +552,8 @@ Generated, not listed: `packages/protocol/src/gen/` (146 files, from `crates/na-
 - **agentui.test.ts** (24)
 - **agentui.ts** (98) — Small shared helpers for the agent-facing pages (Neural, Agents, History): · `plainText(), NOTICE, agentSays(), shortAgo(), clock, dayLabel(), byDay(), useNow()`
 - **alerts.ts** (79) — How this device tells you that an agent finished, needs your input or stopped with an error: · `type AlertMode, type AlertKind, useAlerts, setAlertMode(), wantsSound, wantsNotify, ALERT_TEXT, chime()`
-- **autopilot.test.ts** (167)
-- **autopilot.ts** (480) — Autopilot (D87): the pure logic behind its screens: grouping and filtering the inbox, schedule · `EMPTY_AUTOPILOT, type ItemFilter, interface InboxView, needsUser, inboxView(), attentionCount(), pilotAttention(), anyWorking, KIND_LABEL, URGENCY_LABEL, DAY_OPTIONS, whenLabel(), agoLabel(), statusLine()` +51
+- **autopilot.test.ts** (177)
+- **autopilot.ts** (516) — Autopilot (D87): the pure logic behind its screens: grouping and filtering the inbox, schedule · `EMPTY_AUTOPILOT, type ItemFilter, interface InboxView, needsUser, inboxView(), attentionCount(), pilotAttention(), anyWorking, KIND_LABEL, URGENCY_LABEL, DAY_OPTIONS, whenLabel(), agoLabel(), statusLine()` +53
 - **call.ts** (531) — A call with Neural. The daemon does the listening and the speaking (local speech models); · `useCall, callLevel, interface CallStart, startCall(), endCall(), muteCall(), holdCall(), resumeCall(), interruptCall(), useCallWarm(), playPreview()`
 - **callState.test.ts** (44)
 - **callState.ts** (80) — Pure rules of a call with Neural (no DOM; tested in `callState.test.ts`): what the call screen · `ANSWER_TIMEOUT_MS, READY_TIMEOUT_MS, OFFLINE_TIMEOUT_MS, AUDIO_START_MS, WAKE_IDLE_MS, wakeIdle, type CallNotice, type CallHold, callSubtitle(), runningTime(), micErrorText(), noAnswerText(), SLOW_START_TEXT`

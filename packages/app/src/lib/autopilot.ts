@@ -117,7 +117,7 @@ export function statusLine(p: Pilot, now: number): string {
   if (!p.enabled || p.status === "off") return "Switched off";
   if (p.status === "working") return p.activity || "Working…";
   if (p.status === "needs_you") return "Waiting for you";
-  if (p.status === "error") return p.activity || "Something went wrong";
+  if (p.status === "error") return "Stopped by a problem";
   return p.next_run ? `Idle, next run ${whenLabel(p.next_run, now)}` : "Idle, asks nothing of you";
 }
 
@@ -476,4 +476,40 @@ export function workspacesWithoutPilot<W extends { id: string }>(workspaces: W[]
 /** One pilot's conversation, oldest first. */
 export function pilotMessages(all: PilotMessage[], pilotId: string): PilotMessage[] {
   return all.filter((m) => m.pilot_id === pilotId).sort((a, b) => a.at - b.at);
+}
+
+// ───────────────────────────── errors ─────────────────────────────
+
+export interface FriendlyError {
+  title: string;
+  /** One calm sentence on what to do. */
+  hint: string;
+  /** The raw text, for the "Details" toggle. */
+  raw: string;
+  /** A connector that is probably to blame (named in the text, or the only broken one). */
+  connectorId?: string;
+}
+
+/** Turns the daemon's raw error line ("400 [400]: tools.4.custom.input_schema…") into words. */
+export function friendlyError(raw: string, connectors: Connector[]): FriendlyError {
+  const text = raw.trim();
+  const lower = text.toLowerCase();
+  const named = connectors.find((c) => lower.includes(c.id.toLowerCase()) || lower.includes(c.manifest.name.toLowerCase()));
+  const broken = connectors.filter((c) => !c.builtin && (c.status === "error" || c.build_stopped));
+  const connectorId = named?.id ?? (broken.length === 1 ? broken[0]!.id : undefined);
+  if (/input_schema|tools\.\d+|invalid_request|\b400\b/.test(lower)) {
+    return {
+      title: "A connector sent something the AI could not read",
+      hint: "One of its tools is described wrongly. Open the connector and ask its agent to fix it, or switch it off for now.",
+      raw: text,
+      connectorId,
+    };
+  }
+  if (/401|403|unauthori|forbidden|api key|login|sign in|credit|rate.?limit|\b429\b|overloaded|\b529\b/.test(lower)) {
+    return { title: "The AI service refused the request", hint: "Check the agent’s login or limits, then run it again.", raw: text, connectorId };
+  }
+  if (/timed? ?out|network|offline|dns|connection/.test(lower)) {
+    return { title: "The connection dropped", hint: "Check your internet, then run it again.", raw: text, connectorId };
+  }
+  return { title: "The autopilot ran into a problem", hint: "Run it again. If it keeps happening, open the details.", raw: text || "Something went wrong.", connectorId };
 }

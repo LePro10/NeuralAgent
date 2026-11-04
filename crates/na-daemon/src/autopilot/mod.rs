@@ -312,6 +312,7 @@ impl Core {
             item_id: item.map(str::to_string),
             proactive,
             steps,
+            connector_id: None,
         };
         self.autopilot_update(|a| a.messages.push(m));
         id

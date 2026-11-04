@@ -309,6 +309,17 @@ pub async fn conformance(core: &Arc<Core>, id: &str, dir: &Path) -> ConnectorTes
         missing.is_empty(),
         (!missing.is_empty()).then(|| format!("connector.json lists tools the server does not offer: {}", missing.join(", "))),
     ));
+    let problems = schema_problems(&tools);
+    steps.push(step(
+        "Tool schemas are valid JSON Schema",
+        problems.is_empty(),
+        (!problems.is_empty()).then(|| {
+            format!(
+                "Fix these in the tool definitions (inputSchema types are string, number, integer, boolean, array, object; \"bool\" is only a setup-field kind): {}",
+                problems.join("; ")
+            )
+        }),
+    ));
     let hits = scan_secrets(dir);
     steps.push(step(
         "No secrets in the code",
@@ -318,6 +329,20 @@ pub async fn conformance(core: &Arc<Core>, id: &str, dir: &Path) -> ConnectorTes
     ));
     steps.push(node_tests(dir, supervisor::base_env(&core.env.vars)).await);
     result(steps)
+}
+
+/// What is wrong with the tools' input schemas, naming the tool ("pin_message.pinned: type "bool" should be "boolean"").
+pub fn schema_problems(tools: &[super::mcp_client::ToolInfo]) -> Vec<String> {
+    let mut v = vec![];
+    for t in tools {
+        if let Some(e) = &t.invalid {
+            v.push(format!("{}: {e}", t.name));
+        }
+        for f in &t.fixes {
+            v.push(if f.contains(": ") { format!("{}.{f}", t.name) } else { format!("{}: {f}", t.name) });
+        }
+    }
+    v
 }
 
 /// The failed steps as a message to the building agent.
@@ -376,6 +401,14 @@ mod tests {
         std::fs::remove_file(d.join("index.mjs")).unwrap();
         assert!(!syntax_step(&d, &m, env).await.ok);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn names_the_tool_and_the_fix_for_bad_schemas() {
+        let (schema, fixes) =
+            super::super::schema::normalize(&json!({ "type": "object", "properties": { "pinned": { "type": "bool" } } })).unwrap();
+        let t = super::super::mcp_client::ToolInfo { name: "pin_message".into(), description: String::new(), schema, fixes, invalid: None };
+        assert_eq!(schema_problems(&[t]), vec!["pin_message.pinned: type \"bool\" should be \"boolean\"".to_string()]);
     }
 
     #[test]

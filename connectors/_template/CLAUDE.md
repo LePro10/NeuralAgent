@@ -20,7 +20,7 @@ pass; the app runs the same check.
   portal](https://…) and press **New**"). Say exactly what to click and what to copy. 3 to 7 steps.
 - `setup`: one field for **everything the user must enter**. Never hard-code a user value.
   Field: `{ key, label, type, required?, help?, link?, placeholder?, from?, options?, default? }`.
-  Types: `text`, `secret`, `url`, `number`, `bool`, `select` (with `options: [{value,label}]`),
+  Setup-field types (only here; NOT for tool params): `text`, `secret`, `url`, `number`, `bool`, `select` (with `options: [{value,label}]`),
   `pick` (several values; `from` names a read tool returning `[{ "value", "label" }]`), `list`
   (free list of strings). Every field has `help` in plain words.
 - `tools`: `{ "tool_name": "read" | "write" | "external" }`. **Every tool needs a class**; a
@@ -43,6 +43,10 @@ pass; the app runs the same check.
   (for example `service:message-id`) so duplicates are dropped.
 - Polling: a `poll` tool returns `{ "events": [ ...same shape... ] }` and keeps its own cursor with
   `getState`/`setState`. The first call should only remember what exists, not flood the autopilot.
+- **Tool params are JSON Schema.** In `schema` of a tool use only `string`, `number`, `integer`,
+  `boolean`, `array`, `object` (e.g. `{ pinned: { type: "boolean" } }`). `bool` is ONLY a setup-field
+  kind in `connector.json`; `"type": "bool"` in a tool makes the AI provider reject the request.
+  NeuralAgent's check fails the build when a tool schema is invalid.
 - Tools return JSON-able values. Long text goes through `clip(text, n)`.
 
 ## Rules

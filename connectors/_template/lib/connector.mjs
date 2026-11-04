@@ -137,6 +137,50 @@ export function clip(s, n = 4000) {
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
 
+// ---- tool schemas ----
+
+const TYPE_ALIASES = {
+  bool: "boolean", int: "integer", long: "integer", float: "number", double: "number",
+  str: "string", text: "string", list: "array", dict: "object", map: "object",
+};
+const JSON_TYPES = ["string", "number", "integer", "boolean", "array", "object", "null"];
+
+function fixType(t) {
+  const one = (x) => {
+    const l = String(x).trim().toLowerCase();
+    return JSON_TYPES.includes(l) ? l : TYPE_ALIASES[l];
+  };
+  if (Array.isArray(t)) {
+    const out = [...new Set(t.map(one).filter(Boolean))];
+    return out.length === 0 ? undefined : out.length === 1 ? out[0] : out;
+  }
+  return one(t);
+}
+
+/**
+ * Tool params are JSON Schema: types are string, number, integer, boolean, array, object.
+ * ("bool" is only a setup-field kind in connector.json.) This repairs the common slips
+ * (bool, int, float, str, list, dict) in a "properties" object, recursively.
+ */
+export function fixSchemaTypes(node) {
+  if (Array.isArray(node)) return node.map(fixSchemaTypes);
+  if (!node || typeof node !== "object") return node;
+  const out = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k === "type" && (typeof v === "string" || Array.isArray(v))) {
+      const t = fixType(v);
+      if (t !== undefined) out.type = t;
+    } else if (k === "properties" && v && typeof v === "object" && !Array.isArray(v)) {
+      out.properties = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, fixSchemaTypes(p)]));
+    } else if (k === "items" || k === "additionalProperties" || k === "anyOf" || k === "oneOf" || k === "allOf") {
+      out[k] = fixSchemaTypes(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 // ---- the server ----
 
 /**
@@ -154,11 +198,11 @@ export function createServer({ name, version = "1.0.0", tools = {}, input = proc
   }
 
   function listTools() {
-    return Object.entries(tools).map(([n, t]) => ({
-      name: n,
-      description: t.description || "",
-      inputSchema: { type: "object", properties: t.schema || {}, required: t.required || [] },
-    }));
+    return Object.entries(tools).map(([n, t]) => {
+      const properties = Object.fromEntries(Object.entries(t.schema || {}).map(([k, v]) => [k, fixSchemaTypes(v)]));
+      const required = (t.required || []).filter((r) => Object.hasOwn(properties, r));
+      return { name: n, description: t.description || "", inputSchema: { type: "object", properties, required } };
+    });
   }
 
   async function handle(msg) {

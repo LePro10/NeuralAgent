@@ -18,6 +18,7 @@ import {
   scheduleToForm,
   setAllow,
   statusLine,
+  friendlyError,
   whenLabel,
 } from "./autopilot.ts";
 
@@ -163,4 +164,13 @@ test("the stopped-build card offers only what can work", () => {
   assert.deepEqual(recoveryOptions(base, false), { show: true, retry: false, restore: false, reset: false });
   assert.equal(recoveryOptions({ ...base, build_stopped: false }, true).show, false);
   assert.equal(recoveryOptions({ ...base, builtin: true }, true).show, false);
+});
+
+test("a raw 400 schema error becomes words and points at the one broken connector", () => {
+  const broken = connector({ id: "mine", builtin: false, status: "error" });
+  const e = friendlyError("400 [400]: tools.4.custom.input_schema: invalid", [connector({ id: "discord" }), broken]);
+  assert.equal(e.title, "A connector sent something the AI could not read");
+  assert.equal(e.connectorId, "mine");
+  assert.ok(e.raw.includes("input_schema"));
+  assert.equal(friendlyError("", []).title, "The autopilot ran into a problem");
 });

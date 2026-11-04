@@ -11,6 +11,21 @@ release notes in the update manifest (`scripts/changelog.mjs` parses it). Rules 
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-11-04
+
+### Fixed
+- **The autopilot no longer stops working because of one badly written connector tool.** A connector tool with a wrong parameter type (for example "bool") used to make the AI provider refuse every request. Such mistakes are now repaired automatically, and a tool that cannot be repaired is skipped with a warning on the connector.
+- The autopilot setup chat no longer repeats a question you already answered, says it cannot build a connector, or claims a running connector is missing. It also stays in your language.
+
+### Improved
+- The autopilot can now start building a connector for you when you ask for a new source in the chat, and always sees the current state of all connectors.
+- When a connector is built, its check now tells the building agent exactly which tool parameter is wrong and how to fix it.
+- **The Autopilot chat keeps your place.** Scrolling up while it works no longer throws you back to the bottom; a small "new" button takes you down when you want.
+- **Setting up a connector happens in the chat.** When the autopilot builds or sets up a connector, a card appears right under its message: build progress, the login form, the test, "Use as source", or the way out if the build stopped.
+- Autopilot errors are shown once, in plain words, with a "Details" button for the technical text and a link to the connector that is probably at fault.
+- A connector shows a short note when one of its tools was skipped or repaired, on its page and in the chat card.
+- Clearer first steps: the empty Inbox points you to connecting a source, and an empty Chat offers one-tap starters such as "Connect Discord".
+
 ## [0.5.4] - 2026-11-04
 
 ### Improved

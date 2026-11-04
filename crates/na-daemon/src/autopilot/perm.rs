@@ -6,7 +6,7 @@ use na_protocol::{Allow, Playbook, ToolClass};
 /// (they run an agent); everything else only reads or talks to the user.
 pub fn builtin_class(tool: &str) -> ToolClass {
     match tool {
-        "start_agent" | "send_to_agent" => ToolClass::Write,
+        "start_agent" | "send_to_agent" | "build_connector" => ToolClass::Write,
         _ => ToolClass::Read,
     }
 }
@@ -54,6 +54,9 @@ mod tests {
         assert_eq!(resolve(&p, Some("github"), "label", ToolClass::Write), Allow::Ask);
         assert_eq!(resolve(&p, Some("discord"), "reply", ToolClass::External), Allow::Ask);
         assert_eq!(resolve(&p, None, "start_agent", builtin_class("start_agent")), Allow::Auto);
+        // Building a connector the owner asked for needs no second confirmation.
+        assert_eq!(resolve(&p, None, "build_connector", builtin_class("build_connector")), Allow::Auto);
+        assert_eq!(resolve(&p, None, "connector_status", builtin_class("connector_status")), Allow::Auto);
         assert_eq!(resolve(&p, None, "inbox_update", builtin_class("inbox_update")), Allow::Auto);
     }
 

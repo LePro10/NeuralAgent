@@ -85,6 +85,7 @@ pub fn build_prompt(name: &str, description: &str, change: bool) -> String {
          NA_CONFIG / NA_SECRET_<KEY> / NA_STATE_DIR, events, poll, check) and the rules. In short:\n\
          - connector.json: a clear name, icon, one-line description, setup fields for everything the user must enter (secrets as type \"secret\"), \
          a beginner-friendly numbered guide with links, every tool with a class (read, write or external), a \"check\" read tool that proves the setup works.\n\
+         - Tool params are JSON Schema: types are string, number, integer, boolean, array, object (\"bool\" is ONLY a setup-field kind, never a tool param type).\n\
          - index.mjs: no npm dependencies, Node 22+, secrets only from the environment, logs to stderr and never secret values.\n\
          - connector.test.mjs with tests that need no network or credentials; run `node --test` until it passes.\n\
          When you are done, say in two sentences what the user has to enter. NeuralAgent then checks the connector automatically."

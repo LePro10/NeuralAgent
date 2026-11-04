@@ -1,15 +1,17 @@
 // Autopilot → Chat: the conversation with the pilot. Right after creation it is the setup
 // interview. Tool steps are folded under each answer; a proposed playbook shows as a card.
 import type { Pilot, PilotMessage } from "@neuralagent/protocol";
-import { AssistantMessage, Button, Callout, Composer, Disclosure, StreamingText, ThinkingIndicator, UserBubble, ComposerDock } from "@neuralagent/ui";
-import { BellRing, ChevronRight, Wrench } from "lucide-react";
-import { useMemo } from "react";
+import { AssistantMessage, Button, Composer, Disclosure, StreamingText, ThinkingIndicator, UserBubble, ComposerDock } from "@neuralagent/ui";
+import { ArrowDown, BellRing, ChevronRight, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useStickToBottom } from "../claude/useStickToBottom";
+import { LiveConnector } from "./LiveConnector";
 import { byDay, clock, useNow } from "../../lib/agentui";
 import { pilotMessages, playbookEmpty } from "../../lib/autopilot";
 import { useApDo, useAutopilot, usePilotUi } from "./hooks";
 import { SuggestionCard } from "./SuggestionCard";
 
-export function Chat({ pilot }: { pilot: Pilot }) {
+export function Chat({ pilot, scroller, onOpenConnector }: { pilot: Pilot; scroller: RefObject<HTMLDivElement | null>; onOpenConnector: (id: string) => void }) {
   const state = useAutopilot();
   const setTab = usePilotUi((s) => s.setTab);
   const messages = useMemo(() => pilotMessages(state.messages, pilot.id), [state.messages, pilot.id]);
@@ -21,13 +23,26 @@ export function Chat({ pilot }: { pilot: Pilot }) {
   const days = useMemo(() => byDay(messages, (m) => m.at, now), [messages, now]);
   const setup = !pilot.setup_done && playbookEmpty(pilot.playbook);
 
+  // Scrolling is the page's, so the shared stick-to-bottom model is wired to it from here:
+  // follow only while the reader is at the end, otherwise offer a "new" button.
+  const content = useRef<HTMLDivElement | null>(null);
+  const stick = useStickToBottom({ count: messages.length + suggestions.length, firstKey: null, resetKey: pilot.id, more: false, loadingOlder: false, onNearTop: () => {} });
+  const { scrollerRef, contentRef, toBottom } = stick;
+  useEffect(() => {
+    scrollerRef(scroller.current);
+    contentRef(content.current);
+    return () => {
+      scrollerRef(null);
+      contentRef(null);
+    };
+  }, [scrollerRef, contentRef, scroller]);
+  // Sending a message always brings you to the end.
+  useEffect(() => {
+    if (last?.role === "user") toBottom();
+  }, [last?.id, last?.role, toBottom]);
+
   return (
-    <div className="flex flex-col gap-4 pb-28">
-      {pilot.status === "error" && (
-        <Callout tone="danger" title="The autopilot could not answer">
-          {pilot.activity || "Something went wrong."}
-        </Callout>
-      )}
+    <div ref={content} className="flex flex-col gap-4 pb-28">
       {setup && (
         <div className="surface flex flex-col gap-2 rounded-list p-4">
           <div className="text-headline text-bright">Let’s set up your autopilot</div>
@@ -39,14 +54,15 @@ export function Chat({ pilot }: { pilot: Pilot }) {
           </div>
         </div>
       )}
-      {messages.length === 0 && !setup && (
-        <p className="px-1 pt-2 text-subhead text-dim">Tell the autopilot what to do, for example “look at all new Discord messages now” or “what is open in the inbox?”.</p>
-      )}
+      {messages.length === 0 && !setup && <StartIdeas pilot={pilot} />}
       {days.map((d) => (
         <section key={d.label} className="flex flex-col gap-4">
           <h2 className="pt-2 text-center text-footnote text-dim">{d.label}</h2>
           {d.items.map((m) => (
-            <Line key={m.id} m={m} live={working && m === last} />
+            <div key={m.id} className="flex flex-col gap-2">
+              <Line m={m} live={working && m === last} />
+              {m.connector_id && <LiveConnector id={m.connector_id} pilot={pilot} onOpen={onOpenConnector} />}
+            </div>
           ))}
         </section>
       ))}
@@ -54,6 +70,38 @@ export function Chat({ pilot }: { pilot: Pilot }) {
         <SuggestionCard key={s.id} suggestion={s} />
       ))}
       {waitingForWords && <ThinkingIndicator variant="dots" label="The autopilot is thinking" />}
+      {!stick.pinned && (
+        <div className="sticky z-10 h-0" style={{ bottom: "calc(var(--tabbar-space, 0px) + 7.5rem)" }}>
+          <div className="absolute inset-x-0 bottom-0 flex justify-center">
+            <button
+              type="button"
+              onClick={() => toBottom({ smooth: true })}
+              className="pressable flex h-8 items-center gap-1.5 rounded-full bg-navbar px-3 text-footnote text-bright shadow-edge backdrop-blur-xl"
+            >
+              <ArrowDown className="size-icon-sm" strokeWidth={2} />
+              {stick.unseen > 0 ? `${stick.unseen} new` : "Latest"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Empty chat: one tap starts the common jobs. */
+function StartIdeas({ pilot }: { pilot: Pilot }) {
+  const run = useApDo();
+  const ideas = ["Connect Discord", "Connect GitHub", "What is open in the inbox?"];
+  return (
+    <div className="flex flex-col gap-3 px-1 pt-2">
+      <p className="text-subhead text-dim">Tell the autopilot what to do. It can also build a connector for you: just say what you want to connect.</p>
+      <div className="flex flex-wrap gap-2">
+        {ideas.map((t) => (
+          <Button key={t} size="sm" variant="ghost" onClick={() => void run({ op: "pilot_send", id: pilot.id, text: t })} className="rounded-full">
+            {t}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
